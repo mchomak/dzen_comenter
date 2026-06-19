@@ -1,0 +1,8 @@
+playwright
+psycopg[binary]
+sqlalchemy>=2
+alembic
+pydantic
+pydantic-settings
+httpx
+pytest

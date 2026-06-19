@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    # Финальный command задаётся в Волне 2.
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: dzen
+      POSTGRES_PASSWORD: dzen
+      POSTGRES_DB: dzen_commenter
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:

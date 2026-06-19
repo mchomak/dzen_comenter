@@ -1,0 +1,29 @@
+[project]
+name = "dzen-commenter"
+version = "0.0.0"
+description = "AI community manager for Yandex Dzen comments"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright",
+    "psycopg[binary]",
+    "sqlalchemy>=2",
+    "alembic",
+    "pydantic",
+    "pydantic-settings",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["dzen_commenter*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
