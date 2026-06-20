@@ -1,0 +1,1818 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Добавить в корзину" [ref=e2] [cursor=pointer]:
+      - /url: "#"
+    - link "Позвонить" [ref=e3] [cursor=pointer]:
+      - /url: tel:+74952122734
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - banner "Шапка сайта" [ref=e7]:
+        - link "Логотип Бренда" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img [ref=e10]
+        - generic [ref=e13]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic [ref=e17]: Найти в Дзене
+        - generic [ref=e18]:
+          - button "Настройки" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "Войти" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+    - generic [ref=e32]:
+      - complementary "Боковое меню навигации" [ref=e34]:
+        - list [ref=e35]:
+          - link "Главная" [ref=e36] [cursor=pointer]:
+            - /url: https://dzen.ru/
+            - listitem [ref=e37]:
+              - img [ref=e40]
+          - link "Подписки" [ref=e41] [cursor=pointer]:
+            - /url: https://dzen.ru/subscriptions-manager
+            - listitem [ref=e42]:
+              - img [ref=e45]
+          - link "Найти" [ref=e46] [cursor=pointer]:
+            - /url: https://dzen.ru/explore
+            - listitem [ref=e47]:
+              - img [ref=e50]
+          - link "Новости" [ref=e51] [cursor=pointer]:
+            - /url: https://dzen.ru/news
+            - listitem [ref=e52]:
+              - img [ref=e55]
+          - link "Статьи" [ref=e56] [cursor=pointer]:
+            - /url: https://dzen.ru/articles
+            - listitem [ref=e57]:
+              - img [ref=e60]
+          - link "Видео" [ref=e61] [cursor=pointer]:
+            - /url: https://dzen.ru/video
+            - listitem [ref=e62]:
+              - img [ref=e65]
+          - link "Ролики" [ref=e66] [cursor=pointer]:
+            - /url: https://dzen.ru/shorts
+            - listitem [ref=e67]:
+              - img [ref=e70]
+          - link "Видеоигры" [ref=e73] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/games
+            - listitem [ref=e74]:
+              - img [ref=e77]
+          - link "Детям" [ref=e78] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/multiki
+            - listitem [ref=e79]:
+              - img [ref=e82]
+        - button [ref=e84]:
+          - img [ref=e86]
+      - main [ref=e89]:
+        - generic [ref=e100]:
+          - generic "Статья 1" [ref=e101]:
+            - generic [ref=e104]:
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - generic [ref=e110]:
+                    - link "Аватар канала" [ref=e111] [cursor=pointer]:
+                      - /url: /domeoremont
+                    - generic [ref=e113]:
+                      - link "Название канала" [ref=e114] [cursor=pointer]:
+                        - /url: /domeoremont
+                        - generic [ref=e115]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e117]
+                      - generic [ref=e119]: 343,6 тыс подписчиков
+                    - button "Подписаться" [ref=e121] [cursor=pointer]
+                  - heading "Показываю сад, огород и дом Елены Ваенги! И не подумаешь, что тут живёт певица!" [level=1] [ref=e122]
+                  - generic [ref=e124]:
+                    - generic [ref=e126]: 23 июля 2023
+                    - generic [ref=e127]:
+                      - generic [ref=e128]:
+                        - img [ref=e129]
+                        - generic [ref=e131]: 589,5 тыс
+                      - generic [ref=e132]:
+                        - img [ref=e133]
+                        - generic [ref=e135]: 3 мин
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - generic [ref=e138]: Оглавление
+                    - list [ref=e139]:
+                      - listitem [ref=e140] [cursor=pointer]:
+                        - link "Участок возле дома" [ref=e141]:
+                          - /url: "#ychastok_vozle_doma"
+                          - generic [ref=e142]: Участок возле дома
+                      - listitem [ref=e143] [cursor=pointer]:
+                        - link "Интерьер особняка" [ref=e144]:
+                          - /url: "#interer_osobnyaka"
+                          - generic [ref=e145]: Интерьер особняка
+                      - listitem [ref=e146] [cursor=pointer]:
+                        - link "Сколько стоит ремонт в 2023 году?" [ref=e147]:
+                          - /url: "#skolko_stoit_remont_v_2023_gody"
+                          - generic [ref=e148]: Сколько стоит ремонт в 2023 году?
+                    - button "Показать ещё" [ref=e149] [cursor=pointer]
+                  - generic [ref=e150]:
+                    - paragraph [ref=e161]: Елена Ваенга — настоящая жительница Петербурга, которая не готова расставаться с родными местами ни за какие деньги. Даже свой загородный дом она не стала строить в более тёплом климате, а решила жить недалеко от северной столицы, в посёлке Кузьмолово. Это очень уютное и жизнерадостное место, на которое я предлагаю вам посмотреть в этом обзоре.
+                    - figure [ref=e167] [cursor=pointer]
+                    - figure [ref=e173] [cursor=pointer]:
+                      - img "-2" [ref=e174]
+                    - blockquote [ref=e175]:
+                      - text: "Хотите сделать ремонт, но не разориться на этом? Можно сделать преображение бюджетно, рассчитайте цену ремонта, перейдя по ссылке: 👉"
+                      - link "рассчитать" [ref=e176] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi1R
+                      - text: 👈. Это бесплатно, и займёт всего полминуты!
+                    - heading "Участок возле дома" [level=2]
+                    - paragraph [ref=e177]: Пространство рядом с особняком не простаивает без дела, как у многих других знаменитостей. Несмотря на солидные доходы, Елена Ваенга собственноручно занимается выращиванием овощей и фруктов, и даже держит кур!
+                    - paragraph [ref=e178]: Для выращивания помидоров недалеко от дома даже возвели большую теплицу высотой больше человеческого роста. В ней томатам удаётся расти даже в неблагоприятном питерском климате.
+                    - figure [ref=e184] [cursor=pointer]:
+                      - img "-3" [ref=e185]
+                    - paragraph [ref=e186]: Также на территории усадьбы есть курятник и целый загон для выгула птиц. Он расположен прямо в небольшой роще, которая находилась на участке ещё до его покупки. Кормит кур и собирает яйца Елена Ваенга сама, поскольку делает это для личного удовольствия. Кто бы мог подумать, что роскошная певица занимается таким хобби!
+                    - figure [ref=e192] [cursor=pointer]:
+                      - img "-4" [ref=e193]
+                    - paragraph [ref=e194]: Елена Ваенга настолько увлечена сельским хозяйством, что даже выкладывает в социальные сети фотографии своих рекордов. Посмотрите, какой урожай тыкв ей удалось однажды собрать!
+                    - figure [ref=e200] [cursor=pointer]:
+                      - img "-5" [ref=e201]
+                    - paragraph [ref=e202]: Но, разумеется, в загородном доме есть место не только для труда, но и для отдыха. На улице таким местом служит терраса. Здесь стоит небольшой столик для перекусов, несколько лавочек и диван, выглядящий как гигантская покрышка.
+                    - figure [ref=e208] [cursor=pointer]:
+                      - img "-6" [ref=e209]
+                    - paragraph
+                    - heading "Интерьер особняка" [level=2]
+                    - paragraph [ref=e210]: Центральное место внутри дома занимает столовая, совмещённая с гостиной. Здесь стоит длинный обеденный стол, рассчитанный на 10 человек. На полу лежит ламинат, но не он, а текстиль является главным украшением интерьера. Елена Ваенга лично подбирала шторы, скатерти и другие тканные украшения для оформления особняка.
+                    - figure [ref=e216] [cursor=pointer]:
+                      - img "-7" [ref=e217]
+                    - paragraph
+                    - heading "Сколько стоит ремонт в 2023 году?" [level=2]
+                    - generic [ref=e230]:
+                      - generic:
+                        - generic:
+                          - generic "Активное изображение" [ref=e231] [cursor=pointer]:
+                            - figure [ref=e234]:
+                              - img "-8" [ref=e235]
+                          - figure [ref=e239] [cursor=pointer]:
+                            - img "-8-2" [ref=e240]
+                          - figure [ref=e244] [cursor=pointer]:
+                            - img "-8-3" [ref=e245]
+                    - paragraph
+                    - heading "✅РАССЧИТАЙТЕ ЗДЕСЬ✅" [level=2]:
+                      - text: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e246] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi2R%23mc_0
+                      - text: ✅
+                    - paragraph
+                    - paragraph [ref=e247]: Ещё одна немаловажная деталь интерьера гостиной — большой камин напротив стола. Он выложен из натурального крупного камня. В осеннее и зимнее время камин никогда не простаивает без дела — погода Ленобласти накладывает свой отпечаток на быт.
+                    - figure [ref=e253] [cursor=pointer]:
+                      - img "-9" [ref=e254]
+                    - paragraph [ref=e255]: Рядом со столовой расположилась кухня. Как ни странно, то помещение оформлено в соответствии с современными минималистичными трендами. Фасады снабжены системами «Push-to-Open», и имеют абсолютно гладкую тёмно-серую поверхность. Вся техника на кухне тоже встроена. Елена Ваенга исходила из соображений практичности, поэтому большая часть техники имеет белый цвет.
+                    - figure [ref=e261] [cursor=pointer]:
+                      - img "-10" [ref=e262]
+                    - paragraph [ref=e263]: Тут же, в гостиной, находится лестница на второй этаж, которая будто бы висит в воздухе. Малозаметные соединения ступеней и прозрачные ограждения из закалённого стекла создают очень необычный эффект, который завораживает внимание.
+                    - figure [ref=e269] [cursor=pointer]:
+                      - img "-11" [ref=e270]
+                    - paragraph [ref=e271]: В холле второго этажа расположилась небольшая библиотека и музыкальный зал. Здесь Елена Ваенга всё внимание акцентировала на рояль — на фоне чёрных стен инструмент сильно выделяется, и притягивает к себе взгляд.
+                    - figure [ref=e277] [cursor=pointer]:
+                      - img "-12" [ref=e278]
+                    - paragraph [ref=e279]: "Поблизости находятся жилые комнаты и ванная, которую тоже певица отделала по своему вкусу. В интерьере ванной использованы красно-белые оттенки: три стены отделаны глянцевой красной плиткой, а пол и четвёртая стена белые."
+                    - figure [ref=e285] [cursor=pointer]:
+                      - img "-13" [ref=e286]
+                    - paragraph [ref=e287]: А вам нравится оформление загородного дома Елены Ваенги? Поделитесь мнением в комментариях 👇.
+                    - heading "С чего начать ремонт?" [level=2]
+                    - figure [ref=e293] [cursor=pointer]:
+                      - img "-14" [ref=e294]
+                    - paragraph [ref=e295]: "Domeo советует начать свой ремонт с 2х простых шагов:"
+                    - blockquote [ref=e296]:
+                      - text: "1. Рассчитать стоимость ремонта в 3-х вариантах и сравнить. Бесплатно получите расчет тут: ✅"
+                      - link "https://clck.ru/34YbSB" [ref=e297] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi3R
+                    - blockquote [ref=e298]:
+                      - text: "2. Выбрать подходящего дизайнера для визуализации своих идей! Бесплатно выберите своего дизайнера здесь: ✅"
+                      - link "https://clck.ru/34YbPg" [ref=e299] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-design.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi3D
+                    - figure [ref=e305] [cursor=pointer]:
+                      - img "-15" [ref=e306]
+                    - paragraph [ref=e307]: "Также рекомендую прочитать:"
+                    - generic [ref=e316] [cursor=pointer]:
+                      - generic [ref=e317]: "Питерская квартира Елены Ваенги: рассказываю об особенностях дизайна"
+                      - generic [ref=e318]:
+                        - generic [ref=e319]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e322]
+                        - generic [ref=e323]: · 21 февраля 2023
+                    - link "Посмотрите, в каком поместье жил Валентин Юдашкин! Обзор загородного дома кутюрье DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 22 июля 2023" [ref=e326] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ZLtfidqNKT5_pzCZ
+                      - img [ref=e547]
+                      - generic [ref=e332]:
+                        - generic [ref=e333]: Посмотрите, в каком поместье жил Валентин Юдашкин! Обзор загородного дома кутюрье
+                        - generic [ref=e334]:
+                          - generic [ref=e335]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e338]
+                          - generic [ref=e339]: · 22 июля 2023
+                    - generic [ref=e342] [cursor=pointer]:
+                      - img [ref=e548]
+                      - generic [ref=e348]:
+                        - generic [ref=e349]: "Показываю «пацанскую» квартиру Димы Билана в Москве: обзор интерьера"
+                        - generic [ref=e350]:
+                          - generic [ref=e351]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e354]
+                          - generic [ref=e355]: · 21 июля 2023
+                    - figure [ref=e361] [cursor=pointer]:
+                      - img "-16" [ref=e362]
+                    - paragraph [ref=e363]:
+                      - generic [ref=e364]: Информация, приведенная в статье, взята из открытых источников
+              - generic [ref=e365]:
+                - generic "Плашка подписки на канал" [ref=e366]:
+                  - generic [ref=e367]:
+                    - generic [ref=e368]: Подпишитесь на канал,
+                    - generic [ref=e369]: чтобы не пропустить новые публикации
+                  - button "Подписаться" [ref=e370] [cursor=pointer]:
+                    - generic [ref=e371]: Подписаться
+                - generic "Социальный блок" [ref=e372]:
+                  - generic [ref=e373]:
+                    - button [ref=e376] [cursor=pointer]:
+                      - generic:
+                        - generic:
+                          - img
+                    - button "Нравится" [ref=e377] [cursor=pointer]:
+                      - generic [ref=e378]:
+                        - img [ref=e380]
+                        - generic "Подпись к кнопке" [ref=e381]: "2849"
+                    - button "Комментировать" [ref=e383] [cursor=pointer]:
+                      - generic [ref=e384]:
+                        - img [ref=e386]
+                        - generic "Подпись к кнопке" [ref=e387]: "330"
+                  - generic [ref=e388]:
+                    - button "Не нравится" [ref=e389] [cursor=pointer]:
+                      - img [ref=e392]
+                    - button [ref=e394] [cursor=pointer]:
+                      - img [ref=e397]
+              - generic [ref=e553]:
+                - generic [ref=e555]:
+                  - generic [ref=e556]: Комментарии330
+                  - button "Сначала популярные" [ref=e557] [cursor=pointer]:
+                    - generic [ref=e558]: Сначала популярные
+                    - img [ref=e560]
+                - generic [ref=e562]:
+                  - generic [ref=e563]:
+                    - textbox "Поле ввода комментария" [ref=e564]:
+                      - /placeholder: Написать комментарий
+                    - generic:
+                      - generic: 0 / 2500
+                      - generic [ref=e565]:
+                        - button "Смайлики и эмоции" [disabled] [ref=e566]:
+                          - img [ref=e568]
+                        - button "Добавить картинку" [disabled] [ref=e570]:
+                          - img [ref=e572]
+                        - button "Отправить комментарий" [disabled] [ref=e574]:
+                          - img [ref=e576]
+                  - generic [ref=e578]: Войти, чтобы комментировать
+                - generic [ref=e584]:
+                  - generic [ref=e585]:
+                    - generic [ref=e586]:
+                      - generic [ref=e587]:
+                        - link "Ольга Созонова" [ref=e588] [cursor=pointer]:
+                          - /url: /id/6516ce875af573666a850751
+                          - generic [ref=e589]: Ольга Созонова
+                        - generic [ref=e590]: 23 июл 2023
+                      - button "Меню комментария" [ref=e592] [cursor=pointer]:
+                        - img [ref=e593]
+                    - generic "Кликабельный текст поста" [ref=e596]:
+                      - generic [ref=e598]: Крайне чудесная женщина!!!! Здоровья,счастья, успехов Вам Елена во всех Ваших делах, начинаниях.
+                    - generic [ref=e600]:
+                      - button "Ответить" [ref=e601] [cursor=pointer]
+                      - generic [ref=e603]:
+                        - checkbox "835"
+                        - generic [ref=e604] [cursor=pointer]:
+                          - img [ref=e605]
+                          - generic [ref=e606]: "835"
+                      - generic [ref=e607]:
+                        - generic [ref=e609]:
+                          - checkbox "32"
+                          - generic [ref=e610] [cursor=pointer]:
+                            - img [ref=e611]
+                            - generic [ref=e612]: "32"
+                        - button [ref=e614]:
+                          - generic [ref=e617] [cursor=pointer]:
+                            - img [ref=e619]
+                            - img [ref=e622]
+                            - img [ref=e624]
+                            - img [ref=e626]
+                            - img [ref=e628]
+                            - img [ref=e630]
+                            - img [ref=e632]
+                  - button "Показать ответы на комментарий" [ref=e635] [cursor=pointer]:
+                    - generic [ref=e637]: 5 ответов
+                - generic [ref=e644]:
+                  - generic [ref=e645]:
+                    - generic [ref=e646]:
+                      - generic [ref=e647]:
+                        - link "Галина Завойкина" [ref=e648] [cursor=pointer]:
+                          - /url: /user/a85iwvweeztalfsbdz-mbxhbeyw
+                          - generic [ref=e649]: Галина Завойкина
+                        - generic [ref=e650]: 23 июл 2023
+                      - button "Меню комментария" [ref=e652] [cursor=pointer]:
+                        - img [ref=e653]
+                    - generic "Кликабельный текст поста" [ref=e656]:
+                      - generic [ref=e658]: Умница. Образованный человек из хорошей семьи. Большой талант. Очень глубокий человек. Философский склад ума.
+                    - generic [ref=e660]:
+                      - button "Ответить" [ref=e661] [cursor=pointer]
+                      - generic [ref=e663]:
+                        - checkbox "683"
+                        - generic [ref=e664] [cursor=pointer]:
+                          - img [ref=e665]
+                          - generic [ref=e666]: "683"
+                      - generic [ref=e667]:
+                        - generic [ref=e669]:
+                          - checkbox "29"
+                          - generic [ref=e670] [cursor=pointer]:
+                            - img [ref=e671]
+                            - generic [ref=e672]: "29"
+                        - button [ref=e674]:
+                          - img [ref=e676] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e679] [cursor=pointer]:
+                    - generic [ref=e681]: 7 ответов
+                - generic [ref=e688]:
+                  - generic [ref=e689]:
+                    - generic [ref=e690]:
+                      - generic [ref=e691]:
+                        - link "Анастасия Чернышова" [ref=e692] [cursor=pointer]:
+                          - /url: /user/tz4fykk70vrf98ztg6239nm08c
+                          - generic [ref=e693]: Анастасия Чернышова
+                        - generic [ref=e694]: 23 июл 2023
+                      - button "Меню комментария" [ref=e696] [cursor=pointer]:
+                        - img [ref=e697]
+                    - generic "Кликабельный текст поста" [ref=e700]:
+                      - generic [ref=e702]: умница
+                    - generic [ref=e704]:
+                      - button "Ответить" [ref=e705] [cursor=pointer]
+                      - generic [ref=e707]:
+                        - checkbox "529"
+                        - generic [ref=e708] [cursor=pointer]:
+                          - img [ref=e709]
+                          - generic [ref=e710]: "529"
+                      - generic [ref=e711]:
+                        - generic [ref=e713]:
+                          - checkbox "25"
+                          - generic [ref=e714] [cursor=pointer]:
+                            - img [ref=e715]
+                            - generic [ref=e716]: "25"
+                        - button [ref=e718]:
+                          - img [ref=e720] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e723] [cursor=pointer]:
+                    - generic [ref=e725]: 2 ответа
+                - generic [ref=e830]:
+                  - generic [ref=e831]:
+                    - generic [ref=e832]:
+                      - generic [ref=e833]:
+                        - link "Елена Частова" [ref=e834] [cursor=pointer]:
+                          - /url: /user/1zcjnprd44vg2vncdzn8g8r3y4
+                          - generic [ref=e835]: Елена Частова
+                        - generic [ref=e836]: 23 июл 2023
+                      - button "Меню комментария" [ref=e838] [cursor=pointer]:
+                        - img [ref=e839]
+                    - generic "Кликабельный текст поста" [ref=e842]:
+                      - generic [ref=e844]: Самое главное что-бы ей нравилось! Картинки они и есть картинки а в живую по-другому смотреться будет. А вот парник с помидорами Шикарный!!!
+                    - generic [ref=e846]:
+                      - button "Ответить" [ref=e847] [cursor=pointer]
+                      - generic [ref=e849]:
+                        - checkbox "63"
+                        - generic [ref=e850] [cursor=pointer]:
+                          - img [ref=e851]
+                          - generic [ref=e852]: "63"
+                      - generic [ref=e853]:
+                        - generic [ref=e855]:
+                          - checkbox "2"
+                          - generic [ref=e856] [cursor=pointer]:
+                            - img [ref=e857]
+                            - generic [ref=e858]: "2"
+                        - button [ref=e860]:
+                          - img [ref=e862] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e865] [cursor=pointer]:
+                    - generic [ref=e867]: 6 ответов
+                - generic [ref=e874]:
+                  - generic [ref=e875]:
+                    - generic [ref=e876]:
+                      - generic [ref=e877]:
+                        - link "Maria Delva" [ref=e878] [cursor=pointer]:
+                          - /url: /id/628b28d193a0b55aef5f87aa
+                          - generic [ref=e879]: Maria Delva
+                        - generic [ref=e880]: 23 июл 2023
+                      - button "Меню комментария" [ref=e882] [cursor=pointer]:
+                        - img [ref=e883]
+                    - generic "Кликабельный текст поста" [ref=e886]:
+                      - generic [ref=e888]: Полное отсутствие вкуса, нет единого стиля. Восторги автора непонятны.
+                    - generic [ref=e890]:
+                      - button "Ответить" [ref=e891] [cursor=pointer]
+                      - generic [ref=e893]:
+                        - checkbox "89"
+                        - generic [ref=e894] [cursor=pointer]:
+                          - img [ref=e895]
+                          - generic [ref=e896]: "89"
+                      - generic [ref=e897]:
+                        - generic [ref=e899]:
+                          - checkbox "30"
+                          - generic [ref=e900] [cursor=pointer]:
+                            - img [ref=e901]
+                            - generic [ref=e902]: "30"
+                        - button [ref=e904]:
+                          - img [ref=e906] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e909] [cursor=pointer]:
+                    - generic [ref=e911]: 4 ответа
+                - generic [ref=e918]:
+                  - generic [ref=e919]:
+                    - generic [ref=e920]:
+                      - generic [ref=e921]:
+                        - link "Инна Байсунгурова" [ref=e922] [cursor=pointer]:
+                          - /url: /id/628e883cd5ae8179cf287a73
+                          - generic [ref=e923]: Инна Байсунгурова
+                        - generic [ref=e924]: 23 июл 2023
+                      - button "Меню комментария" [ref=e926] [cursor=pointer]:
+                        - img [ref=e927]
+                    - generic "Кликабельный текст поста" [ref=e930]:
+                      - generic [ref=e932]: Все делает лично и личный повар и личный дворник и личный помошник по хозяйству!Все лично!
+                    - generic [ref=e934]:
+                      - button "Ответить" [ref=e935] [cursor=pointer]
+                      - generic [ref=e937]:
+                        - checkbox "62"
+                        - generic [ref=e938] [cursor=pointer]:
+                          - img [ref=e939]
+                          - generic [ref=e940]: "62"
+                      - generic [ref=e941]:
+                        - generic [ref=e943]:
+                          - checkbox "4"
+                          - generic [ref=e944] [cursor=pointer]:
+                            - img [ref=e945]
+                            - generic [ref=e946]: "4"
+                        - button [ref=e948]:
+                          - img [ref=e950] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e953] [cursor=pointer]:
+                    - generic [ref=e955]: 2 ответа
+                - generic [ref=e962]:
+                  - generic [ref=e963]:
+                    - generic [ref=e964]:
+                      - generic [ref=e965]:
+                        - link "Tati2854" [ref=e966] [cursor=pointer]:
+                          - /url: /id/66c258f58ef13b0aaf5bf229
+                          - generic [ref=e967]: Tati2854
+                        - generic [ref=e968]: 23 июл 2023
+                      - button "Меню комментария" [ref=e970] [cursor=pointer]:
+                        - img [ref=e971]
+                    - generic "Кликабельный текст поста" [ref=e974] [cursor=pointer]:
+                      - generic [ref=e976]:
+                        - text: Кому колхоз а кому доход и удовольствие. Судите по себе. Елена обеспечивает всю семью (маму, сестру с семьей и т.д.). А семья у нее на двоих с мужем огромная. Далее. Елена очень часто собирает у себя в доме весь коллектив с семьями, с детьми, кормит, поит. Они там отдыхают и репетируют. А еще она, по собственному желанию, перечисляет половину своей зарплаты бывшему мужу за его песни
+                        - generic [ref=e977]: ...ещё
+                    - generic [ref=e979]:
+                      - button "Ответить" [ref=e980] [cursor=pointer]
+                      - generic [ref=e982]:
+                        - checkbox "71"
+                        - generic [ref=e983] [cursor=pointer]:
+                          - img [ref=e984]
+                          - generic [ref=e985]: "71"
+                      - generic [ref=e986]:
+                        - generic [ref=e988]:
+                          - checkbox "20"
+                          - generic [ref=e989] [cursor=pointer]:
+                            - img [ref=e990]
+                            - generic [ref=e991]: "20"
+                        - button [ref=e993]:
+                          - img [ref=e995] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e998] [cursor=pointer]:
+                    - generic [ref=e1000]: 11 ответов
+                - generic [ref=e1008]:
+                  - generic [ref=e1009]:
+                    - generic [ref=e1010]:
+                      - link "Наместникова Елена Владимировна" [ref=e1011] [cursor=pointer]:
+                        - /url: /user/79z63rxdbw9ujpru4y9pxpkmkm
+                        - generic [ref=e1012]: Наместникова Елена Владимировна
+                      - generic [ref=e1013]: 23 июл 2023
+                    - button "Меню комментария" [ref=e1015] [cursor=pointer]:
+                      - img [ref=e1016]
+                  - generic "Кликабельный текст поста" [ref=e1019]:
+                    - generic [ref=e1021]: По фотографиям нельзя понять полной картины. Человек делал для себя так какая разница нравится кому-то или нет?
+                  - generic [ref=e1023]:
+                    - button "Ответить" [ref=e1024] [cursor=pointer]
+                    - generic [ref=e1026]:
+                      - checkbox "39"
+                      - generic [ref=e1027] [cursor=pointer]:
+                        - img [ref=e1028]
+                        - generic [ref=e1029]: "39"
+                    - generic [ref=e1030]:
+                      - generic [ref=e1032]:
+                        - checkbox "1"
+                        - generic [ref=e1033] [cursor=pointer]:
+                          - img [ref=e1034]
+                          - generic [ref=e1035]: "1"
+                      - button [ref=e1037]:
+                        - img [ref=e1039] [cursor=pointer]
+                - generic [ref=e1046]:
+                  - generic [ref=e1047]:
+                    - generic [ref=e1048]:
+                      - generic [ref=e1049]:
+                        - link "844870 Лабазина" [ref=e1050] [cursor=pointer]:
+                          - /url: /user/m0gy191ktewb51bhfjvj9zfc98
+                          - generic [ref=e1051]: 844870 Лабазина
+                        - generic [ref=e1052]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1054] [cursor=pointer]:
+                        - img [ref=e1055]
+                    - generic "Кликабельный текст поста" [ref=e1058]:
+                      - generic [ref=e1060]: На вкус и цвет-товарищей нет.😏
+                    - generic [ref=e1062]:
+                      - button "Ответить" [ref=e1063] [cursor=pointer]
+                      - generic [ref=e1065]:
+                        - checkbox "41"
+                        - generic [ref=e1066] [cursor=pointer]:
+                          - img [ref=e1067]
+                          - generic [ref=e1068]: "41"
+                      - generic [ref=e1069]:
+                        - generic [ref=e1071]:
+                          - checkbox "2"
+                          - generic [ref=e1072] [cursor=pointer]:
+                            - img [ref=e1073]
+                            - generic [ref=e1074]: "2"
+                        - button [ref=e1076]:
+                          - img [ref=e1078] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1081] [cursor=pointer]:
+                    - generic [ref=e1083]: 1 ответ
+                - generic [ref=e1091]:
+                  - generic [ref=e1092]:
+                    - generic [ref=e1093]:
+                      - link "наталья кашина" [ref=e1094] [cursor=pointer]:
+                        - /url: /id/61a0cdd7268a152a9f8e6db9
+                        - generic [ref=e1095]: наталья кашина
+                      - generic [ref=e1096]: 24 июл 2023
+                    - button "Меню комментария" [ref=e1098] [cursor=pointer]:
+                      - img [ref=e1099]
+                  - generic "Кликабельный текст поста" [ref=e1102]:
+                    - generic [ref=e1104]: ЛЮДИ , давайте порадуемся за ЕЛЕНУ она талантлива во всем !
+                  - generic [ref=e1106]:
+                    - button "Ответить" [ref=e1107] [cursor=pointer]
+                    - generic [ref=e1109]:
+                      - checkbox "43"
+                      - generic [ref=e1110] [cursor=pointer]:
+                        - img [ref=e1111]
+                        - generic [ref=e1112]: "43"
+                    - generic [ref=e1113]:
+                      - generic [ref=e1115]:
+                        - checkbox "6"
+                        - generic [ref=e1116] [cursor=pointer]:
+                          - img [ref=e1117]
+                          - generic [ref=e1118]: "6"
+                      - button [ref=e1120]:
+                        - img [ref=e1122] [cursor=pointer]
+                - generic [ref=e1130]:
+                  - generic [ref=e1131]:
+                    - generic [ref=e1132]:
+                      - link "Тамара Ткаченко" [ref=e1133] [cursor=pointer]:
+                        - /url: /id/638bb17bd2bcd40c26d40934
+                        - generic [ref=e1134]: Тамара Ткаченко
+                      - generic [ref=e1135]: 23 июл 2023
+                      - generic "Изменено" [ref=e1136]:
+                        - img [ref=e1137]
+                    - button "Меню комментария" [ref=e1140] [cursor=pointer]:
+                      - img [ref=e1141]
+                  - generic "Кликабельный текст поста" [ref=e1144]:
+                    - generic [ref=e1146]: Жилье должно быть жильем, а не Эрмитажем. Хозяйке удобно, она это делала под себя и здорово!
+                  - generic [ref=e1148]:
+                    - button "Ответить" [ref=e1149] [cursor=pointer]
+                    - generic [ref=e1151]:
+                      - checkbox "41"
+                      - generic [ref=e1152] [cursor=pointer]:
+                        - img [ref=e1153]
+                        - generic [ref=e1154]: "41"
+                    - generic [ref=e1155]:
+                      - generic [ref=e1157]:
+                        - checkbox "4"
+                        - generic [ref=e1158] [cursor=pointer]:
+                          - img [ref=e1159]
+                          - generic [ref=e1160]: "4"
+                      - button [ref=e1162]:
+                        - img [ref=e1164] [cursor=pointer]
+                - generic [ref=e1171]:
+                  - generic [ref=e1172]:
+                    - generic [ref=e1173]:
+                      - generic [ref=e1174]:
+                        - link "Ольга Войтович" [ref=e1175] [cursor=pointer]:
+                          - /url: /id/62d699049b5a844188636278
+                          - generic [ref=e1176]: Ольга Войтович
+                        - generic [ref=e1177]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1179] [cursor=pointer]:
+                        - img [ref=e1180]
+                    - generic "Кликабельный текст поста" [ref=e1183]:
+                      - generic [ref=e1185]: "Коментарии некоторые лишние,человек делает для себя интерьер #колхоз или совхоз это личное#.Уважаю Лену за простоту души умница."
+                    - generic [ref=e1187]:
+                      - button "Ответить" [ref=e1188] [cursor=pointer]
+                      - generic [ref=e1190]:
+                        - checkbox "44"
+                        - generic [ref=e1191] [cursor=pointer]:
+                          - img [ref=e1192]
+                          - generic [ref=e1193]: "44"
+                      - generic [ref=e1194]:
+                        - generic [ref=e1196]:
+                          - checkbox "7"
+                          - generic [ref=e1197] [cursor=pointer]:
+                            - img [ref=e1198]
+                            - generic [ref=e1199]: "7"
+                        - button [ref=e1201]:
+                          - img [ref=e1203] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1206] [cursor=pointer]:
+                    - generic [ref=e1208]: 2 ответа
+                - generic [ref=e1215]:
+                  - generic [ref=e1216]:
+                    - generic [ref=e1217]:
+                      - generic [ref=e1218]:
+                        - link "Галина Иванова" [ref=e1219] [cursor=pointer]:
+                          - /url: /user/ween08m438dzxfnqw8kt3mfha0
+                          - generic [ref=e1220]: Галина Иванова
+                        - generic [ref=e1221]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1223] [cursor=pointer]:
+                        - img [ref=e1224]
+                    - generic "Кликабельный текст поста" [ref=e1227]:
+                      - generic [ref=e1229]: Много трудится, поэтому всё имеет, молодец
+                    - generic [ref=e1231]:
+                      - button "Ответить" [ref=e1232] [cursor=pointer]
+                      - generic [ref=e1234]:
+                        - checkbox "37"
+                        - generic [ref=e1235] [cursor=pointer]:
+                          - img [ref=e1236]
+                          - generic [ref=e1237]: "37"
+                      - generic [ref=e1238]:
+                        - generic [ref=e1240]:
+                          - checkbox "3"
+                          - generic [ref=e1241] [cursor=pointer]:
+                            - img [ref=e1242]
+                            - generic [ref=e1243]: "3"
+                        - button [ref=e1245]:
+                          - img [ref=e1247] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1250] [cursor=pointer]:
+                    - generic [ref=e1252]: 1 ответ
+                - generic [ref=e1259]:
+                  - generic [ref=e1260]:
+                    - generic [ref=e1261]:
+                      - generic [ref=e1262]:
+                        - link "Любовь Тк" [ref=e1263] [cursor=pointer]:
+                          - /url: /id/6475c04d6bf6d25810902a18
+                          - generic [ref=e1264]: Любовь Тк
+                        - generic [ref=e1265]: 25 июл 2023
+                      - button "Меню комментария" [ref=e1267] [cursor=pointer]:
+                        - img [ref=e1268]
+                    - generic "Кликабельный текст поста" [ref=e1271] [cursor=pointer]:
+                      - generic [ref=e1272]:
+                        - generic [ref=e1273]: Когда Ваенга появилась на сцене, это было какое событие, песни замечательные, прекрасное исполнение, все хорошо. И она была такая родная и близкая понятная. Самородок из глубинки. Но по мере популярности стала меняться и Елена, звёздная болезнь её не обошла стороной.
+                        - generic [ref=e1274]: И как-то интерес к ней поутих.
+                        - generic [ref=e1275]: ещё
+                    - generic [ref=e1277]:
+                      - button "Ответить" [ref=e1278] [cursor=pointer]
+                      - generic [ref=e1280]:
+                        - checkbox "35"
+                        - generic [ref=e1281] [cursor=pointer]:
+                          - img [ref=e1282]
+                          - generic [ref=e1283]: "35"
+                      - generic [ref=e1284]:
+                        - generic [ref=e1286]:
+                          - checkbox "7"
+                          - generic [ref=e1287] [cursor=pointer]:
+                            - img [ref=e1288]
+                            - generic [ref=e1289]: "7"
+                        - button [ref=e1291]:
+                          - img [ref=e1293] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1296] [cursor=pointer]:
+                    - generic [ref=e1298]: 2 ответа
+                - generic [ref=e1305]:
+                  - generic [ref=e1306]:
+                    - generic [ref=e1307]:
+                      - generic [ref=e1308]:
+                        - link "KYSAKA" [ref=e1309] [cursor=pointer]:
+                          - /url: /id/5d7f8a1d4735a600ae6cf6c8
+                          - generic [ref=e1310]: KYSAKA
+                        - generic [ref=e1311]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1313] [cursor=pointer]:
+                        - img [ref=e1314]
+                    - generic "Кликабельный текст поста" [ref=e1317]:
+                      - generic [ref=e1319]: Не нравится, толи колхоз, толи совхоз, всего много и вкучу
+                    - generic [ref=e1321]:
+                      - button "Ответить" [ref=e1322] [cursor=pointer]
+                      - generic [ref=e1324]:
+                        - checkbox "59"
+                        - generic [ref=e1325] [cursor=pointer]:
+                          - img [ref=e1326]
+                          - generic [ref=e1327]: "59"
+                      - generic [ref=e1328]:
+                        - generic [ref=e1330]:
+                          - checkbox "31"
+                          - generic [ref=e1331] [cursor=pointer]:
+                            - img [ref=e1332]
+                            - generic [ref=e1333]: "31"
+                        - button [ref=e1335]:
+                          - img [ref=e1337] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1340] [cursor=pointer]:
+                    - generic [ref=e1342]: 12 ответов
+                - generic [ref=e1350]:
+                  - generic [ref=e1351]:
+                    - generic [ref=e1352]:
+                      - link "Евгения Логинова" [ref=e1353] [cursor=pointer]:
+                        - /url: /id/64e3858725ab36736bb654f2
+                        - generic [ref=e1354]: Евгения Логинова
+                      - generic [ref=e1355]: 25 июл 2023
+                    - button "Меню комментария" [ref=e1357] [cursor=pointer]:
+                      - img [ref=e1358]
+                  - generic "Кликабельный текст поста" [ref=e1361]:
+                    - generic [ref=e1363]: Люблю Елену,как певицу ! Приятно узнать , что еще и хозяйка хорошая. МОЛОДЕЦ! Красивая, талантливая , сильная женщина!
+                  - generic [ref=e1365]:
+                    - button "Ответить" [ref=e1366] [cursor=pointer]
+                    - generic [ref=e1368]:
+                      - checkbox "31"
+                      - generic [ref=e1369] [cursor=pointer]:
+                        - img [ref=e1370]
+                        - generic [ref=e1371]: "31"
+                    - generic [ref=e1372]:
+                      - generic [ref=e1374]:
+                        - checkbox "6"
+                        - generic [ref=e1375] [cursor=pointer]:
+                          - img [ref=e1376]
+                          - generic [ref=e1377]: "6"
+                      - button [ref=e1379]:
+                        - img [ref=e1381] [cursor=pointer]
+                - generic [ref=e1389]:
+                  - generic [ref=e1390]:
+                    - generic [ref=e1391]:
+                      - link "Надежда Б." [ref=e1392] [cursor=pointer]:
+                        - /url: /user/fwj7q7pddphwu2a1phvvz8xej4
+                        - generic [ref=e1393]: Надежда Б.
+                      - generic [ref=e1394]: 24 июл 2023
+                    - button "Меню комментария" [ref=e1396] [cursor=pointer]:
+                      - img [ref=e1397]
+                  - generic "Кликабельный текст поста" [ref=e1400]:
+                    - generic [ref=e1402]: Очень приятная женщина. Хотелось быть соседкой у неё. Успехов ей и большого счастья!!!
+                  - generic [ref=e1404]:
+                    - button "Ответить" [ref=e1405] [cursor=pointer]
+                    - generic [ref=e1407]:
+                      - checkbox "28"
+                      - generic [ref=e1408] [cursor=pointer]:
+                        - img [ref=e1409]
+                        - generic [ref=e1410]: "28"
+                    - generic [ref=e1411]:
+                      - generic [ref=e1413]:
+                        - checkbox "4"
+                        - generic [ref=e1414] [cursor=pointer]:
+                          - img [ref=e1415]
+                          - generic [ref=e1416]: "4"
+                      - button [ref=e1418]:
+                        - img [ref=e1420] [cursor=pointer]
+                - generic [ref=e1428]:
+                  - generic [ref=e1429]:
+                    - generic [ref=e1430]:
+                      - link "Владимир К." [ref=e1431] [cursor=pointer]:
+                        - /url: /id/62432b8370a8f0563d689bf4
+                        - generic [ref=e1432]: Владимир К.
+                      - generic [ref=e1433]: 24 июл 2023
+                    - button "Меню комментария" [ref=e1435] [cursor=pointer]:
+                      - img [ref=e1436]
+                  - generic "Кликабельный текст поста" [ref=e1439]:
+                    - generic [ref=e1441]: Должно нравиться хозяевам.
+                  - generic [ref=e1443]:
+                    - button "Ответить" [ref=e1444] [cursor=pointer]
+                    - generic [ref=e1446]:
+                      - checkbox "23"
+                      - generic [ref=e1447] [cursor=pointer]:
+                        - img [ref=e1448]
+                        - generic [ref=e1449]: "23"
+                    - generic [ref=e1450]:
+                      - generic [ref=e1452]:
+                        - checkbox
+                        - img [ref=e1454] [cursor=pointer]
+                      - button [ref=e1456]:
+                        - img [ref=e1458] [cursor=pointer]
+                - generic [ref=e1465]:
+                  - generic [ref=e1466]:
+                    - generic [ref=e1467]:
+                      - generic [ref=e1468]:
+                        - link "Татьяна Зажигалина" [ref=e1469] [cursor=pointer]:
+                          - /url: /user/5awfvgfzvhbhanbjrp1b1xdvd4
+                          - generic [ref=e1470]: Татьяна Зажигалина
+                        - generic [ref=e1471]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1473] [cursor=pointer]:
+                        - img [ref=e1474]
+                    - generic "Кликабельный текст поста" [ref=e1477]:
+                      - generic [ref=e1479]: Ой ну просто молодец!
+                    - generic [ref=e1481]:
+                      - button "Ответить" [ref=e1482] [cursor=pointer]
+                      - generic [ref=e1484]:
+                        - checkbox "30"
+                        - generic [ref=e1485] [cursor=pointer]:
+                          - img [ref=e1486]
+                          - generic [ref=e1487]: "30"
+                      - generic [ref=e1488]:
+                        - generic [ref=e1490]:
+                          - checkbox "9"
+                          - generic [ref=e1491] [cursor=pointer]:
+                            - img [ref=e1492]
+                            - generic [ref=e1493]: "9"
+                        - button [ref=e1495]:
+                          - img [ref=e1497] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1500] [cursor=pointer]:
+                    - generic [ref=e1502]: 2 ответа
+                - generic [ref=e1510]:
+                  - generic [ref=e1512]:
+                    - generic [ref=e1513]: Пользователь удалён
+                    - generic [ref=e1514]: 18 апр 2024
+                  - generic [ref=e1516]: Комментарий недоступен
+                - generic [ref=e1522]:
+                  - generic [ref=e1523]:
+                    - generic [ref=e1524]:
+                      - generic [ref=e1525]:
+                        - link "Stella Zimina" [ref=e1526] [cursor=pointer]:
+                          - /url: /user/qow3bkshhvohafsfbf8xknckgis
+                          - generic [ref=e1527]: Stella Zimina
+                        - generic [ref=e1528]: 26 авг 2024
+                      - button "Меню комментария" [ref=e1530] [cursor=pointer]:
+                        - img [ref=e1531]
+                    - generic "Кликабельный текст поста" [ref=e1534]:
+                      - generic [ref=e1536]: А почему должно нравиться кому то?Главное что бы нравилось ей и ее семье!Елена молодец,трудяга и большой талант!Умница!!!
+                    - generic [ref=e1538]:
+                      - button "Ответить" [ref=e1539] [cursor=pointer]
+                      - generic [ref=e1541]:
+                        - checkbox "20"
+                        - generic [ref=e1542] [cursor=pointer]:
+                          - img [ref=e1543]
+                          - generic [ref=e1544]: "20"
+                      - generic [ref=e1545]:
+                        - generic [ref=e1547]:
+                          - checkbox "2"
+                          - generic [ref=e1548] [cursor=pointer]:
+                            - img [ref=e1549]
+                            - generic [ref=e1550]: "2"
+                        - button [ref=e1552]:
+                          - img [ref=e1554] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1557] [cursor=pointer]:
+                    - generic [ref=e1559]: 1 ответ
+                - generic [ref=e1566]:
+                  - generic [ref=e1567]:
+                    - generic [ref=e1568]:
+                      - generic [ref=e1569]:
+                        - link "Маша Юрьева" [ref=e1570] [cursor=pointer]:
+                          - /url: /id/6369292797da6c731a410006
+                          - generic [ref=e1571]: Маша Юрьева
+                        - generic [ref=e1572]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1574] [cursor=pointer]:
+                        - img [ref=e1575]
+                    - generic "Кликабельный текст поста" [ref=e1578]:
+                      - generic [ref=e1580]: Мировая женщина!! Все успевает!! И карьера, и огород и живность!!! Откуда только силы берутся? Восхищаюсь!
+                    - generic [ref=e1582]:
+                      - button "Ответить" [ref=e1583] [cursor=pointer]
+                      - generic [ref=e1585]:
+                        - checkbox "24"
+                        - generic [ref=e1586] [cursor=pointer]:
+                          - img [ref=e1587]
+                          - generic [ref=e1588]: "24"
+                      - generic [ref=e1589]:
+                        - generic [ref=e1591]:
+                          - checkbox "6"
+                          - generic [ref=e1592] [cursor=pointer]:
+                            - img [ref=e1593]
+                            - generic [ref=e1594]: "6"
+                        - button [ref=e1596]:
+                          - img [ref=e1598] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1601] [cursor=pointer]:
+                    - generic [ref=e1603]: 2 ответа
+                - generic [ref=e1610]:
+                  - generic [ref=e1611]:
+                    - generic [ref=e1612]:
+                      - generic [ref=e1613]:
+                        - link "Любовь Жигарева" [ref=e1614] [cursor=pointer]:
+                          - /url: /user/hiij5t_033j88fdz_9a6hp4ndke
+                          - generic [ref=e1615]: Любовь Жигарева
+                        - generic [ref=e1616]: 1 сен 2024
+                      - button "Меню комментария" [ref=e1618] [cursor=pointer]:
+                        - img [ref=e1619]
+                    - generic "Кликабельный текст поста" [ref=e1622]:
+                      - generic [ref=e1624]: С уважением отношусь к этой естественной ,талантливой женщине
+                    - generic [ref=e1626]:
+                      - button "Ответить" [ref=e1627] [cursor=pointer]
+                      - generic [ref=e1629]:
+                        - checkbox "19"
+                        - generic [ref=e1630] [cursor=pointer]:
+                          - img [ref=e1631]
+                          - generic [ref=e1632]: "19"
+                      - generic [ref=e1633]:
+                        - generic [ref=e1635]:
+                          - checkbox "2"
+                          - generic [ref=e1636] [cursor=pointer]:
+                            - img [ref=e1637]
+                            - generic [ref=e1638]: "2"
+                        - button [ref=e1640]:
+                          - img [ref=e1642] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1645] [cursor=pointer]:
+                    - generic [ref=e1647]: 1 ответ
+                - generic [ref=e1655]:
+                  - generic [ref=e1656]:
+                    - generic [ref=e1657]:
+                      - link "Валентина Г." [ref=e1658] [cursor=pointer]:
+                        - /url: /user/u7auaq5cfuz50cnmuwnar1vkb8
+                        - generic [ref=e1659]: Валентина Г.
+                      - generic [ref=e1660]: 17 июн 2024
+                    - button "Меню комментария" [ref=e1662] [cursor=pointer]:
+                      - img [ref=e1663]
+                  - generic "Кликабельный текст поста" [ref=e1666]:
+                    - generic [ref=e1668]: Это её дом она в нём живёт и он должен нравиться ей,а мне лично по барабану!!! Всё вы лезете и лезете,свой заведите и радуйтесь!!!
+                  - generic [ref=e1670]:
+                    - button "Ответить" [ref=e1671] [cursor=pointer]
+                    - generic [ref=e1673]:
+                      - checkbox "16"
+                      - generic [ref=e1674] [cursor=pointer]:
+                        - img [ref=e1675]
+                        - generic [ref=e1676]: "16"
+                    - generic [ref=e1677]:
+                      - generic [ref=e1679]:
+                        - checkbox
+                        - img [ref=e1681] [cursor=pointer]
+                      - button [ref=e1683]:
+                        - img [ref=e1685] [cursor=pointer]
+                - generic [ref=e1692]:
+                  - generic [ref=e1693]:
+                    - generic [ref=e1694]:
+                      - generic [ref=e1695]:
+                        - link "Валентина Рокол" [ref=e1696] [cursor=pointer]:
+                          - /url: /user/ffwmwd87cye1eazt312456jhyr
+                          - generic [ref=e1697]: Валентина Рокол
+                        - generic [ref=e1698]: 11 ноя 2023
+                      - button "Меню комментария" [ref=e1700] [cursor=pointer]:
+                        - img [ref=e1701]
+                    - generic "Кликабельный текст поста" [ref=e1704]:
+                      - generic [ref=e1706]: На хрен нам, все это показывать? ...
+                    - generic [ref=e1708]:
+                      - button "Ответить" [ref=e1709] [cursor=pointer]
+                      - generic [ref=e1711]:
+                        - checkbox "19"
+                        - generic [ref=e1712] [cursor=pointer]:
+                          - img [ref=e1713]
+                          - generic [ref=e1714]: "19"
+                      - generic [ref=e1715]:
+                        - generic [ref=e1717]:
+                          - checkbox "3"
+                          - generic [ref=e1718] [cursor=pointer]:
+                            - img [ref=e1719]
+                            - generic [ref=e1720]: "3"
+                        - button [ref=e1722]:
+                          - img [ref=e1724] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1727] [cursor=pointer]:
+                    - generic [ref=e1729]: 1 ответ
+                - generic [ref=e1737]:
+                  - generic [ref=e1738]:
+                    - generic [ref=e1739]:
+                      - link "Сергей Калапов" [ref=e1740] [cursor=pointer]:
+                        - /url: /id/653dcdb5338ce209bf326a67
+                        - generic [ref=e1741]: Сергей Калапов
+                      - generic [ref=e1742]: 23 июл 2023
+                    - button "Меню комментария" [ref=e1744] [cursor=pointer]:
+                      - img [ref=e1745]
+                  - generic "Кликабельный текст поста" [ref=e1748]:
+                    - generic [ref=e1750]: . У каждого своё видение, как обустроить свой теремок...
+                  - generic [ref=e1752]:
+                    - button "Ответить" [ref=e1753] [cursor=pointer]
+                    - generic [ref=e1755]:
+                      - checkbox "20"
+                      - generic [ref=e1756] [cursor=pointer]:
+                        - img [ref=e1757]
+                        - generic [ref=e1758]: "20"
+                    - generic [ref=e1759]:
+                      - generic [ref=e1761]:
+                        - checkbox "4"
+                        - generic [ref=e1762] [cursor=pointer]:
+                          - img [ref=e1763]
+                          - generic [ref=e1764]: "4"
+                      - button [ref=e1766]:
+                        - img [ref=e1768] [cursor=pointer]
+                - generic [ref=e1775]:
+                  - generic [ref=e1776]:
+                    - generic [ref=e1777]:
+                      - generic [ref=e1778]:
+                        - link "Валентина" [ref=e1779] [cursor=pointer]:
+                          - /url: /user/wxk9188b9v2b1t8h11tuw34md8
+                          - generic [ref=e1780]: Валентина
+                        - generic [ref=e1781]: 23 июл 2023
+                      - button "Меню комментария" [ref=e1783] [cursor=pointer]:
+                        - img [ref=e1784]
+                    - generic "Кликабельный текст поста" [ref=e1787]:
+                      - generic [ref=e1789]: Живёт, радуется жизни!!!
+                    - generic [ref=e1791]:
+                      - button "Ответить" [ref=e1792] [cursor=pointer]
+                      - generic [ref=e1794]:
+                        - checkbox "18"
+                        - generic [ref=e1795] [cursor=pointer]:
+                          - img [ref=e1796]
+                          - generic [ref=e1797]: "18"
+                      - generic [ref=e1798]:
+                        - generic [ref=e1800]:
+                          - checkbox "4"
+                          - generic [ref=e1801] [cursor=pointer]:
+                            - img [ref=e1802]
+                            - generic [ref=e1803]: "4"
+                        - button [ref=e1805]:
+                          - img [ref=e1807] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1810] [cursor=pointer]:
+                    - generic [ref=e1812]: 1 ответ
+                - generic [ref=e1820]:
+                  - generic [ref=e1821]:
+                    - generic [ref=e1822]:
+                      - link "Аноним" [ref=e1823] [cursor=pointer]:
+                        - /url: /user/d0vu7t6mkzd3rtttzg9na58jx0
+                        - generic [ref=e1824]: Аноним
+                      - generic [ref=e1825]: 25 июл 2023
+                    - button "Меню комментария" [ref=e1827] [cursor=pointer]:
+                      - img [ref=e1828]
+                  - generic "Кликабельный текст поста" [ref=e1831]:
+                    - generic [ref=e1833]: Больше всего понравился камин. А совхоз или колхоз, на свой совхоз посмотрели бы. Да, есть более шикарные особняки. Главное, ей комфортно. Всем не угодишь.
+                  - generic [ref=e1835]:
+                    - button "Ответить" [ref=e1836] [cursor=pointer]
+                    - generic [ref=e1838]:
+                      - checkbox "13"
+                      - generic [ref=e1839] [cursor=pointer]:
+                        - img [ref=e1840]
+                        - generic [ref=e1841]: "13"
+                    - generic [ref=e1842]:
+                      - generic [ref=e1844]:
+                        - checkbox
+                        - img [ref=e1846] [cursor=pointer]
+                      - button [ref=e1848]:
+                        - img [ref=e1850] [cursor=pointer]
+                - generic [ref=e1858]:
+                  - generic [ref=e1859]:
+                    - generic [ref=e1860]:
+                      - link "Тата_Вишня" [ref=e1861] [cursor=pointer]:
+                        - /url: /id/5cebc4a4776f8400b3a4c1eb
+                        - generic [ref=e1862]: Тата_Вишня
+                      - generic [ref=e1863]: 28 июл 2024
+                    - button "Меню комментария" [ref=e1865] [cursor=pointer]:
+                      - img [ref=e1866]
+                  - generic "Кликабельный текст поста" [ref=e1869]:
+                    - generic [ref=e1871]: Елена Ваенга - замечательная, талантливая артистка и верный, стойкий человек! Женщина живёт в свое удовольствие, без заморочек и суеты, без понтажа и "звёздности"! Общается с теми, кого любит и уважает, не идёт на поводу модных тенденций, принимает правильную пищу! Поэтому и выглядит отлично - здоровой, аппетитной, красивой женщины в расцвете лет!
+                  - generic [ref=e1873]:
+                    - button "Ответить" [ref=e1874] [cursor=pointer]
+                    - generic [ref=e1876]:
+                      - checkbox "18"
+                      - generic [ref=e1877] [cursor=pointer]:
+                        - img [ref=e1878]
+                        - generic [ref=e1879]: "18"
+                    - generic [ref=e1880]:
+                      - generic [ref=e1882]:
+                        - checkbox "7"
+                        - generic [ref=e1883] [cursor=pointer]:
+                          - img [ref=e1884]
+                          - generic [ref=e1885]: "7"
+                      - button [ref=e1887]:
+                        - img [ref=e1889] [cursor=pointer]
+                - generic [ref=e1897]:
+                  - generic [ref=e1898]:
+                    - generic [ref=e1899]:
+                      - link "татьяна говорухина" [ref=e1900] [cursor=pointer]:
+                        - /url: /user/9wugchgjgpju5ugy48rmqc7b0w
+                        - generic [ref=e1901]: татьяна говорухина
+                      - generic [ref=e1902]: 15 апр 2024
+                    - button "Меню комментария" [ref=e1904] [cursor=pointer]:
+                      - img [ref=e1905]
+                  - generic "Кликабельный текст поста" [ref=e1908]:
+                    - generic [ref=e1910]: молодец, занимается чем нравится.
+                  - generic [ref=e1912]:
+                    - button "Ответить" [ref=e1913] [cursor=pointer]
+                    - generic [ref=e1915]:
+                      - checkbox "13"
+                      - generic [ref=e1916] [cursor=pointer]:
+                        - img [ref=e1917]
+                        - generic [ref=e1918]: "13"
+                    - generic [ref=e1919]:
+                      - generic [ref=e1921]:
+                        - checkbox "2"
+                        - generic [ref=e1922] [cursor=pointer]:
+                          - img [ref=e1923]
+                          - generic [ref=e1924]: "2"
+                      - button [ref=e1926]:
+                        - img [ref=e1928] [cursor=pointer]
+                - generic [ref=e1936]:
+                  - generic [ref=e1937]:
+                    - generic [ref=e1938]:
+                      - link "Окно" [ref=e1939] [cursor=pointer]:
+                        - /url: /id/65c8dab99472bd5004fc8a8d
+                        - generic [ref=e1940]: Окно
+                      - generic [ref=e1941]: 25 июл 2023
+                    - button "Меню комментария" [ref=e1943] [cursor=pointer]:
+                      - img [ref=e1944]
+                  - generic "Кликабельный текст поста" [ref=e1947]:
+                    - generic [ref=e1949]: талантливая певица.
+                  - generic [ref=e1951]:
+                    - button "Ответить" [ref=e1952] [cursor=pointer]
+                    - generic [ref=e1954]:
+                      - checkbox "15"
+                      - generic [ref=e1955] [cursor=pointer]:
+                        - img [ref=e1956]
+                        - generic [ref=e1957]: "15"
+                    - generic [ref=e1958]:
+                      - generic [ref=e1960]:
+                        - checkbox "4"
+                        - generic [ref=e1961] [cursor=pointer]:
+                          - img [ref=e1962]
+                          - generic [ref=e1963]: "4"
+                      - button [ref=e1965]:
+                        - img [ref=e1967] [cursor=pointer]
+                - generic [ref=e1974]:
+                  - generic [ref=e1975]:
+                    - generic [ref=e1976]:
+                      - generic [ref=e1977]:
+                        - link "Джон" [ref=e1978] [cursor=pointer]:
+                          - /url: /id/6383833a38f96e79b7be8d9f
+                          - generic [ref=e1979]: Джон
+                        - generic [ref=e1980]: 24 июл 2023
+                      - button "Меню комментария" [ref=e1982] [cursor=pointer]:
+                        - img [ref=e1983]
+                    - generic "Кликабельный текст поста" [ref=e1986]:
+                      - generic [ref=e1988]: Браво Ваенга!
+                    - generic [ref=e1990]:
+                      - button "Ответить" [ref=e1991] [cursor=pointer]
+                      - generic [ref=e1993]:
+                        - checkbox "15"
+                        - generic [ref=e1994] [cursor=pointer]:
+                          - img [ref=e1995]
+                          - generic [ref=e1996]: "15"
+                      - generic [ref=e1997]:
+                        - generic [ref=e1999]:
+                          - checkbox "4"
+                          - generic [ref=e2000] [cursor=pointer]:
+                            - img [ref=e2001]
+                            - generic [ref=e2002]: "4"
+                        - button [ref=e2004]:
+                          - img [ref=e2006] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2009] [cursor=pointer]:
+                    - generic [ref=e2011]: 2 ответа
+                - generic [ref=e2019]:
+                  - generic [ref=e2020]:
+                    - generic [ref=e2021]:
+                      - link "Наталья Пузрякова" [ref=e2022] [cursor=pointer]:
+                        - /url: /user/e8yy4t3g6uc3zmerhe2jvf4bt4
+                        - generic [ref=e2023]: Наталья Пузрякова
+                      - generic [ref=e2024]: 23 июл 2023
+                    - button "Меню комментария" [ref=e2026] [cursor=pointer]:
+                      - img [ref=e2027]
+                  - generic "Кликабельный текст поста" [ref=e2030]:
+                    - generic [ref=e2032]: "Очень люблю творчество Елены! Уютный, красивый дом. В стиле хозяйки: уютно, тепло, радостно, вкусно. Всего самого доброго и светлого хозяйке!"
+                  - generic [ref=e2034]:
+                    - button "Ответить" [ref=e2035] [cursor=pointer]
+                    - generic [ref=e2037]:
+                      - checkbox "16"
+                      - generic [ref=e2038] [cursor=pointer]:
+                        - img [ref=e2039]
+                        - generic [ref=e2040]: "16"
+                    - generic [ref=e2041]:
+                      - generic [ref=e2043]:
+                        - checkbox "5"
+                        - generic [ref=e2044] [cursor=pointer]:
+                          - img [ref=e2045]
+                          - generic [ref=e2046]: "5"
+                      - button [ref=e2048]:
+                        - img [ref=e2050] [cursor=pointer]
+                - generic [ref=e2058]:
+                  - generic [ref=e2059]:
+                    - generic [ref=e2060]:
+                      - link "Galina китаева" [ref=e2061] [cursor=pointer]:
+                        - /url: /id/633dff2682864b6db2246a61
+                        - generic [ref=e2062]: Galina китаева
+                      - generic [ref=e2063]: 21 окт 2024
+                    - button "Меню комментария" [ref=e2065] [cursor=pointer]:
+                      - img [ref=e2066]
+                  - generic "Кликабельный текст поста" [ref=e2069]:
+                    - generic [ref=e2071]: Ну живёт и живёт.Это садоводство пока не снесли.
+                  - generic [ref=e2073]:
+                    - button "Ответить" [ref=e2074] [cursor=pointer]
+                    - generic [ref=e2076]:
+                      - checkbox "9"
+                      - generic [ref=e2077] [cursor=pointer]:
+                        - img [ref=e2078]
+                        - generic [ref=e2079]: "9"
+                    - generic [ref=e2080]:
+                      - generic [ref=e2082]:
+                        - checkbox
+                        - img [ref=e2084] [cursor=pointer]
+                      - button [ref=e2086]:
+                        - img [ref=e2088] [cursor=pointer]
+                - generic [ref=e2096]:
+                  - generic [ref=e2097]:
+                    - generic [ref=e2098]:
+                      - link "Елена Арлюкова" [ref=e2099] [cursor=pointer]:
+                        - /url: /user/if9d_eji5anz19uxhwpevucht7g
+                        - generic [ref=e2100]: Елена Арлюкова
+                      - generic [ref=e2101]: 9 окт 2024
+                    - button "Меню комментария" [ref=e2103] [cursor=pointer]:
+                      - img [ref=e2104]
+                  - generic "Кликабельный текст поста" [ref=e2107]:
+                    - generic [ref=e2109]: Вот кого я уважаю и чьи песни очень люблю. "Умница, красавица и просто спортсменка"...
+                  - generic [ref=e2111]:
+                    - button "Ответить" [ref=e2112] [cursor=pointer]
+                    - generic [ref=e2114]:
+                      - checkbox "12"
+                      - generic [ref=e2115] [cursor=pointer]:
+                        - img [ref=e2116]
+                        - generic [ref=e2117]: "12"
+                    - generic [ref=e2118]:
+                      - generic [ref=e2120]:
+                        - checkbox "3"
+                        - generic [ref=e2121] [cursor=pointer]:
+                          - img [ref=e2122]
+                          - generic [ref=e2123]: "3"
+                      - button [ref=e2125]:
+                        - img [ref=e2127] [cursor=pointer]
+                - generic [ref=e2135]:
+                  - generic [ref=e2136]:
+                    - generic [ref=e2137]:
+                      - link "Людмила Кордюкова" [ref=e2138] [cursor=pointer]:
+                        - /url: /user/hqevh16tqnvpchf9te2payel4ps
+                        - generic [ref=e2139]: Людмила Кордюкова
+                      - generic [ref=e2140]: 11 авг 2024
+                    - button "Меню комментария" [ref=e2142] [cursor=pointer]:
+                      - img [ref=e2143]
+                  - generic "Кликабельный текст поста" [ref=e2146]:
+                    - generic [ref=e2148]: Все прекрасно продумано. Здоровья и счастья этой замечательной женщине!
+                  - generic [ref=e2150]:
+                    - button "Ответить" [ref=e2151] [cursor=pointer]
+                    - generic [ref=e2153]:
+                      - checkbox "11"
+                      - generic [ref=e2154] [cursor=pointer]:
+                        - img [ref=e2155]
+                        - generic [ref=e2156]: "11"
+                    - generic [ref=e2157]:
+                      - generic [ref=e2159]:
+                        - checkbox "2"
+                        - generic [ref=e2160] [cursor=pointer]:
+                          - img [ref=e2161]
+                          - generic [ref=e2162]: "2"
+                      - button [ref=e2164]:
+                        - img [ref=e2166] [cursor=pointer]
+                - generic [ref=e2174]:
+                  - generic [ref=e2175]:
+                    - generic [ref=e2176]:
+                      - link "Ольга Неженцева" [ref=e2177] [cursor=pointer]:
+                        - /url: /user/extnwm41et4q2k7krav7xbdvn0
+                        - generic [ref=e2178]: Ольга Неженцева
+                      - generic [ref=e2179]: 29 июл 2024
+                    - button "Меню комментария" [ref=e2181] [cursor=pointer]:
+                      - img [ref=e2182]
+                  - generic "Кликабельный текст поста" [ref=e2185]:
+                    - generic [ref=e2187]: Ну да,если иметь человек 10 прислуги,то почему бы и нет.
+                  - generic [ref=e2189]:
+                    - button "Ответить" [ref=e2190] [cursor=pointer]
+                    - generic [ref=e2192]:
+                      - checkbox "11"
+                      - generic [ref=e2193] [cursor=pointer]:
+                        - img [ref=e2194]
+                        - generic [ref=e2195]: "11"
+                    - generic [ref=e2196]:
+                      - generic [ref=e2198]:
+                        - checkbox "3"
+                        - generic [ref=e2199] [cursor=pointer]:
+                          - img [ref=e2200]
+                          - generic [ref=e2201]: "3"
+                      - button [ref=e2203]:
+                        - img [ref=e2205] [cursor=pointer]
+                - generic [ref=e2213]:
+                  - generic [ref=e2214]:
+                    - generic [ref=e2215]:
+                      - link "Халёша" [ref=e2216] [cursor=pointer]:
+                        - /url: /id/5f7c94c0b516ad3bd83a024f
+                        - generic [ref=e2217]: Халёша
+                      - generic [ref=e2218]: 15 июн 2024
+                    - button "Меню комментария" [ref=e2220] [cursor=pointer]:
+                      - img [ref=e2221]
+                  - generic "Кликабельный текст поста" [ref=e2224]:
+                    - generic [ref=e2226]: Молодец.
+                  - generic [ref=e2228]:
+                    - button "Ответить" [ref=e2229] [cursor=pointer]
+                    - generic [ref=e2231]:
+                      - checkbox "11"
+                      - generic [ref=e2232] [cursor=pointer]:
+                        - img [ref=e2233]
+                        - generic [ref=e2234]: "11"
+                    - generic [ref=e2235]:
+                      - generic [ref=e2237]:
+                        - checkbox "2"
+                        - generic [ref=e2238] [cursor=pointer]:
+                          - img [ref=e2239]
+                          - generic [ref=e2240]: "2"
+                      - button [ref=e2242]:
+                        - img [ref=e2244] [cursor=pointer]
+                - generic [ref=e2252]:
+                  - generic [ref=e2253]:
+                    - generic [ref=e2254]:
+                      - link "Светлана Иванова" [ref=e2255] [cursor=pointer]:
+                        - /url: /user/lqvvzbbmzvkoqtwtkhefazaqwve
+                        - generic [ref=e2256]: Светлана Иванова
+                      - generic [ref=e2257]: 28 мая 2024
+                    - button "Меню комментария" [ref=e2259] [cursor=pointer]:
+                      - img [ref=e2260]
+                  - generic "Кликабельный текст поста" [ref=e2263]:
+                    - generic [ref=e2265]: В своём доме жить, это наслаждение каждый день, с квартирой не сравнить! Мне всё понравилось!
+                  - generic [ref=e2267]:
+                    - button "Ответить" [ref=e2268] [cursor=pointer]
+                    - generic [ref=e2270]:
+                      - checkbox "8"
+                      - generic [ref=e2271] [cursor=pointer]:
+                        - img [ref=e2272]
+                        - generic [ref=e2273]: "8"
+                    - generic [ref=e2274]:
+                      - generic [ref=e2276]:
+                        - checkbox
+                        - img [ref=e2278] [cursor=pointer]
+                      - button [ref=e2280]:
+                        - img [ref=e2282] [cursor=pointer]
+                - generic [ref=e2290]:
+                  - generic [ref=e2291]:
+                    - generic [ref=e2292]:
+                      - link "Ирина Цвет" [ref=e2293] [cursor=pointer]:
+                        - /url: /user/pu2wrayyxugmk7wza7bcjpnvmr
+                        - generic [ref=e2294]: Ирина Цвет
+                      - generic [ref=e2295]: 10 мая 2024
+                    - button "Меню комментария" [ref=e2297] [cursor=pointer]:
+                      - img [ref=e2298]
+                  - generic "Кликабельный текст поста" [ref=e2301]:
+                    - generic [ref=e2303]: Нет ,что у нее нагорожено, не понять.
+                  - generic [ref=e2305]:
+                    - button "Ответить" [ref=e2306] [cursor=pointer]
+                    - generic [ref=e2308]:
+                      - checkbox "11"
+                      - generic [ref=e2309] [cursor=pointer]:
+                        - img [ref=e2310]
+                        - generic [ref=e2311]: "11"
+                    - generic [ref=e2312]:
+                      - generic [ref=e2314]:
+                        - checkbox "3"
+                        - generic [ref=e2315] [cursor=pointer]:
+                          - img [ref=e2316]
+                          - generic [ref=e2317]: "3"
+                      - button [ref=e2319]:
+                        - img [ref=e2321] [cursor=pointer]
+                - generic [ref=e2329]:
+                  - generic [ref=e2330]:
+                    - generic [ref=e2331]:
+                      - link "Анисья Крючкова" [ref=e2332] [cursor=pointer]:
+                        - /url: /id/61a196f3a8290259c83c89d2
+                        - generic [ref=e2333]: Анисья Крючкова
+                      - generic [ref=e2334]: 15 ноя 2023
+                    - button "Меню комментария" [ref=e2336] [cursor=pointer]:
+                      - img [ref=e2337]
+                  - generic "Кликабельный текст поста" [ref=e2340]:
+                    - generic [ref=e2342]: Умничка!!!! Храни тебя Господь!
+                  - generic [ref=e2344]:
+                    - button "Ответить" [ref=e2345] [cursor=pointer]
+                    - generic [ref=e2347]:
+                      - checkbox "9"
+                      - generic [ref=e2348] [cursor=pointer]:
+                        - img [ref=e2349]
+                        - generic [ref=e2350]: "9"
+                    - generic [ref=e2351]:
+                      - generic [ref=e2353]:
+                        - checkbox "1"
+                        - generic [ref=e2354] [cursor=pointer]:
+                          - img [ref=e2355]
+                          - generic [ref=e2356]: "1"
+                      - button [ref=e2358]:
+                        - img [ref=e2360] [cursor=pointer]
+                - generic [ref=e2368]:
+                  - generic [ref=e2369]:
+                    - generic [ref=e2370]:
+                      - link "Светлана Сопочкина" [ref=e2371] [cursor=pointer]:
+                        - /url: /user/4licahsnkjbzmbiypd1pb8eekng
+                        - generic [ref=e2372]: Светлана Сопочкина
+                      - generic [ref=e2373]: 6 окт 2023
+                    - button "Меню комментария" [ref=e2375] [cursor=pointer]:
+                      - img [ref=e2376]
+                  - generic "Кликабельный текст поста" [ref=e2379]:
+                    - generic [ref=e2381]: Мне все очень понрвилось. Успехов и здоровья Вам,и в творчеств и в жизни.
+                  - generic [ref=e2383]:
+                    - button "Ответить" [ref=e2384] [cursor=pointer]
+                    - generic [ref=e2386]:
+                      - checkbox "9"
+                      - generic [ref=e2387] [cursor=pointer]:
+                        - img [ref=e2388]
+                        - generic [ref=e2389]: "9"
+                    - generic [ref=e2390]:
+                      - generic [ref=e2392]:
+                        - checkbox "1"
+                        - generic [ref=e2393] [cursor=pointer]:
+                          - img [ref=e2394]
+                          - generic [ref=e2395]: "1"
+                      - button [ref=e2397]:
+                        - img [ref=e2399] [cursor=pointer]
+                - generic [ref=e2406]:
+                  - generic [ref=e2407]:
+                    - generic [ref=e2408]:
+                      - generic [ref=e2409]:
+                        - link "stolyar b." [ref=e2410] [cursor=pointer]:
+                          - /url: /user/zxh1uxzw8aeuh4w4p1hetx0jgg
+                          - generic [ref=e2411]: stolyar b.
+                        - generic [ref=e2412]: 5 окт 2023
+                      - button "Меню комментария" [ref=e2414] [cursor=pointer]:
+                        - img [ref=e2415]
+                    - generic "Кликабельный текст поста" [ref=e2418]:
+                      - generic [ref=e2420]: в отличии от пугачихиных селиконовых пищалок Лена настоящая,живая.
+                    - generic [ref=e2422]:
+                      - button "Ответить" [ref=e2423] [cursor=pointer]
+                      - generic [ref=e2425]:
+                        - checkbox "10"
+                        - generic [ref=e2426] [cursor=pointer]:
+                          - img [ref=e2427]
+                          - generic [ref=e2428]: "10"
+                      - generic [ref=e2429]:
+                        - generic [ref=e2431]:
+                          - checkbox "2"
+                          - generic [ref=e2432] [cursor=pointer]:
+                            - img [ref=e2433]
+                            - generic [ref=e2434]: "2"
+                        - button [ref=e2436]:
+                          - img [ref=e2438] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2441] [cursor=pointer]:
+                    - generic [ref=e2443]: 1 ответ
+                - generic [ref=e2451]:
+                  - generic [ref=e2453]:
+                    - generic [ref=e2454]: Пользователь удалён
+                    - generic [ref=e2455]: 8 авг 2023
+                  - generic [ref=e2457]: Комментарий недоступен
+                - generic [ref=e2464]:
+                  - generic [ref=e2465]:
+                    - generic [ref=e2466]:
+                      - link "Лара Э" [ref=e2467] [cursor=pointer]:
+                        - /url: /user/vj0518nqvf8366enqqu1bmm100
+                        - generic [ref=e2468]: Лара Э
+                      - generic [ref=e2469]: 1 авг 2023
+                    - button "Меню комментария" [ref=e2471] [cursor=pointer]:
+                      - img [ref=e2472]
+                  - generic "Кликабельный текст поста" [ref=e2475]:
+                    - generic [ref=e2477]: Уважаю...свое хозяйство..говорит о многом о человеке.
+                  - generic [ref=e2479]:
+                    - button "Ответить" [ref=e2480] [cursor=pointer]
+                    - generic [ref=e2482]:
+                      - checkbox "10"
+                      - generic [ref=e2483] [cursor=pointer]:
+                        - img [ref=e2484]
+                        - generic [ref=e2485]: "10"
+                    - generic [ref=e2486]:
+                      - generic [ref=e2488]:
+                        - checkbox "2"
+                        - generic [ref=e2489] [cursor=pointer]:
+                          - img [ref=e2490]
+                          - generic [ref=e2491]: "2"
+                      - button [ref=e2493]:
+                        - img [ref=e2495] [cursor=pointer]
+                - generic [ref=e2503]:
+                  - generic [ref=e2504]:
+                    - generic [ref=e2505]:
+                      - link "Татьяна Катаева" [ref=e2506] [cursor=pointer]:
+                        - /url: /user/9gd3hrg0mu2rk07pay354d5pgw
+                        - generic [ref=e2507]: Татьяна Катаева
+                      - generic [ref=e2508]: 31 июл 2023
+                    - button "Меню комментария" [ref=e2510] [cursor=pointer]:
+                      - img [ref=e2511]
+                  - generic "Кликабельный текст поста" [ref=e2514]:
+                    - generic [ref=e2516]: Умница,красавица хорошая хозяйка!
+                  - generic [ref=e2518]:
+                    - button "Ответить" [ref=e2519] [cursor=pointer]
+                    - generic [ref=e2521]:
+                      - checkbox "10"
+                      - generic [ref=e2522] [cursor=pointer]:
+                        - img [ref=e2523]
+                        - generic [ref=e2524]: "10"
+                    - generic [ref=e2525]:
+                      - generic [ref=e2527]:
+                        - checkbox "2"
+                        - generic [ref=e2528] [cursor=pointer]:
+                          - img [ref=e2529]
+                          - generic [ref=e2530]: "2"
+                      - button [ref=e2532]:
+                        - img [ref=e2534] [cursor=pointer]
+                - generic [ref=e2542]:
+                  - generic [ref=e2543]:
+                    - generic [ref=e2544]:
+                      - link "Татьяна Илюхина" [ref=e2545] [cursor=pointer]:
+                        - /url: /user/p40vi6x3hvtz9nfvlqqxeweino4
+                        - generic [ref=e2546]: Татьяна Илюхина
+                      - generic [ref=e2547]: 26 июл 2023
+                    - button "Меню комментария" [ref=e2549] [cursor=pointer]:
+                      - img [ref=e2550]
+                  - generic "Кликабельный текст поста" [ref=e2553]:
+                    - generic [ref=e2555]: Таланта и фантазии не занимать. Браво! Браво! Браво!
+                  - generic [ref=e2557]:
+                    - button "Ответить" [ref=e2558] [cursor=pointer]
+                    - generic [ref=e2560]:
+                      - checkbox "8"
+                      - generic [ref=e2561] [cursor=pointer]:
+                        - img [ref=e2562]
+                        - generic [ref=e2563]: "8"
+                    - generic [ref=e2564]:
+                      - generic [ref=e2566]:
+                        - checkbox
+                        - img [ref=e2568] [cursor=pointer]
+                      - button [ref=e2570]:
+                        - img [ref=e2572] [cursor=pointer]
+                - generic [ref=e2579]:
+                  - generic [ref=e2580]:
+                    - generic [ref=e2581]:
+                      - generic [ref=e2582]:
+                        - link "Паж Чар" [ref=e2583] [cursor=pointer]:
+                          - /url: /id/62e6d9e3e13ed15dc1424c37
+                          - generic [ref=e2584]: Паж Чар
+                        - generic [ref=e2585]: 26 июл 2023
+                      - button "Меню комментария" [ref=e2587] [cursor=pointer]:
+                        - img [ref=e2588]
+                    - generic "Кликабельный текст поста" [ref=e2591]:
+                      - generic [ref=e2593]: Люблю слушать её пение особенно Шопен.
+                    - generic [ref=e2595]:
+                      - button "Ответить" [ref=e2596] [cursor=pointer]
+                      - generic [ref=e2598]:
+                        - checkbox "10"
+                        - generic [ref=e2599] [cursor=pointer]:
+                          - img [ref=e2600]
+                          - generic [ref=e2601]: "10"
+                      - generic [ref=e2602]:
+                        - generic [ref=e2604]:
+                          - checkbox "2"
+                          - generic [ref=e2605] [cursor=pointer]:
+                            - img [ref=e2606]
+                            - generic [ref=e2607]: "2"
+                        - button [ref=e2609]:
+                          - img [ref=e2611] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2614] [cursor=pointer]:
+                    - generic [ref=e2616]: 2 ответа
+                - generic [ref=e2624]:
+                  - generic [ref=e2625]:
+                    - generic [ref=e2626]:
+                      - link "Инкогнито 2039" [ref=e2627] [cursor=pointer]:
+                        - /url: /user/06w2zqqd34b63w3vum747ww3wr
+                        - generic [ref=e2628]: Инкогнито 2039
+                      - generic [ref=e2629]: 26 июл 2023
+                    - button "Меню комментария" [ref=e2631] [cursor=pointer]:
+                      - img [ref=e2632]
+                  - generic "Кликабельный текст поста" [ref=e2635]:
+                    - generic [ref=e2637]: Умница! И песни замечательные и сама красавица! Леночка спасибо за песню ""Аэропорт"".. эта песня мне очень дорога и напоминает о любимом человеке! Счастья тебе Елена..новых песен и про старых не забывать! Удачи везде всегда во всем .мы любим тебя твои песни!
+                  - generic [ref=e2639]:
+                    - button "Ответить" [ref=e2640] [cursor=pointer]
+                    - generic [ref=e2642]:
+                      - checkbox "12"
+                      - generic [ref=e2643] [cursor=pointer]:
+                        - img [ref=e2644]
+                        - generic [ref=e2645]: "12"
+                    - generic [ref=e2646]:
+                      - generic [ref=e2648]:
+                        - checkbox "4"
+                        - generic [ref=e2649] [cursor=pointer]:
+                          - img [ref=e2650]
+                          - generic [ref=e2651]: "4"
+                      - button [ref=e2653]:
+                        - img [ref=e2655] [cursor=pointer]
+                - generic [ref=e2663]:
+                  - generic [ref=e2664]:
+                    - generic [ref=e2665]:
+                      - link "Лариса Воол" [ref=e2666] [cursor=pointer]:
+                        - /url: /user/mjnafy3e9krb8utf7fpxz7575r
+                        - generic [ref=e2667]: Лариса Воол
+                      - generic [ref=e2668]: 9 окт 2024
+                    - button "Меню комментария" [ref=e2670] [cursor=pointer]:
+                      - img [ref=e2671]
+                  - generic "Кликабельный текст поста" [ref=e2674]:
+                    - generic [ref=e2676]: Живет по своему пониманию
+                  - generic [ref=e2678]:
+                    - button "Ответить" [ref=e2679] [cursor=pointer]
+                    - generic [ref=e2681]:
+                      - checkbox "8"
+                      - generic [ref=e2682] [cursor=pointer]:
+                        - img [ref=e2683]
+                        - generic [ref=e2684]: "8"
+                    - generic [ref=e2685]:
+                      - generic [ref=e2687]:
+                        - checkbox "1"
+                        - generic [ref=e2688] [cursor=pointer]:
+                          - img [ref=e2689]
+                          - generic [ref=e2690]: "1"
+                      - button [ref=e2692]:
+                        - img [ref=e2694] [cursor=pointer]
+                - generic [ref=e2702]:
+                  - generic [ref=e2703]:
+                    - generic [ref=e2704]:
+                      - link "Любовь Б." [ref=e2705] [cursor=pointer]:
+                        - /url: /id/645b5552624753759e0271a2
+                        - generic [ref=e2706]: Любовь Б.
+                      - generic [ref=e2707]: 6 окт 2024
+                    - button "Меню комментария" [ref=e2709] [cursor=pointer]:
+                      - img [ref=e2710]
+                  - generic "Кликабельный текст поста" [ref=e2713]:
+                    - generic [ref=e2715]: Интерьер характерный - схож с её много0бразным характером. Молодец!
+                  - generic [ref=e2717]:
+                    - button "Ответить" [ref=e2718] [cursor=pointer]
+                    - generic [ref=e2720]:
+                      - checkbox "9"
+                      - generic [ref=e2721] [cursor=pointer]:
+                        - img [ref=e2722]
+                        - generic [ref=e2723]: "9"
+                    - generic [ref=e2724]:
+                      - generic [ref=e2726]:
+                        - checkbox "2"
+                        - generic [ref=e2727] [cursor=pointer]:
+                          - img [ref=e2728]
+                          - generic [ref=e2729]: "2"
+                      - button [ref=e2731]:
+                        - img [ref=e2733] [cursor=pointer]
+                - generic [ref=e2740]:
+                  - generic [ref=e2741]:
+                    - generic [ref=e2742]:
+                      - generic [ref=e2743]:
+                        - link "Галина Новикова" [ref=e2744] [cursor=pointer]:
+                          - /url: /id/62da3c9a3eed1d3d534afd33
+                          - generic [ref=e2745]: Галина Новикова
+                        - generic [ref=e2746]: 30 авг 2024
+                      - button "Меню комментария" [ref=e2748] [cursor=pointer]:
+                        - img [ref=e2749]
+                    - generic "Кликабельный текст поста" [ref=e2752]:
+                      - generic [ref=e2754]: Без вкуса все и она сама, начиная с поведения
+                    - generic [ref=e2756]:
+                      - button "Ответить" [ref=e2757] [cursor=pointer]
+                      - generic [ref=e2759]:
+                        - checkbox "12"
+                        - generic [ref=e2760] [cursor=pointer]:
+                          - img [ref=e2761]
+                          - generic [ref=e2762]: "12"
+                      - generic [ref=e2763]:
+                        - generic [ref=e2765]:
+                          - checkbox "5"
+                          - generic [ref=e2766] [cursor=pointer]:
+                            - img [ref=e2767]
+                            - generic [ref=e2768]: "5"
+                        - button [ref=e2770]:
+                          - img [ref=e2772] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2775] [cursor=pointer]:
+                    - generic [ref=e2777]: 1 ответ
+                - generic [ref=e2785]:
+                  - generic [ref=e2786]:
+                    - generic [ref=e2787]:
+                      - link "Юрий Б." [ref=e2788] [cursor=pointer]:
+                        - /url: /user/yqtu9w4x36t6rwf7yxhddr8bem
+                        - generic [ref=e2789]: Юрий Б.
+                      - generic [ref=e2790]: 29 июн 2024
+                    - button "Меню комментария" [ref=e2792] [cursor=pointer]:
+                      - img [ref=e2793]
+                  - generic "Кликабельный текст поста" [ref=e2796]:
+                    - generic [ref=e2798]: Очень классная артистка, Певица. Здоровья Тебе на долгие годы
+                  - generic [ref=e2800]:
+                    - button "Ответить" [ref=e2801] [cursor=pointer]
+                    - generic [ref=e2803]:
+                      - checkbox "9"
+                      - generic [ref=e2804] [cursor=pointer]:
+                        - img [ref=e2805]
+                        - generic [ref=e2806]: "9"
+                    - generic [ref=e2807]:
+                      - generic [ref=e2809]:
+                        - checkbox "1"
+                        - generic [ref=e2810] [cursor=pointer]:
+                          - img [ref=e2811]
+                          - generic [ref=e2812]: "1"
+                      - button [ref=e2814]:
+                        - img [ref=e2816] [cursor=pointer]
+                - button "Показать ещё" [ref=e728] [cursor=pointer]:
+                  - generic [ref=e729]: Ещё 50 комментариев
+              - generic "Блок рекомендаций" [ref=e401]:
+                - text: Рекомендуем почитать
+                - generic [ref=e402]:
+                  - article [ref=e403]:
+                    - link [ref=e404] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aiqnGYO-Zyx4i7di?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIy2oLjrMyBsUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                    - generic [ref=e405]:
+                      - generic [ref=e407]:
+                        - img [ref=e409]
+                        - generic [ref=e412]: 6 минут
+                      - img [ref=e730]
+                    - generic [ref=e416]:
+                      - generic [ref=e417]:
+                        - generic [ref=e418]:
+                          - link "Аватар канала" [ref=e420] [cursor=pointer]:
+                            - /url: /id/5a5f38fe8651654b9a6886c8
+                          - generic [ref=e423]:
+                            - link "Название канала" [ref=e425] [cursor=pointer]:
+                              - /url: /id/5a5f38fe8651654b9a6886c8
+                              - generic "МК" [ref=e426]:
+                                - generic [ref=e427]: МК
+                                - img [ref=e428]
+                            - generic [ref=e432]: 339 тыс читали · 1 неделю назад
+                        - button "Три точки" [ref=e433] [cursor=pointer]:
+                          - img [ref=e434]
+                      - generic [ref=e436]:
+                        - 'link "«Я не хочу жить»: последние слова Людмилы Чурсиной, которые потрясли её близкую подругу" [ref=e437] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aiqnGYO-Zyx4i7di?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIy2oLjrMyBsUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                          - generic [ref=e438]: "«Я не хочу жить»: последние слова Людмилы Чурсиной, которые потрясли её близкую подругу"
+                        - generic [ref=e439]: Со вчерашнего дня, как стало известно о смерти народной артистки СССР, невероятной красавицы Людмилы Чурсиной, сохранившей красоту почти до конца жизни, о ней продолжают говорить. Вспоминают в основном коллеги – снимались вместе, выходили на сцену. И в этих воспоминаниях зачастую больше себя, чем ее. Но мы нашли человека, не связанного с миром искусства, но которую 25 лет дружбы связывают со знаменитой актрисой. Это Юлия Пенкина, завуч самой обычной школы в Калининском районе Санкт-Петербурга. Открылась другая Людмила Чурсина...
+                  - article [ref=e440]:
+                    - link [ref=e441] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ai5VeKbUc2hODlU-?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIrTk6nsMyBrUI4JagQBayxsiAH3v830xZSOuwmQAQA%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                    - generic [ref=e442]:
+                      - generic [ref=e444]:
+                        - img [ref=e446]
+                        - generic [ref=e449]: 6 минут
+                      - img [ref=e731]
+                    - generic [ref=e453]:
+                      - generic [ref=e454]:
+                        - generic [ref=e455]:
+                          - link "Аватар канала" [ref=e457] [cursor=pointer]:
+                            - /url: /id/5b62f1a7320be700acd67f9a
+                          - generic [ref=e460]:
+                            - link "Название канала" [ref=e462] [cursor=pointer]:
+                              - /url: /id/5b62f1a7320be700acd67f9a
+                              - generic "Этобаза" [ref=e463]:
+                                - generic [ref=e464]: Этобаза
+                            - generic [ref=e467]: 51,5 тыс читали · 5 дней назад
+                        - button "Три точки" [ref=e468] [cursor=pointer]:
+                          - img [ref=e469]
+                      - generic [ref=e471]:
+                        - 'link "Нищета, питается с огорода, дочь забыла, Галкин высмеивает: как сейчас доживает жизнь 81-летний литовский отец Кристины Орбакайте Миколас" [ref=e472] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ai5VeKbUc2hODlU-?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIrTk6nsMyBrUI4JagQBayxsiAH3v830xZSOuwmQAQA%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                          - generic [ref=e473]: "Нищета, питается с огорода, дочь забыла, Галкин высмеивает: как сейчас доживает жизнь 81-летний литовский отец Кристины Орбакайте Миколас"
+                        - generic [ref=e474]: Читатель, присядь поудобнее. Я хочу рассказать тебе историю о человеке, чье имя часто теряется в тени великой Примадонны, но чья жизнь полна света, труда и тихой, неугасающей любви. Это история отца единственной дочери Аллы Пугачевой Кристины Орбакайте. Миколаса Эдмундаса Орбакаса. — Она всем сразу нравилась, — вспоминал он позже, сидя в своем стареньком домике на берегу Балтики. — И как певица, и как человек. Но у нас не было любви с первого взгляда. Миколас родился 16 апреля 1945 года в литовском городке Шяуляй...
+                  - article [ref=e475]:
+                    - link [ref=e476] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ag8x5hUdvlFXpPMG?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CNr09drkMyBrUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                    - generic [ref=e477]:
+                      - generic [ref=e479]:
+                        - img [ref=e481]
+                        - generic [ref=e484]: 4 минуты
+                      - img [ref=e732]
+                    - generic [ref=e488]:
+                      - generic [ref=e489]:
+                        - generic [ref=e490]:
+                          - link "Аватар канала" [ref=e492] [cursor=pointer]:
+                            - /url: /id/5a6596498651654b300a5eb7
+                          - generic [ref=e495]:
+                            - link "Название канала" [ref=e497] [cursor=pointer]:
+                              - /url: /id/5a6596498651654b300a5eb7
+                              - generic "Радио 1" [ref=e498]:
+                                - generic [ref=e499]: Радио 1
+                                - img [ref=e500]
+                            - generic [ref=e504]: 205,3 тыс читали · 4 недели назад
+                        - button "Три точки" [ref=e505] [cursor=pointer]:
+                          - img [ref=e506]
+                      - generic [ref=e508]:
+                        - 'link "Цыган-барон и пожизненные отчисления: за что на самом деле Ваенга расплачивается с экс-супругом спустя 16 лет после развода" [ref=e509] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ag8x5hUdvlFXpPMG?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CNr09drkMyBrUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                          - generic [ref=e510]: "Цыган-барон и пожизненные отчисления: за что на самом деле Ваенга расплачивается с экс-супругом спустя 16 лет после развода"
+                        - generic [ref=e511]: Их свела случайность, которую иначе как вмешательством судьбы не назовёшь. Спустя годы на пике славы брак распался, однако Елена Ваенга по сей день исправно отдаёт бывшему мужу половину заработанного — без судов, скандалов и принуждения. Что движет певицей — чувство вины, бесконечная признательность или осознанная плата за талант, который когда-то разглядел в ней «цыганский барон», расскажет «Радио 1». Страна могла никогда не услышать этот узнаваемый хрипловатый голос и пронзительные, похожие на прожитую жизнь песни...
+          - generic "Статья 2" [ref=e735]:
+            - generic [ref=e738]:
+              - generic [ref=e741]:
+                - generic [ref=e742]:
+                  - generic [ref=e744]:
+                    - link "Аватар канала" [ref=e745] [cursor=pointer]:
+                      - /url: /id/5f37c718fd2ffb4eb97d4217
+                    - generic [ref=e747]:
+                      - link "Название канала" [ref=e748] [cursor=pointer]:
+                        - /url: /id/5f37c718fd2ffb4eb97d4217
+                        - generic [ref=e749]: Чёрный редактор
+                      - generic [ref=e750]: 125,6 тыс подписчиков
+                    - button "Подписаться" [ref=e752] [cursor=pointer]
+                  - 'heading "«Остался ради неё»: тайная любовь 28-летнего красавца Дени Байсарова, из-за которой он бросил маму и Пугачёву" [level=1] [ref=e753]'
+                  - generic [ref=e755]:
+                    - generic [ref=e757]: 15 июня
+                    - generic [ref=e758]:
+                      - generic [ref=e759]:
+                        - img [ref=e760]
+                        - generic [ref=e762]: 42,4 тыс
+                      - generic [ref=e763]:
+                        - img [ref=e764]
+                        - generic [ref=e766]: 8 мин
+                - generic [ref=e768]:
+                  - generic "Кликабельный текст поста" [ref=e770] [cursor=pointer]:
+                    - generic [ref=e774]:
+                      - text: Есть собственный бизнес, связанный с рекламой и консалтингом. Владеет студией дизайна и периодически проводит арт-терапию — в этом направлении он развивается наравне с запутанной личной
+                      - generic [ref=e775]:
+                        - text: ...
+                        - generic [ref=e776]:
+                          - text: Читать далее
+                          - img [ref=e777]
+                  - img [ref=e784]
+              - generic "Социальный блок" [ref=e786]:
+                - generic [ref=e787]:
+                  - button [ref=e790] [cursor=pointer]:
+                    - generic:
+                      - generic:
+                        - img
+                  - button "Нравится" [ref=e791] [cursor=pointer]:
+                    - generic [ref=e792]:
+                      - img [ref=e794]
+                      - generic "Подпись к кнопке" [ref=e795]: "314"
+                  - button "Комментировать" [ref=e797] [cursor=pointer]:
+                    - generic [ref=e798]:
+                      - img [ref=e800]
+                      - generic "Подпись к кнопке" [ref=e801]: "85"
+                  - button "Поделиться" [ref=e804] [cursor=pointer]:
+                    - img [ref=e807]
+                - button "Не нравится" [ref=e809] [cursor=pointer]:
+                  - img [ref=e812]
+          - button "Что это значит":
+            - generic:
+              - img
+              - generic: Что это значит
+  - generic [ref=e536] [cursor=pointer]:
+    - button [ref=e538]:
+      - img [ref=e539]
+    - generic [ref=e541]:
+      - heading "Дзен без рекламы" [level=3] [ref=e542]
+      - paragraph [ref=e543]: Подписка Дзен Про за 159 ₽ в месяц
+    - button "Подключить" [ref=e544]:
+      - generic [ref=e545]: Подключить
+    - generic:
+      - img
+    - button [ref=e546]
+  - iframe

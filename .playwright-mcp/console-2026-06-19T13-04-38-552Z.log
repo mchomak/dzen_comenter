@@ -1,0 +1,4 @@
+[    1033ms] [ERROR] Connecting to 'https://undefined/beacon/report' violates the following Content Security Policy directive: "connect-src 'self'". The action has been blocked. @ https://sso.passport.yandex.ru/push?uuid=7f51fac1-320d-44b3-8dc0-1324c5efeed7&retpath=https%3A%2F%2Fdzen.ru%2Fa%2FZLyjrWpm2w-6QwGn%3Fis_autologin_ya%3Dtrue:0
+[    1033ms] [ERROR] Connecting to 'https://sso.dzen.ru/beacon/report' violates the following Content Security Policy directive: "connect-src 'self'". The action has been blocked. @ https://sso.passport.yandex.ru/push?uuid=7f51fac1-320d-44b3-8dc0-1324c5efeed7&retpath=https%3A%2F%2Fdzen.ru%2Fa%2FZLyjrWpm2w-6QwGn%3Fis_autologin_ya%3Dtrue:0
+[    4623ms] [WARNING] RUM is not defined on window @ https://static.dzeninfra.ru/s3/zen-apps/content/1.336.2/article.modern.bundle.js:0
+[    4629ms] [WARNING] 1 Still ADB_FUNCTIONS @ https://static.dzeninfra.ru/s3/zen-apps/content/1.336.2/article.modern.bundle.js:0

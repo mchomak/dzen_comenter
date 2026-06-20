@@ -1,0 +1,307 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Добавить в корзину" [ref=e2] [cursor=pointer]:
+      - /url: "#"
+    - link "Позвонить" [ref=e3] [cursor=pointer]:
+      - /url: tel:+74952122734
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - banner "Шапка сайта" [ref=e7]:
+        - link "Логотип Бренда" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img [ref=e10]
+        - generic [ref=e13]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic [ref=e17]: Найти в Дзене
+        - generic [ref=e18]:
+          - button "Настройки" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "Войти" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+    - generic [ref=e32]:
+      - complementary "Боковое меню навигации" [ref=e34]:
+        - list [ref=e35]:
+          - link "Главная" [ref=e36] [cursor=pointer]:
+            - /url: https://dzen.ru/
+            - listitem [ref=e37]:
+              - img [ref=e40]
+          - link "Подписки" [ref=e41] [cursor=pointer]:
+            - /url: https://dzen.ru/subscriptions-manager
+            - listitem [ref=e42]:
+              - img [ref=e45]
+          - link "Найти" [ref=e46] [cursor=pointer]:
+            - /url: https://dzen.ru/explore
+            - listitem [ref=e47]:
+              - img [ref=e50]
+          - link "Новости" [ref=e51] [cursor=pointer]:
+            - /url: https://dzen.ru/news
+            - listitem [ref=e52]:
+              - img [ref=e55]
+          - link "Статьи" [ref=e56] [cursor=pointer]:
+            - /url: https://dzen.ru/articles
+            - listitem [ref=e57]:
+              - img [ref=e60]
+          - link "Видео" [ref=e61] [cursor=pointer]:
+            - /url: https://dzen.ru/video
+            - listitem [ref=e62]:
+              - img [ref=e65]
+          - link "Ролики" [ref=e66] [cursor=pointer]:
+            - /url: https://dzen.ru/shorts
+            - listitem [ref=e67]:
+              - img [ref=e70]
+          - link "Видеоигры" [ref=e73] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/games
+            - listitem [ref=e74]:
+              - img [ref=e77]
+          - link "Детям" [ref=e78] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/multiki
+            - listitem [ref=e79]:
+              - img [ref=e82]
+        - button [ref=e84]:
+          - img [ref=e86]
+      - main [ref=e89]:
+        - generic [ref=e92]:
+          - generic "Статья 1" [ref=e93]:
+            - generic [ref=e104]:
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - generic [ref=e110]:
+                    - link "Аватар канала" [ref=e111] [cursor=pointer]:
+                      - /url: /domeoremont
+                    - generic [ref=e113]:
+                      - link "Название канала" [ref=e114] [cursor=pointer]:
+                        - /url: /domeoremont
+                        - generic [ref=e115]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e117]
+                      - generic [ref=e119]: 343,6 тыс подписчиков
+                    - button "Подписаться" [ref=e121] [cursor=pointer]
+                  - 'heading "Посмотрите, как живёт Светлана Ходченкова: обзор квартиры на 71 этаже!" [level=1] [ref=e122]'
+                  - generic [ref=e124]:
+                    - generic [ref=e126]: 23 июня 2023
+                    - generic [ref=e127]:
+                      - generic [ref=e128]:
+                        - img [ref=e129]
+                        - generic [ref=e131]: 587,2 тыс
+                      - generic [ref=e132]:
+                        - img [ref=e133]
+                        - generic [ref=e135]: 1 мин
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - generic [ref=e138]: Оглавление
+                    - list [ref=e139]:
+                      - listitem [ref=e140] [cursor=pointer]:
+                        - link "•Готовитесь начать ремонт?" [ref=e141]:
+                          - /url: "#gotovites_nachat_remont"
+                          - generic [ref=e142]: •Готовитесь начать ремонт?
+                      - listitem [ref=e143] [cursor=pointer]:
+                        - link "•✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [ref=e144]:
+                          - /url: "#_rasschitaiite_zdes_"
+                          - generic [ref=e145]: •✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅
+                      - listitem [ref=e146] [cursor=pointer]:
+                        - link "Расположение" [ref=e147]:
+                          - /url: "#raspolojenie"
+                          - generic [ref=e148]: Расположение
+                    - button "Показать ещё" [ref=e149] [cursor=pointer]
+                  - generic [ref=e150]:
+                    - paragraph [ref=e163]: Светлана Ходченкова известна своими ролями не только в отечественных кинолентах, но и за рубежом. Достаточно долго актриса прожила за границей - в штатах и Японии, но сейчас она вернулась в Россию и уже обустроила свою квартиру в Москве. Готовы увидеть, в каких интерьерах живет звезда кино?
+                    - figure [ref=e169] [cursor=pointer]
+                    - blockquote [ref=e170]: Поставьте лайк ❤️ статье, мне очень важна ваша поддержка. ПОДПИШИТЕСЬ, чтобы узнавать о новых публикациях про знаменитостей первыми!
+                    - heading "Готовитесь начать ремонт?" [level=3]
+                    - figure [ref=e176] [cursor=pointer]:
+                      - img "-2" [ref=e177]
+                    - heading "✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [level=3]:
+                      - text: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e178] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Devgeniya%26utm_term%3D2306-svhodchenkova1R
+                      - text: ✅
+                    - heading "Расположение" [level=2]
+                    - paragraph [ref=e179]: Актриса снималась в таких высокобюджетных фильмах как «Благословите женщину», «Любовь в большом городе», «Викинг» и т. д. Поэтому неудивительно, что её гонораров хватило на покупку квартиры в комплексе Москва-сити.
+                    - figure [ref=e185] [cursor=pointer]:
+                      - img "-3" [ref=e186]
+                    - paragraph [ref=e187]:
+                      - text: Кстати, неподалёку находится
+                      - link "квартира Ивана Урганта" [ref=e188] [cursor=pointer]:
+                        - /url: https://dzen.ru/a/Y-NDkvL23S0I4IEF?feed_exp=ordinary_feed&rid=281153166.94.1681793377211.64434&clid=1400&integration=site_desktop&place=multisearch&secdata=CNH3wJDjMCABUA9qAQE%3D
+                      - text: — она расположена в башне Меркурий.
+                    - paragraph [ref=e189]: Из окон столичной квартиры Ходченковой открывается потрясающий вид на автомагистрали и соседние небоскрёбы.
+                    - figure [ref=e195] [cursor=pointer]:
+                      - img "-4" [ref=e196]
+                    - heading "Сколько стоит ремонт квартиры в 2023 году?" [level=3]
+                    - figure [ref=e202] [cursor=pointer]:
+                      - img "-5" [ref=e203]
+                    - heading "✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [level=2]:
+                      - generic [ref=e204]: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e205] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Devgeniya%26utm_term%3D2306-svhodchenkova2R
+                      - generic [ref=e206]: ✅
+                    - heading "Оформление комнат" [level=3]:
+                      - generic [ref=e207]: Оформление комнат
+                    - paragraph [ref=e208]: Каждая комната в квартире Светланы Ходченковой оформлена в своём стиле. Так, например, на кухне можно видеть классическую отделку, мебель и декор. Столешница сделана из мрамора, а белоснежные стены украшают молдинги.
+                    - figure [ref=e214] [cursor=pointer]:
+                      - img "-6" [ref=e215]
+                    - paragraph [ref=e216]: В гостиной тоже классический интерьер, но здесь преобладают элементы дворцовой роскоши. На полу — паркет из ореха, на стенах — текстильные обои с цветочными узорами. Шторы — велюровые, а итальянская мебель обита настоящим бархатом.
+                    - figure [ref=e222] [cursor=pointer]:
+                      - img "-7" [ref=e223]
+                    - figure [ref=e229] [cursor=pointer]:
+                      - img "-8" [ref=e230]
+                    - paragraph [ref=e231]:
+                      - text: По соседству с гостиной находится зона отдыха, которую оформили в стиле лофт. В одной из своих статей я рассказывала,
+                      - link "как на убитой кухне создали лофт-интерьер" [ref=e232] [cursor=pointer]:
+                        - /url: https://dzen.ru/a/Y-s8kjg3TRXbRIhP?feed_exp=ordinary_feed&rid=1010349119.96.1681793812766.51627&clid=1400&integration=site_desktop&place=multisearch&secdata=CJTC0v7kMCABUA9qAQE%3D
+                      - text: . Этот стиль отлично подходит и для старых, и для новых квартир.
+                    - figure [ref=e238] [cursor=pointer]:
+                      - img "-9" [ref=e239]
+                    - paragraph [ref=e240]: А вот спальня оформлена в эклектичном стиле — тут перемешались пастельные тона, яркие мозаичные элементы, цветочные узоры и т. д. Но от каждого элемента в комнате веет роскошью и долгой историей, поэтому все они гармонично сочетаются между собой.
+                    - figure [ref=e246] [cursor=pointer]:
+                      - img "-10" [ref=e247]
+                    - figure [ref=e253] [cursor=pointer]:
+                      - img "-11" [ref=e254]
+                    - figure [ref=e260] [cursor=pointer]:
+                      - img "-12" [ref=e261]
+                    - blockquote [ref=e262]: "Domeo советует начать свой ремонт с 2-х простых шагов:"
+                    - blockquote [ref=e263]:
+                      - text: "1. Рассчитать точную цену ремонта под Ваш бюджет. Бесплатно рассчитайте здесь: ✅"
+                      - link "https://clck.ru/34mzeQ" [ref=e264] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fclck.ru%2F34mzeQ
+                    - blockquote [ref=e265]:
+                      - text: "2. Выбрать подходящего дизайнера для визуализации своих идей! Бесплатно выберите своего дизайнера здесь: ✅"
+                      - link "https://clck.ru/34mzeK" [ref=e266] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fclck.ru%2F34mzeK
+                    - figure [ref=e272] [cursor=pointer]:
+                      - img "-13" [ref=e273]
+                    - paragraph [ref=e274]:
+                      - generic [ref=e275]: Понравился ли вам интерьер в квартире Светланы Ходченковой? Делитесь впечатлениями в комментариях 👇
+                    - heading "Вам также будут интересны статьи:" [level=3]:
+                      - generic [ref=e276]: "Вам также будут интересны статьи:"
+                    - link "Только посмотрите на огромный загородный дом Полины Гагариной DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 21 июня 2023" [ref=e279] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ZJIDLL-vhiQ-WbON
+                      - generic [ref=e285]:
+                        - generic [ref=e286]: Только посмотрите на огромный загородный дом Полины Гагариной
+                        - generic [ref=e287]:
+                          - generic [ref=e288]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e291]
+                          - generic [ref=e292]: · 21 июня 2023
+                    - 'link "Антуражная усадьба Александра Ширвиндта: обзор особняка с историей DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 18 июня 2023" [ref=e295] [cursor=pointer]':
+                      - /url: https://dzen.ru/a/ZI4WMTkjsxbWJEYm
+                      - generic [ref=e301]:
+                        - generic [ref=e302]: "Антуражная усадьба Александра Ширвиндта: обзор особняка с историей"
+                        - generic [ref=e303]:
+                          - generic [ref=e304]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e307]
+                          - generic [ref=e308]: · 18 июня 2023
+                    - paragraph [ref=e309]:
+                      - generic [ref=e310]: Информация, приведенная в статье, взята из открытых источников
+              - generic [ref=e311]:
+                - generic "Плашка подписки на канал" [ref=e312]:
+                  - generic [ref=e313]:
+                    - generic [ref=e314]: Подпишитесь на канал,
+                    - generic [ref=e315]: чтобы не пропустить новые публикации
+                  - button "Подписаться" [ref=e316] [cursor=pointer]:
+                    - generic [ref=e317]: Подписаться
+                - generic "Социальный блок" [ref=e318]:
+                  - generic [ref=e319]:
+                    - button [ref=e322] [cursor=pointer]:
+                      - generic:
+                        - generic:
+                          - img
+                    - button "Нравится" [ref=e323] [cursor=pointer]:
+                      - generic [ref=e324]:
+                        - img [ref=e326]
+                        - generic "Подпись к кнопке" [ref=e327]: "1483"
+                    - button "Комментировать" [ref=e329] [cursor=pointer]:
+                      - generic [ref=e330]:
+                        - img [ref=e332]
+                        - generic "Подпись к кнопке" [ref=e333]: "614"
+                  - generic [ref=e334]:
+                    - button "Не нравится" [ref=e335] [cursor=pointer]:
+                      - img [ref=e338]
+                    - button [ref=e340] [cursor=pointer]:
+                      - img [ref=e343]
+              - generic "Блок рекомендаций" [ref=e363]:
+                - text: Рекомендуем почитать
+                - generic [ref=e364]:
+                  - article [ref=e365]:
+                    - link [ref=e366] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aY2XTUdj7UchdPAt?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CO%2Fu84jFMyBrUMgJagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                    - generic [ref=e369]:
+                      - img [ref=e371]
+                      - generic [ref=e374]: 3 минуты
+                    - generic [ref=e378]:
+                      - generic [ref=e379]:
+                        - generic [ref=e380]:
+                          - link "Аватар канала" [ref=e382] [cursor=pointer]:
+                            - /url: /id/5de5623395aa9f00b1a4d60f
+                          - generic [ref=e385]:
+                            - link "Название канала" [ref=e387] [cursor=pointer]:
+                              - /url: /id/5de5623395aa9f00b1a4d60f
+                              - generic "Анастасия BORSCH-TV" [ref=e388]:
+                                - generic [ref=e389]: Анастасия BORSCH-TV
+                                - img [ref=e390]
+                            - generic [ref=e394]: 152,4 тыс читали · 4 месяца назад
+                        - button "Три точки" [ref=e395] [cursor=pointer]:
+                          - img [ref=e396]
+                      - generic [ref=e398]:
+                        - 'link "Создали 600 квадратов искусства из трех квартир: Смотрим \"убежище\" Боярской и Матвеева" [ref=e399] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aY2XTUdj7UchdPAt?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CO%2Fu84jFMyBrUMgJagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                          - generic [ref=e400]: "Создали 600 квадратов искусства из трех квартир: Смотрим \"убежище\" Боярской и Матвеева"
+                        - generic [ref=e401]: Квартира Елизавета Боярская и Максим Матвеев — это не просто место для жизни, а продуманное пространство с характером. Супруги выбрали дом с историей на улице Белинского в Санкт-Петербурге. Здание было возведено ещё в XVIII веке и прошло непростую судьбу. В 80-е годы прошлого века дом почти полностью снесли. Однако в 2005 году его восстановили, максимально приблизив внешний облик к историческому оригиналу. При этом использовали современные технологии и сохранили статус объекта культурного наследия...
+                  - article [ref=e402]:
+                    - link [ref=e403] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aiebENU51jhyAWmW?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIXm99XqMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                    - generic [ref=e406]:
+                      - img [ref=e408]
+                      - generic [ref=e411]: 5 минут
+                    - generic [ref=e415]:
+                      - generic [ref=e416]:
+                        - generic [ref=e417]:
+                          - link "Аватар канала" [ref=e419] [cursor=pointer]:
+                            - /url: /id/5d497ee0e854a900b4e94e17
+                          - generic [ref=e422]:
+                            - link "Название канала" [ref=e424] [cursor=pointer]:
+                              - /url: /id/5d497ee0e854a900b4e94e17
+                              - generic "VEASY" [ref=e425]:
+                                - generic [ref=e426]: VEASY
+                            - generic [ref=e429]: 20,1 тыс читали · 1 неделю назад
+                        - button "Три точки" [ref=e430] [cursor=pointer]:
+                          - img [ref=e431]
+                      - generic [ref=e433]:
+                        - 'link "Живет словно в музее: Показываем богатую квартиру актера Станислава Садальского" [ref=e434] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aiebENU51jhyAWmW?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIXm99XqMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                          - generic [ref=e435]: "Живет словно в музее: Показываем богатую квартиру актера Станислава Садальского"
+                        - generic [ref=e436]: Имя Станислава Садальского знакомо нескольким поколениям зрителей. Кто-то помнит его по фильмам советской эпохи, кто-то по сериалам, а кто-то узнает по голосу из знаменитого мультфильма «Падал прошлогодний снег». За долгие годы в кино и на телевидении артист сыграл десятки ярких персонажей, однако многие поклонники уверены, что его талант заслуживал еще большего признания. Но сегодня речь пойдет не о ролях. Есть у Садальского еще одна интересная сторона жизни его квартира, которая давно вызывает любопытство у поклонников...
+                  - article [ref=e437]:
+                    - link [ref=e438] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ajIqFjOYlGUxu-7m?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CP%2B6tqHtMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                    - generic [ref=e441]:
+                      - img [ref=e443]
+                      - generic [ref=e446]: 6 минут
+                    - generic [ref=e450]:
+                      - generic [ref=e451]:
+                        - generic [ref=e452]:
+                          - link "Аватар канала" [ref=e454] [cursor=pointer]:
+                            - /url: /id/67034b5c60479e7c512615f1
+                          - generic [ref=e457]:
+                            - link "Название канала" [ref=e459] [cursor=pointer]:
+                              - /url: /id/67034b5c60479e7c512615f1
+                              - generic "Все о стройке" [ref=e460]:
+                                - generic [ref=e461]: Все о стройке
+                            - generic [ref=e464]: 24,3 тыс читали · 2 дня назад
+                        - button "Три точки" [ref=e465] [cursor=pointer]:
+                          - img [ref=e466]
+                      - generic [ref=e468]:
+                        - 'link "Где живет Светлана Зейналова: квартира с необычной планировкой, дача в Подмосковье и ремонт, который пришлось переделывать заново" [ref=e469] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ajIqFjOYlGUxu-7m?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CP%2B6tqHtMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                          - generic [ref=e470]: "Где живет Светлана Зейналова: квартира с необычной планировкой, дача в Подмосковье и ремонт, который пришлось переделывать заново"
+                        - generic [ref=e471]: "От квартиры на северо-западе Москвы до уютного загородного дома с камином: как телеведущая создала пространство для большой семьи. Светлана Зейналова уже много лет остается одним из самых узнаваемых лиц российского телевидения. Миллионы зрителей знают ее как ведущую популярных программ на Первом канале, однако за пределами телеэкрана жизнь знаменитости построена вокруг семьи, детей и дома. История недвижимости Светланы Зейналовой отличается от типичных рассказов о звездных особняках и элитных пентхаусах..."
+                  - article [ref=e473]
+          - button "Что это значит":
+            - generic:
+              - img
+              - generic: Что это значит
+  - iframe

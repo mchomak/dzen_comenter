@@ -1,0 +1,8 @@
+[    2141ms] [WARNING] RUM is not defined on window @ https://static.dzeninfra.ru/s3/zen-apps/content/1.336.2/article.modern.bundle.js:0
+[    2144ms] [WARNING] 1 Still ADB_FUNCTIONS @ https://static.dzeninfra.ru/s3/zen-apps/content/1.336.2/article.modern.bundle.js:0
+[    9734ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://rtb-eu-warsaw.intent.ai/um/y:0
+[    9892ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://yandex.ru/an/mapuid/onetargetis/5b947272-2a57-45cd-893e-2c5b8f76c802:0
+[   10342ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://shopnetic.com/api/rtb/dmp/pixel?partner=yandex:0
+[   11460ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://prebid.admatic.com.tr/setuid?bidder=yandex_ortb&gdpr=0&gdpr_consent=&f=b&uid=7A5ABFDBEE8EA5BF:0
+[   30438ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://mitdmp.whiteboxdigital.ru/pixel?id=a&source=yandex&redirect=false&href=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fqbitis%2F%7Bmiid%7D:0
+[   31242ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://sync.gonet-ads.com/match/yandex?id=[buyerUid]:0

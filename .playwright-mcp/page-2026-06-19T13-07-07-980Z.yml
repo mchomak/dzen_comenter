@@ -1,0 +1,1851 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Добавить в корзину" [ref=e2] [cursor=pointer]:
+      - /url: "#"
+    - link "Позвонить" [ref=e3] [cursor=pointer]:
+      - /url: tel:+74952122734
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - banner "Шапка сайта" [ref=e7]:
+        - link "Логотип Бренда" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img [ref=e10]
+        - generic [ref=e13]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic [ref=e17]: Найти в Дзене
+        - generic [ref=e18]:
+          - button "Настройки" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "Войти" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+    - generic [ref=e32]:
+      - complementary "Боковое меню навигации" [ref=e34]:
+        - list [ref=e35]:
+          - link "Главная" [ref=e36] [cursor=pointer]:
+            - /url: https://dzen.ru/
+            - listitem [ref=e37]:
+              - img [ref=e40]
+          - link "Подписки" [ref=e41] [cursor=pointer]:
+            - /url: https://dzen.ru/subscriptions-manager
+            - listitem [ref=e42]:
+              - img [ref=e45]
+          - link "Найти" [ref=e46] [cursor=pointer]:
+            - /url: https://dzen.ru/explore
+            - listitem [ref=e47]:
+              - img [ref=e50]
+          - link "Новости" [ref=e51] [cursor=pointer]:
+            - /url: https://dzen.ru/news
+            - listitem [ref=e52]:
+              - img [ref=e55]
+          - link "Статьи" [ref=e56] [cursor=pointer]:
+            - /url: https://dzen.ru/articles
+            - listitem [ref=e57]:
+              - img [ref=e60]
+          - link "Видео" [ref=e61] [cursor=pointer]:
+            - /url: https://dzen.ru/video
+            - listitem [ref=e62]:
+              - img [ref=e65]
+          - link "Ролики" [ref=e66] [cursor=pointer]:
+            - /url: https://dzen.ru/shorts
+            - listitem [ref=e67]:
+              - img [ref=e70]
+          - link "Видеоигры" [ref=e73] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/games
+            - listitem [ref=e74]:
+              - img [ref=e77]
+          - link "Детям" [ref=e78] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/multiki
+            - listitem [ref=e79]:
+              - img [ref=e82]
+        - button [ref=e84]:
+          - img [ref=e86]
+      - main [ref=e89]:
+        - generic [ref=e92]:
+          - generic "Статья 1" [ref=e93]:
+            - generic [ref=e104]:
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - generic [ref=e110]:
+                    - link "Аватар канала" [ref=e111] [cursor=pointer]:
+                      - /url: /domeoremont
+                    - generic [ref=e113]:
+                      - link "Название канала" [ref=e114] [cursor=pointer]:
+                        - /url: /domeoremont
+                        - generic [ref=e115]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e117]
+                      - generic [ref=e119]: 343,6 тыс подписчиков
+                    - button "Подписаться" [ref=e121] [cursor=pointer]
+                  - 'heading "Посмотрите, как живёт Светлана Ходченкова: обзор квартиры на 71 этаже!" [level=1] [ref=e122]'
+                  - generic [ref=e124]:
+                    - generic [ref=e126]: 23 июня 2023
+                    - generic [ref=e127]:
+                      - generic [ref=e128]:
+                        - img [ref=e129]
+                        - generic [ref=e131]: 587,2 тыс
+                      - generic [ref=e132]:
+                        - img [ref=e133]
+                        - generic [ref=e135]: 1 мин
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - generic [ref=e138]: Оглавление
+                    - list [ref=e139]:
+                      - listitem [ref=e140] [cursor=pointer]:
+                        - link "•Готовитесь начать ремонт?" [ref=e141]:
+                          - /url: "#gotovites_nachat_remont"
+                          - generic [ref=e142]: •Готовитесь начать ремонт?
+                      - listitem [ref=e143] [cursor=pointer]:
+                        - link "•✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [ref=e144]:
+                          - /url: "#_rasschitaiite_zdes_"
+                          - generic [ref=e145]: •✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅
+                      - listitem [ref=e146] [cursor=pointer]:
+                        - link "Расположение" [ref=e147]:
+                          - /url: "#raspolojenie"
+                          - generic [ref=e148]: Расположение
+                    - button "Показать ещё" [ref=e149] [cursor=pointer]
+                  - generic [ref=e150]:
+                    - paragraph [ref=e163]: Светлана Ходченкова известна своими ролями не только в отечественных кинолентах, но и за рубежом. Достаточно долго актриса прожила за границей - в штатах и Японии, но сейчас она вернулась в Россию и уже обустроила свою квартиру в Москве. Готовы увидеть, в каких интерьерах живет звезда кино?
+                    - figure [ref=e169] [cursor=pointer]
+                    - blockquote [ref=e170]: Поставьте лайк ❤️ статье, мне очень важна ваша поддержка. ПОДПИШИТЕСЬ, чтобы узнавать о новых публикациях про знаменитостей первыми!
+                    - heading "Готовитесь начать ремонт?" [level=3]
+                    - figure [ref=e176] [cursor=pointer]:
+                      - img "-2" [ref=e177]
+                    - heading "✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [level=3]:
+                      - text: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e178] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Devgeniya%26utm_term%3D2306-svhodchenkova1R
+                      - text: ✅
+                    - heading "Расположение" [level=2]
+                    - paragraph [ref=e179]: Актриса снималась в таких высокобюджетных фильмах как «Благословите женщину», «Любовь в большом городе», «Викинг» и т. д. Поэтому неудивительно, что её гонораров хватило на покупку квартиры в комплексе Москва-сити.
+                    - figure [ref=e185] [cursor=pointer]:
+                      - img "-3" [ref=e186]
+                    - paragraph [ref=e187]:
+                      - text: Кстати, неподалёку находится
+                      - link "квартира Ивана Урганта" [ref=e188] [cursor=pointer]:
+                        - /url: https://dzen.ru/a/Y-NDkvL23S0I4IEF?feed_exp=ordinary_feed&rid=281153166.94.1681793377211.64434&clid=1400&integration=site_desktop&place=multisearch&secdata=CNH3wJDjMCABUA9qAQE%3D
+                      - text: — она расположена в башне Меркурий.
+                    - paragraph [ref=e189]: Из окон столичной квартиры Ходченковой открывается потрясающий вид на автомагистрали и соседние небоскрёбы.
+                    - figure [ref=e195] [cursor=pointer]:
+                      - img "-4" [ref=e196]
+                    - heading "Сколько стоит ремонт квартиры в 2023 году?" [level=3]
+                    - figure [ref=e202] [cursor=pointer]:
+                      - img "-5" [ref=e203]
+                    - heading "✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [level=2]:
+                      - generic [ref=e204]: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e205] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Devgeniya%26utm_term%3D2306-svhodchenkova2R
+                      - generic [ref=e206]: ✅
+                    - heading "Оформление комнат" [level=3]:
+                      - generic [ref=e207]: Оформление комнат
+                    - paragraph [ref=e208]: Каждая комната в квартире Светланы Ходченковой оформлена в своём стиле. Так, например, на кухне можно видеть классическую отделку, мебель и декор. Столешница сделана из мрамора, а белоснежные стены украшают молдинги.
+                    - figure [ref=e214] [cursor=pointer]:
+                      - img "-6" [ref=e215]
+                    - paragraph [ref=e216]: В гостиной тоже классический интерьер, но здесь преобладают элементы дворцовой роскоши. На полу — паркет из ореха, на стенах — текстильные обои с цветочными узорами. Шторы — велюровые, а итальянская мебель обита настоящим бархатом.
+                    - figure [ref=e222] [cursor=pointer]:
+                      - img "-7" [ref=e223]
+                    - figure [ref=e229] [cursor=pointer]:
+                      - img "-8" [ref=e230]
+                    - paragraph [ref=e231]:
+                      - text: По соседству с гостиной находится зона отдыха, которую оформили в стиле лофт. В одной из своих статей я рассказывала,
+                      - link "как на убитой кухне создали лофт-интерьер" [ref=e232] [cursor=pointer]:
+                        - /url: https://dzen.ru/a/Y-s8kjg3TRXbRIhP?feed_exp=ordinary_feed&rid=1010349119.96.1681793812766.51627&clid=1400&integration=site_desktop&place=multisearch&secdata=CJTC0v7kMCABUA9qAQE%3D
+                      - text: . Этот стиль отлично подходит и для старых, и для новых квартир.
+                    - figure [ref=e238] [cursor=pointer]:
+                      - img "-9" [ref=e239]
+                    - paragraph [ref=e240]: А вот спальня оформлена в эклектичном стиле — тут перемешались пастельные тона, яркие мозаичные элементы, цветочные узоры и т. д. Но от каждого элемента в комнате веет роскошью и долгой историей, поэтому все они гармонично сочетаются между собой.
+                    - figure [ref=e246] [cursor=pointer]:
+                      - img "-10" [ref=e247]
+                    - figure [ref=e253] [cursor=pointer]:
+                      - img "-11" [ref=e254]
+                    - figure [ref=e260] [cursor=pointer]:
+                      - img "-12" [ref=e261]
+                    - blockquote [ref=e262]: "Domeo советует начать свой ремонт с 2-х простых шагов:"
+                    - blockquote [ref=e263]:
+                      - text: "1. Рассчитать точную цену ремонта под Ваш бюджет. Бесплатно рассчитайте здесь: ✅"
+                      - link "https://clck.ru/34mzeQ" [ref=e264] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fclck.ru%2F34mzeQ
+                    - blockquote [ref=e265]:
+                      - text: "2. Выбрать подходящего дизайнера для визуализации своих идей! Бесплатно выберите своего дизайнера здесь: ✅"
+                      - link "https://clck.ru/34mzeK" [ref=e266] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fclck.ru%2F34mzeK
+                    - figure [ref=e272] [cursor=pointer]:
+                      - img "-13" [ref=e273]
+                    - paragraph [ref=e274]:
+                      - generic [ref=e275]: Понравился ли вам интерьер в квартире Светланы Ходченковой? Делитесь впечатлениями в комментариях 👇
+                    - heading "Вам также будут интересны статьи:" [level=3]:
+                      - generic [ref=e276]: "Вам также будут интересны статьи:"
+                    - link "Только посмотрите на огромный загородный дом Полины Гагариной DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 21 июня 2023" [ref=e279] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ZJIDLL-vhiQ-WbON
+                      - img [ref=e611]
+                      - generic [ref=e285]:
+                        - generic [ref=e286]: Только посмотрите на огромный загородный дом Полины Гагариной
+                        - generic [ref=e287]:
+                          - generic [ref=e288]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e291]
+                          - generic [ref=e292]: · 21 июня 2023
+                    - 'link "Антуражная усадьба Александра Ширвиндта: обзор особняка с историей DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 18 июня 2023" [ref=e295] [cursor=pointer]':
+                      - /url: https://dzen.ru/a/ZI4WMTkjsxbWJEYm
+                      - img [ref=e612]
+                      - generic [ref=e301]:
+                        - generic [ref=e302]: "Антуражная усадьба Александра Ширвиндта: обзор особняка с историей"
+                        - generic [ref=e303]:
+                          - generic [ref=e304]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e307]
+                          - generic [ref=e308]: · 18 июня 2023
+                    - paragraph [ref=e309]:
+                      - generic [ref=e310]: Информация, приведенная в статье, взята из открытых источников
+              - generic [ref=e311]:
+                - generic "Плашка подписки на канал" [ref=e312]:
+                  - generic [ref=e313]:
+                    - generic [ref=e314]: Подпишитесь на канал,
+                    - generic [ref=e315]: чтобы не пропустить новые публикации
+                  - button "Подписаться" [ref=e316] [cursor=pointer]:
+                    - generic [ref=e317]: Подписаться
+                - generic "Социальный блок" [ref=e318]:
+                  - generic [ref=e319]:
+                    - button [ref=e322] [cursor=pointer]:
+                      - generic:
+                        - generic:
+                          - img
+                    - button "Нравится" [ref=e323] [cursor=pointer]:
+                      - generic [ref=e324]:
+                        - img [ref=e326]
+                        - generic "Подпись к кнопке" [ref=e327]: "1483"
+                    - button "Комментировать" [ref=e329] [cursor=pointer]:
+                      - generic [ref=e330]:
+                        - img [ref=e332]
+                        - generic "Подпись к кнопке" [ref=e333]: "614"
+                  - generic [ref=e334]:
+                    - button "Не нравится" [ref=e335] [cursor=pointer]:
+                      - img [ref=e338]
+                    - button [ref=e340] [cursor=pointer]:
+                      - img [ref=e343]
+              - generic [ref=e617]:
+                - generic [ref=e619]:
+                  - generic [ref=e620]: Комментарии614
+                  - button "Сначала популярные" [ref=e621] [cursor=pointer]:
+                    - generic [ref=e622]: Сначала популярные
+                    - img [ref=e624]
+                - generic [ref=e626]:
+                  - generic [ref=e627]:
+                    - textbox "Поле ввода комментария" [ref=e628]:
+                      - /placeholder: Написать комментарий
+                    - generic:
+                      - generic: 0 / 2500
+                      - generic [ref=e629]:
+                        - button "Смайлики и эмоции" [disabled] [ref=e630]:
+                          - img [ref=e632]
+                        - button "Добавить картинку" [disabled] [ref=e634]:
+                          - img [ref=e636]
+                        - button "Отправить комментарий" [disabled] [ref=e638]:
+                          - img [ref=e640]
+                  - generic [ref=e642]: Войти, чтобы комментировать
+                - generic [ref=e648]:
+                  - generic [ref=e649]:
+                    - generic [ref=e650]:
+                      - generic [ref=e651]:
+                        - link "Константин Г." [ref=e652] [cursor=pointer]:
+                          - /url: /user/m93znjx5cg577zggjzfz9r7vg4
+                          - generic [ref=e653]: Константин Г.
+                        - generic [ref=e654]: 3 июл 2023
+                      - button "Меню комментария" [ref=e656] [cursor=pointer]:
+                        - img [ref=e657]
+                    - generic "Кликабельный текст поста" [ref=e660] [cursor=pointer]:
+                      - generic [ref=e662]:
+                        - text: "Так... вот фраза о \"потрясающих\" видах на автомагистрали и соседние небоскрёбы. Ребята, вы в своем уме? Жить в вонючем почти центре города среди всего этого ядовитого говнища - это нонсенс. Далее. 71 этаж, который, наверное, раскачивается от сильных ветров. А если землятресение, пусть и небольшое? Ну, а потом, представьте себе: у вас выходной. Вы выходите из под\"езда, чтобы"
+                        - generic [ref=e663]: ...ещё
+                    - generic [ref=e665]:
+                      - button "Ответить" [ref=e666] [cursor=pointer]
+                      - generic [ref=e668]:
+                        - checkbox "1113"
+                        - generic [ref=e669] [cursor=pointer]:
+                          - img [ref=e670]
+                          - generic [ref=e671]: "1113"
+                      - generic [ref=e672]:
+                        - generic [ref=e674]:
+                          - checkbox "113"
+                          - generic [ref=e675] [cursor=pointer]:
+                            - img [ref=e676]
+                            - generic [ref=e677]: "113"
+                        - button [ref=e679]:
+                          - generic [ref=e682] [cursor=pointer]:
+                            - img [ref=e684]
+                            - img [ref=e687]
+                            - img [ref=e689]
+                            - img [ref=e691]
+                            - img [ref=e693]
+                            - img [ref=e695]
+                            - img [ref=e697]
+                  - button "Показать ответы на комментарий" [ref=e700] [cursor=pointer]:
+                    - generic [ref=e702]: 56 ответов
+                - generic [ref=e709]:
+                  - generic [ref=e710]:
+                    - generic [ref=e711]:
+                      - generic [ref=e712]:
+                        - link "Елена" [ref=e713] [cursor=pointer]:
+                          - /url: /id/63bfe1dad6204a074ed4b999
+                          - generic [ref=e714]: Елена
+                        - generic [ref=e715]: 25 июн 2023
+                      - button "Меню комментария" [ref=e717] [cursor=pointer]:
+                        - img [ref=e718]
+                    - generic "Кликабельный текст поста" [ref=e721]:
+                      - generic [ref=e723]: Главное, чтобы лифты не сломались
+                    - generic [ref=e725]:
+                      - button "Ответить" [ref=e726] [cursor=pointer]
+                      - generic [ref=e728]:
+                        - checkbox "670"
+                        - generic [ref=e729] [cursor=pointer]:
+                          - img [ref=e730]
+                          - generic [ref=e731]: "670"
+                      - generic [ref=e732]:
+                        - generic [ref=e734]:
+                          - checkbox "13"
+                          - generic [ref=e735] [cursor=pointer]:
+                            - img [ref=e736]
+                            - generic [ref=e737]: "13"
+                        - button [ref=e739]:
+                          - img [ref=e741] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e744] [cursor=pointer]:
+                    - generic [ref=e746]: 12 ответов
+                - generic [ref=e753]:
+                  - generic [ref=e754]:
+                    - generic [ref=e755]:
+                      - generic [ref=e756]:
+                        - link "Зарина Рузиматова" [ref=e757] [cursor=pointer]:
+                          - /url: /id/63cfd8d9a2e35520b4cdd228
+                          - generic [ref=e758]: Зарина Рузиматова
+                        - generic [ref=e759]: 23 июн 2023
+                      - button "Меню комментария" [ref=e761] [cursor=pointer]:
+                        - img [ref=e762]
+                    - generic "Кликабельный текст поста" [ref=e765]:
+                      - generic [ref=e767]: Прикольный вид из ванны!! Представляю, кка круто ее там принимать!!
+                    - generic [ref=e769]:
+                      - button "Ответить" [ref=e770] [cursor=pointer]
+                      - generic [ref=e772]:
+                        - checkbox "205"
+                        - generic [ref=e773] [cursor=pointer]:
+                          - img [ref=e774]
+                          - generic [ref=e775]: "205"
+                      - generic [ref=e776]:
+                        - generic [ref=e778]:
+                          - checkbox "34"
+                          - generic [ref=e779] [cursor=pointer]:
+                            - img [ref=e780]
+                            - generic [ref=e781]: "34"
+                        - button [ref=e783]:
+                          - img [ref=e785] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e788] [cursor=pointer]:
+                    - generic [ref=e790]: 16 ответов
+                - generic [ref=e932]:
+                  - generic [ref=e933]:
+                    - generic [ref=e934]:
+                      - generic [ref=e935]:
+                        - link "Екатерина И." [ref=e936] [cursor=pointer]:
+                          - /url: /user/6crm9ectywhiuafposro-skfx4a
+                          - generic [ref=e937]: Екатерина И.
+                        - generic [ref=e938]: 3 июл 2023
+                      - button "Меню комментария" [ref=e940] [cursor=pointer]:
+                        - img [ref=e941]
+                    - generic "Кликабельный текст поста" [ref=e944]:
+                      - generic [ref=e946]: Как квартира? Что сказать? Если честно, как-то не очень. Вот и всё. Неуютно и не красиво. Если это считается стильным, то значит пусть будет стильно. Счастья ей! Нет повода для зависти, а начинала смотреть, думала понравиться. Разочаровалась.
+                    - generic [ref=e948]:
+                      - button "Ответить" [ref=e949] [cursor=pointer]
+                      - generic [ref=e951]:
+                        - checkbox "121"
+                        - generic [ref=e952] [cursor=pointer]:
+                          - img [ref=e953]
+                          - generic [ref=e954]: "121"
+                      - generic [ref=e955]:
+                        - generic [ref=e957]:
+                          - checkbox "8"
+                          - generic [ref=e958] [cursor=pointer]:
+                            - img [ref=e959]
+                            - generic [ref=e960]: "8"
+                        - button [ref=e962]:
+                          - img [ref=e964] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e967] [cursor=pointer]:
+                    - generic [ref=e969]: 1 ответ
+                - generic [ref=e977]:
+                  - generic [ref=e978]:
+                    - generic [ref=e979]:
+                      - link "Елена" [ref=e980] [cursor=pointer]:
+                        - /url: /id/628f997d5f085456c7f0ba17
+                        - generic [ref=e981]: Елена
+                      - generic [ref=e982]: 3 июл 2023
+                    - button "Меню комментария" [ref=e984] [cursor=pointer]:
+                      - img [ref=e985]
+                  - generic "Кликабельный текст поста" [ref=e988]:
+                    - generic [ref=e990]: Какой ужОс жить на 71 этаже....
+                  - generic [ref=e992]:
+                    - button "Ответить" [ref=e993] [cursor=pointer]
+                    - generic [ref=e995]:
+                      - checkbox "101"
+                      - generic [ref=e996] [cursor=pointer]:
+                        - img [ref=e997]
+                        - generic [ref=e998]: "101"
+                    - generic [ref=e999]:
+                      - generic [ref=e1001]:
+                        - checkbox "5"
+                        - generic [ref=e1002] [cursor=pointer]:
+                          - img [ref=e1003]
+                          - generic [ref=e1004]: "5"
+                      - button [ref=e1006]:
+                        - img [ref=e1008] [cursor=pointer]
+                - generic [ref=e1015]:
+                  - generic [ref=e1016]:
+                    - generic [ref=e1017]:
+                      - generic [ref=e1018]:
+                        - link "Елена" [ref=e1019] [cursor=pointer]:
+                          - /url: /id/5f30d5ecf918ce34099bdcba
+                          - generic [ref=e1020]: Елена
+                        - generic [ref=e1021]: 4 июл 2023
+                      - button "Меню комментария" [ref=e1023] [cursor=pointer]:
+                        - img [ref=e1024]
+                    - generic "Кликабельный текст поста" [ref=e1027]:
+                      - generic [ref=e1029]: Бьла как-то в гостях в квартире в Москва-Сити. Окна там не расчитаны чтоб их открывать и проветривать квартиру. Только кондишн. Не представляю как можно жить в таком помещении.
+                    - generic [ref=e1031]:
+                      - button "Ответить" [ref=e1032] [cursor=pointer]
+                      - generic [ref=e1034]:
+                        - checkbox "92"
+                        - generic [ref=e1035] [cursor=pointer]:
+                          - img [ref=e1036]
+                          - generic [ref=e1037]: "92"
+                      - generic [ref=e1038]:
+                        - generic [ref=e1040]:
+                          - checkbox "2"
+                          - generic [ref=e1041] [cursor=pointer]:
+                            - img [ref=e1042]
+                            - generic [ref=e1043]: "2"
+                        - button [ref=e1045]:
+                          - img [ref=e1047] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1050] [cursor=pointer]:
+                    - generic [ref=e1052]: 1 ответ
+                - generic [ref=e1059]:
+                  - generic [ref=e1060]:
+                    - generic [ref=e1061]:
+                      - generic [ref=e1062]:
+                        - link "Дмитрий Берсенёв" [ref=e1063] [cursor=pointer]:
+                          - /url: /user/57zgfcd0j5rjqfbjy34m7avvcw
+                          - generic [ref=e1064]: Дмитрий Берсенёв
+                        - generic [ref=e1065]: 4 июл 2023
+                        - generic "Изменено" [ref=e1066]:
+                          - img [ref=e1067]
+                      - button "Меню комментария" [ref=e1070] [cursor=pointer]:
+                        - img [ref=e1071]
+                    - generic "Кликабельный текст поста" [ref=e1074]:
+                      - generic [ref=e1076]: Квартплата в этом доме с такой площадью 200 -300 тысяч в месяц... Замена окна по любым причинам от 2 млн., к воздуху надо привыкать - он разряженный, рассвет начинает с петухами а то раньше.... красиво, но накой оно надо, лучше коттедж в лесу, это квартира стоит около 400 млн., за эти бабки можно замок построить. Вообще, извините красиво, дорого но по факту это панты и не более .
+                    - generic [ref=e1078]:
+                      - button "Ответить" [ref=e1079] [cursor=pointer]
+                      - generic [ref=e1081]:
+                        - checkbox "85"
+                        - generic [ref=e1082] [cursor=pointer]:
+                          - img [ref=e1083]
+                          - generic [ref=e1084]: "85"
+                      - generic [ref=e1085]:
+                        - generic [ref=e1087]:
+                          - checkbox "6"
+                          - generic [ref=e1088] [cursor=pointer]:
+                            - img [ref=e1089]
+                            - generic [ref=e1090]: "6"
+                        - button [ref=e1092]:
+                          - img [ref=e1094] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1097] [cursor=pointer]:
+                    - generic [ref=e1099]: 6 ответов
+                - generic [ref=e1106]:
+                  - generic [ref=e1107]:
+                    - generic [ref=e1108]:
+                      - generic [ref=e1109]:
+                        - link "Антонина Ежова" [ref=e1110] [cursor=pointer]:
+                          - /url: /user/tnfaiiaxgqjyohhsvy1ug77lwfe
+                          - generic [ref=e1111]: Антонина Ежова
+                        - generic [ref=e1112]: 3 июл 2023
+                      - button "Меню комментария" [ref=e1114] [cursor=pointer]:
+                        - img [ref=e1115]
+                    - generic "Кликабельный текст поста" [ref=e1118]:
+                      - generic [ref=e1120]: Хуже не придумаешьь. Это же вредно для здоровья так высоко жить.
+                    - generic [ref=e1122]:
+                      - button "Ответить" [ref=e1123] [cursor=pointer]
+                      - generic [ref=e1125]:
+                        - checkbox "72"
+                        - generic [ref=e1126] [cursor=pointer]:
+                          - img [ref=e1127]
+                          - generic [ref=e1128]: "72"
+                      - generic [ref=e1129]:
+                        - generic [ref=e1131]:
+                          - checkbox "5"
+                          - generic [ref=e1132] [cursor=pointer]:
+                            - img [ref=e1133]
+                            - generic [ref=e1134]: "5"
+                        - button [ref=e1136]:
+                          - img [ref=e1138] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1141] [cursor=pointer]:
+                    - generic [ref=e1143]: 1 ответ
+                - generic [ref=e1150]:
+                  - generic [ref=e1151]:
+                    - generic [ref=e1152]:
+                      - generic [ref=e1153]:
+                        - link "Елена" [ref=e1154] [cursor=pointer]:
+                          - /url: /id/5dcfee2d72b73d07e87e64cc
+                          - generic [ref=e1155]: Елена
+                        - generic [ref=e1156]: 4 июл 2023
+                      - button "Меню комментария" [ref=e1158] [cursor=pointer]:
+                        - img [ref=e1159]
+                    - generic "Кликабельный текст поста" [ref=e1162] [cursor=pointer]:
+                      - generic [ref=e1163]:
+                        - generic [ref=e1164]: Одни понты. Интерьеры для картинки, но не для удобства. Неужели еще делают такие шторы-пылесборники-половыетряпки? Ванна у окна... Что ты там увидишь, лежа в ванне? Ну, если только зеркало на потолке установлено... Еще брызги на окне и вокруг. Да и нужна она вообще, ванна эта...
+                        - generic [ref=e1165]:
+                          - text: Вообще, по этим фото сложилось впечатление, что хозяйская рука к
+                          - generic [ref=e1166]: ...ещё
+                    - generic [ref=e1168]:
+                      - button "Ответить" [ref=e1169] [cursor=pointer]
+                      - generic [ref=e1171]:
+                        - checkbox "63"
+                        - generic [ref=e1172] [cursor=pointer]:
+                          - img [ref=e1173]
+                          - generic [ref=e1174]: "63"
+                      - generic [ref=e1175]:
+                        - generic [ref=e1177]:
+                          - checkbox "4"
+                          - generic [ref=e1178] [cursor=pointer]:
+                            - img [ref=e1179]
+                            - generic [ref=e1180]: "4"
+                        - button [ref=e1182]:
+                          - img [ref=e1184] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1187] [cursor=pointer]:
+                    - generic [ref=e1189]: 2 ответа
+                - generic [ref=e1196]:
+                  - generic [ref=e1197]:
+                    - generic [ref=e1198]:
+                      - generic [ref=e1199]:
+                        - link "Алина Соболева" [ref=e1200] [cursor=pointer]:
+                          - /url: /user/ilfjzfq-ndnkq_dfwrvtmw1sq4s
+                          - generic [ref=e1201]: Алина Соболева
+                        - generic [ref=e1202]: 3 июл 2023
+                      - button "Меню комментария" [ref=e1204] [cursor=pointer]:
+                        - img [ref=e1205]
+                    - generic "Кликабельный текст поста" [ref=e1208]:
+                      - generic [ref=e1210]: На вкус и цвет товарищей нет ,мне не нравится я не люблю пафос !!!! Не уютно !!!Ванная да красиво но не будешь в ней сидеть целый день.Чем больше денег тем меньше вкуса !!!!
+                    - generic [ref=e1212]:
+                      - button "Ответить" [ref=e1213] [cursor=pointer]
+                      - generic [ref=e1215]:
+                        - checkbox "64"
+                        - generic [ref=e1216] [cursor=pointer]:
+                          - img [ref=e1217]
+                          - generic [ref=e1218]: "64"
+                      - generic [ref=e1219]:
+                        - generic [ref=e1221]:
+                          - checkbox "8"
+                          - generic [ref=e1222] [cursor=pointer]:
+                            - img [ref=e1223]
+                            - generic [ref=e1224]: "8"
+                        - button [ref=e1226]:
+                          - img [ref=e1228] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1231] [cursor=pointer]:
+                    - generic [ref=e1233]: 1 ответ
+                - generic [ref=e1240]:
+                  - generic [ref=e1241]:
+                    - generic [ref=e1242]:
+                      - generic [ref=e1243]:
+                        - link "Драгунова Екатерина" [ref=e1244] [cursor=pointer]:
+                          - /url: /id/5d2ffe3fa98a2a00ac6df058
+                          - generic [ref=e1245]: Драгунова Екатерина
+                        - generic [ref=e1246]: 24 июн 2023
+                      - button "Меню комментария" [ref=e1248] [cursor=pointer]:
+                        - img [ref=e1249]
+                    - generic "Кликабельный текст поста" [ref=e1252]:
+                      - generic [ref=e1254]: Стильная женщина в стильной квартире)
+                    - generic [ref=e1256]:
+                      - button "Ответить" [ref=e1257] [cursor=pointer]
+                      - generic [ref=e1259]:
+                        - checkbox "73"
+                        - generic [ref=e1260] [cursor=pointer]:
+                          - img [ref=e1261]
+                          - generic [ref=e1262]: "73"
+                      - generic [ref=e1263]:
+                        - generic [ref=e1265]:
+                          - checkbox "20"
+                          - generic [ref=e1266] [cursor=pointer]:
+                            - img [ref=e1267]
+                            - generic [ref=e1268]: "20"
+                        - button [ref=e1270]:
+                          - img [ref=e1272] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1275] [cursor=pointer]:
+                    - generic [ref=e1277]: 3 ответа
+                - generic [ref=e1284]:
+                  - generic [ref=e1285]:
+                    - generic [ref=e1286]:
+                      - generic [ref=e1287]:
+                        - link "Марго & Марго" [ref=e1288] [cursor=pointer]:
+                          - /url: /margo1
+                          - generic [ref=e1289]: Марго & Марго
+                        - generic [ref=e1290]: 24 июн 2023
+                      - button "Меню комментария" [ref=e1292] [cursor=pointer]:
+                        - img [ref=e1293]
+                    - generic "Кликабельный текст поста" [ref=e1296]:
+                      - generic [ref=e1298]: Она мне кажется довольно милой, но актриса конечно нулевая. Но если заработала на такое то дай бог (я лично москва сити терпеть не могу, работала там и ничего престижного в проживании там не вижу)
+                    - generic [ref=e1300]:
+                      - button "Ответить" [ref=e1301] [cursor=pointer]
+                      - generic [ref=e1303]:
+                        - checkbox "65"
+                        - generic [ref=e1304] [cursor=pointer]:
+                          - img [ref=e1305]
+                          - generic [ref=e1306]: "65"
+                      - generic [ref=e1307]:
+                        - generic [ref=e1309]:
+                          - checkbox "16"
+                          - generic [ref=e1310] [cursor=pointer]:
+                            - img [ref=e1311]
+                            - generic [ref=e1312]: "16"
+                        - button [ref=e1314]:
+                          - img [ref=e1316] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1319] [cursor=pointer]:
+                    - generic [ref=e1321]: 5 ответов
+                - generic [ref=e1329]:
+                  - generic [ref=e1330]:
+                    - generic [ref=e1331]:
+                      - link "Mad rose" [ref=e1332] [cursor=pointer]:
+                        - /url: /user/kaet3n2y0uwhv0mmwg7nefunfm
+                        - generic [ref=e1333]: Mad rose
+                      - generic [ref=e1334]: 3 июл 2023
+                    - button "Меню комментария" [ref=e1336] [cursor=pointer]:
+                      - img [ref=e1337]
+                  - generic "Кликабельный текст поста" [ref=e1340]:
+                    - generic [ref=e1342]: Как-то безлико,без вкуса,как гостинница.
+                  - generic [ref=e1344]:
+                    - button "Ответить" [ref=e1345] [cursor=pointer]
+                    - generic [ref=e1347]:
+                      - checkbox "53"
+                      - generic [ref=e1348] [cursor=pointer]:
+                        - img [ref=e1349]
+                        - generic [ref=e1350]: "53"
+                    - generic [ref=e1351]:
+                      - generic [ref=e1353]:
+                        - checkbox "5"
+                        - generic [ref=e1354] [cursor=pointer]:
+                          - img [ref=e1355]
+                          - generic [ref=e1356]: "5"
+                      - button [ref=e1358]:
+                        - img [ref=e1360] [cursor=pointer]
+                - generic [ref=e1367]:
+                  - generic [ref=e1368]:
+                    - generic [ref=e1369]:
+                      - generic [ref=e1370]:
+                        - link "Игорь Шарко" [ref=e1371] [cursor=pointer]:
+                          - /url: /user/hf64z2jbccwomu6hjtbfloetvig
+                          - generic [ref=e1372]: Игорь Шарко
+                        - generic [ref=e1373]: 4 июл 2023
+                      - button "Меню комментария" [ref=e1375] [cursor=pointer]:
+                        - img [ref=e1376]
+                    - generic "Кликабельный текст поста" [ref=e1379]:
+                      - generic [ref=e1381]: Квартиры для бездетных.
+                    - generic [ref=e1383]:
+                      - button "Ответить" [ref=e1384] [cursor=pointer]
+                      - generic [ref=e1386]:
+                        - checkbox "50"
+                        - generic [ref=e1387] [cursor=pointer]:
+                          - img [ref=e1388]
+                          - generic [ref=e1389]: "50"
+                      - generic [ref=e1390]:
+                        - generic [ref=e1392]:
+                          - checkbox "6"
+                          - generic [ref=e1393] [cursor=pointer]:
+                            - img [ref=e1394]
+                            - generic [ref=e1395]: "6"
+                        - button [ref=e1397]:
+                          - img [ref=e1399] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1402] [cursor=pointer]:
+                    - generic [ref=e1404]: 1 ответ
+                - generic [ref=e1411]:
+                  - generic [ref=e1412]:
+                    - generic [ref=e1413]:
+                      - generic [ref=e1414]:
+                        - link "екатерина мержеевская" [ref=e1415] [cursor=pointer]:
+                          - /url: /user/k3bf4fky3azy003fkv0tyvramm
+                          - generic [ref=e1416]: екатерина мержеевская
+                        - generic [ref=e1417]: 4 июл 2023
+                      - button "Меню комментария" [ref=e1419] [cursor=pointer]:
+                        - img [ref=e1420]
+                    - generic "Кликабельный текст поста" [ref=e1423]:
+                      - generic [ref=e1425]: Я все обосру, поэтому помолчу🤭
+                    - generic [ref=e1427]:
+                      - button "Ответить" [ref=e1428] [cursor=pointer]
+                      - generic [ref=e1430]:
+                        - checkbox "45"
+                        - generic [ref=e1431] [cursor=pointer]:
+                          - img [ref=e1432]
+                          - generic [ref=e1433]: "45"
+                      - generic [ref=e1434]:
+                        - generic [ref=e1436]:
+                          - checkbox "2"
+                          - generic [ref=e1437] [cursor=pointer]:
+                            - img [ref=e1438]
+                            - generic [ref=e1439]: "2"
+                        - button [ref=e1441]:
+                          - img [ref=e1443] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1446] [cursor=pointer]:
+                    - generic [ref=e1448]: 2 ответа
+                - generic [ref=e1456]:
+                  - generic [ref=e1457]:
+                    - generic [ref=e1458]:
+                      - link "Всё, что мне интересно." [ref=e1459] [cursor=pointer]:
+                        - /url: /id/6238814330ba483b4de74e9f
+                        - generic [ref=e1460]: Всё, что мне интересно.
+                      - generic [ref=e1461]: 4 июл 2023
+                    - button "Меню комментария" [ref=e1463] [cursor=pointer]:
+                      - img [ref=e1464]
+                  - generic "Кликабельный текст поста" [ref=e1467]:
+                    - generic [ref=e1468]:
+                      - generic [ref=e1469]: Красиво.
+                      - generic [ref=e1470]: На пару суток в таких апартаментах остановиться. Не жить.
+                  - generic [ref=e1472]:
+                    - button "Ответить" [ref=e1473] [cursor=pointer]
+                    - generic [ref=e1475]:
+                      - checkbox "40"
+                      - generic [ref=e1476] [cursor=pointer]:
+                        - img [ref=e1477]
+                        - generic [ref=e1478]: "40"
+                    - generic [ref=e1479]:
+                      - generic [ref=e1481]:
+                        - checkbox "1"
+                        - generic [ref=e1482] [cursor=pointer]:
+                          - img [ref=e1483]
+                          - generic [ref=e1484]: "1"
+                      - button [ref=e1486]:
+                        - img [ref=e1488] [cursor=pointer]
+                - generic [ref=e1495]:
+                  - generic [ref=e1496]:
+                    - generic [ref=e1497]:
+                      - generic [ref=e1498]:
+                        - link "Дмитрий Белкин" [ref=e1499] [cursor=pointer]:
+                          - /url: /id/643e55f329c49271b116a75a
+                          - generic [ref=e1500]: Дмитрий Белкин
+                        - generic [ref=e1501]: 4 июл 2023
+                      - button "Меню комментария" [ref=e1503] [cursor=pointer]:
+                        - img [ref=e1504]
+                    - generic "Кликабельный текст поста" [ref=e1507]:
+                      - generic [ref=e1508]:
+                        - generic [ref=e1509]: Все очень хорошо,но лучше деревенской природы нет и не будет!Воздух,земля,банька
+                        - generic [ref=e1510]: И пр.натуральное.
+                        - generic [ref=e1511]: А в разрисованных камнях ,это не мое,завидовать не чему!
+                    - generic [ref=e1513]:
+                      - button "Ответить" [ref=e1514] [cursor=pointer]
+                      - generic [ref=e1516]:
+                        - checkbox "37"
+                        - generic [ref=e1517] [cursor=pointer]:
+                          - img [ref=e1518]
+                          - generic [ref=e1519]: "37"
+                      - generic [ref=e1520]:
+                        - generic [ref=e1522]:
+                          - checkbox "1"
+                          - generic [ref=e1523] [cursor=pointer]:
+                            - img [ref=e1524]
+                            - generic [ref=e1525]: "1"
+                        - button [ref=e1527]:
+                          - img [ref=e1529] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1532] [cursor=pointer]:
+                    - generic [ref=e1534]: 3 ответа
+                - generic [ref=e1542]:
+                  - generic [ref=e1543]:
+                    - generic [ref=e1544]:
+                      - link "ЭнЖэ" [ref=e1545] [cursor=pointer]:
+                        - /url: /id/6229ccd92c0fcb6215cbda9a
+                        - generic [ref=e1546]: ЭнЖэ
+                      - generic [ref=e1547]: 13 ноя 2023
+                    - button "Меню комментария" [ref=e1549] [cursor=pointer]:
+                      - img [ref=e1550]
+                  - generic "Кликабельный текст поста" [ref=e1553]:
+                    - generic [ref=e1555]: По моему надо быть ненормальным, что бы хотеть жить в таких домах
+                  - generic [ref=e1557]:
+                    - button "Ответить" [ref=e1558] [cursor=pointer]
+                    - generic [ref=e1560]:
+                      - checkbox "36"
+                      - generic [ref=e1561] [cursor=pointer]:
+                        - img [ref=e1562]
+                        - generic [ref=e1563]: "36"
+                    - generic [ref=e1564]:
+                      - generic [ref=e1566]:
+                        - checkbox "1"
+                        - generic [ref=e1567] [cursor=pointer]:
+                          - img [ref=e1568]
+                          - generic [ref=e1569]: "1"
+                      - button [ref=e1571]:
+                        - img [ref=e1573] [cursor=pointer]
+                - generic [ref=e1581]:
+                  - generic [ref=e1582]:
+                    - generic [ref=e1583]:
+                      - link "Татьяна" [ref=e1584] [cursor=pointer]:
+                        - /url: /id/6229bc8826dfee1a63918396
+                        - generic [ref=e1585]: Татьяна
+                      - generic [ref=e1586]: 30 июн 2023
+                    - button "Меню комментария" [ref=e1588] [cursor=pointer]:
+                      - img [ref=e1589]
+                  - generic "Кликабельный текст поста" [ref=e1592]:
+                    - generic [ref=e1594]: Умытая, совсем не интересная, от слова совсем
+                  - generic [ref=e1596]:
+                    - button "Ответить" [ref=e1597] [cursor=pointer]
+                    - generic [ref=e1599]:
+                      - checkbox "43"
+                      - generic [ref=e1600] [cursor=pointer]:
+                        - img [ref=e1601]
+                        - generic [ref=e1602]: "43"
+                    - generic [ref=e1603]:
+                      - generic [ref=e1605]:
+                        - checkbox "10"
+                        - generic [ref=e1606] [cursor=pointer]:
+                          - img [ref=e1607]
+                          - generic [ref=e1608]: "10"
+                      - button [ref=e1610]:
+                        - img [ref=e1612] [cursor=pointer]
+                - generic [ref=e1619]:
+                  - generic [ref=e1620]:
+                    - generic [ref=e1621]:
+                      - generic [ref=e1622]:
+                        - link "fakel" [ref=e1623] [cursor=pointer]:
+                          - /url: /id/5a8c4f885f496759a80b61e5
+                          - generic [ref=e1624]: fakel
+                        - generic [ref=e1625]: 26 июн 2023
+                      - button "Меню комментария" [ref=e1627] [cursor=pointer]:
+                        - img [ref=e1628]
+                    - generic "Кликабельный текст поста" [ref=e1631]:
+                      - generic [ref=e1633]: Личного счастья нет, и этим все сказано, тоже люблю велюровые шторы, и они у меня на всех окнах, какая роскошь?, это просто тепло, 🔥 когда окна эркер, как у меня, роскошью в их гламурной жизни считается публичный муж, супруг, депутат, или премьер министр., а этого пока нет.
+                    - generic [ref=e1635]:
+                      - button "Ответить" [ref=e1636] [cursor=pointer]
+                      - generic [ref=e1638]:
+                        - checkbox "43"
+                        - generic [ref=e1639] [cursor=pointer]:
+                          - img [ref=e1640]
+                          - generic [ref=e1641]: "43"
+                      - generic [ref=e1642]:
+                        - generic [ref=e1644]:
+                          - checkbox "8"
+                          - generic [ref=e1645] [cursor=pointer]:
+                            - img [ref=e1646]
+                            - generic [ref=e1647]: "8"
+                        - button [ref=e1649]:
+                          - img [ref=e1651] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1654] [cursor=pointer]:
+                    - generic [ref=e1656]: 4 ответа
+                - generic [ref=e1664]:
+                  - generic [ref=e1665]:
+                    - generic [ref=e1666]:
+                      - link "ирина зимина" [ref=e1667] [cursor=pointer]:
+                        - /url: /user/u664v8a6wb43t4r9t6adpudv2m
+                        - generic [ref=e1668]: ирина зимина
+                      - generic [ref=e1669]: 30 авг 2023
+                    - button "Меню комментария" [ref=e1671] [cursor=pointer]:
+                      - img [ref=e1672]
+                  - generic "Кликабельный текст поста" [ref=e1675]:
+                    - generic [ref=e1677]: Самой квартиры и не видно. Одна С.Ходченкова в разных позах.
+                  - generic [ref=e1679]:
+                    - button "Ответить" [ref=e1680] [cursor=pointer]
+                    - generic [ref=e1682]:
+                      - checkbox "33"
+                      - generic [ref=e1683] [cursor=pointer]:
+                        - img [ref=e1684]
+                        - generic [ref=e1685]: "33"
+                    - generic [ref=e1686]:
+                      - generic [ref=e1688]:
+                        - checkbox "1"
+                        - generic [ref=e1689] [cursor=pointer]:
+                          - img [ref=e1690]
+                          - generic [ref=e1691]: "1"
+                      - button [ref=e1693]:
+                        - img [ref=e1695] [cursor=pointer]
+                - generic [ref=e1703]:
+                  - generic [ref=e1704]:
+                    - generic [ref=e1705]:
+                      - link "@lga A" [ref=e1706] [cursor=pointer]:
+                        - /url: /id/617699ffe8739e14b682c7aa
+                        - generic [ref=e1707]: "@lga A"
+                      - generic [ref=e1708]: 3 июл 2023
+                    - button "Меню комментария" [ref=e1710] [cursor=pointer]:
+                      - img [ref=e1711]
+                  - generic "Кликабельный текст поста" [ref=e1714]:
+                    - generic [ref=e1716]: Жить на 71 этаже? Нет уж увольте....я лучше у себя, а квартира понятно, что красивая и дорогая!
+                  - generic [ref=e1718]:
+                    - button "Ответить" [ref=e1719] [cursor=pointer]
+                    - generic [ref=e1721]:
+                      - checkbox "32"
+                      - generic [ref=e1722] [cursor=pointer]:
+                        - img [ref=e1723]
+                        - generic [ref=e1724]: "32"
+                    - generic [ref=e1725]:
+                      - generic [ref=e1727]:
+                        - checkbox "3"
+                        - generic [ref=e1728] [cursor=pointer]:
+                          - img [ref=e1729]
+                          - generic [ref=e1730]: "3"
+                      - button [ref=e1732]:
+                        - img [ref=e1734] [cursor=pointer]
+                - generic [ref=e1741]:
+                  - generic [ref=e1742]:
+                    - generic [ref=e1743]:
+                      - generic [ref=e1744]:
+                        - link "Артур Викторов" [ref=e1745] [cursor=pointer]:
+                          - /url: /id/636942c2e8c1dd529a4aa7ca
+                          - generic [ref=e1746]: Артур Викторов
+                        - generic [ref=e1747]: 24 июн 2023
+                      - button "Меню комментария" [ref=e1749] [cursor=pointer]:
+                        - img [ref=e1750]
+                    - generic "Кликабельный текст поста" [ref=e1753]:
+                      - generic [ref=e1755]: Ну и вид из окна!!! Обалдеть!!!
+                    - generic [ref=e1757]:
+                      - button "Ответить" [ref=e1758] [cursor=pointer]
+                      - generic [ref=e1760]:
+                        - checkbox "34"
+                        - generic [ref=e1761] [cursor=pointer]:
+                          - img [ref=e1762]
+                          - generic [ref=e1763]: "34"
+                      - generic [ref=e1764]:
+                        - generic [ref=e1766]:
+                          - checkbox "5"
+                          - generic [ref=e1767] [cursor=pointer]:
+                            - img [ref=e1768]
+                            - generic [ref=e1769]: "5"
+                        - button [ref=e1771]:
+                          - img [ref=e1773] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1776] [cursor=pointer]:
+                    - generic [ref=e1778]: 2 ответа
+                - generic [ref=e1785]:
+                  - generic [ref=e1786]:
+                    - generic [ref=e1787]:
+                      - generic [ref=e1788]:
+                        - link "Иван Иванов" [ref=e1789] [cursor=pointer]:
+                          - /url: /id/64ee5ad71e74a52cae299f91
+                          - generic [ref=e1790]: Иван Иванов
+                        - generic [ref=e1791]: 4 июл 2023
+                      - button "Меню комментария" [ref=e1793] [cursor=pointer]:
+                        - img [ref=e1794]
+                    - generic "Кликабельный текст поста" [ref=e1797]:
+                      - generic [ref=e1799]: 40 лет детей нет, по мне так это страшно, очень страшно. Одинокая жизнь пустоцвета. Разве тряпки и вещи имеют какаую то ценность?
+                    - generic [ref=e1801]:
+                      - button "Ответить" [ref=e1802] [cursor=pointer]
+                      - generic [ref=e1804]:
+                        - checkbox "40"
+                        - generic [ref=e1805] [cursor=pointer]:
+                          - img [ref=e1806]
+                          - generic [ref=e1807]: "40"
+                      - generic [ref=e1808]:
+                        - generic [ref=e1810]:
+                          - checkbox "14"
+                          - generic [ref=e1811] [cursor=pointer]:
+                            - img [ref=e1812]
+                            - generic [ref=e1813]: "14"
+                        - button [ref=e1815]:
+                          - img [ref=e1817] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1820] [cursor=pointer]:
+                    - generic [ref=e1822]: 21 ответ
+                - generic [ref=e1830]:
+                  - generic [ref=e1831]:
+                    - generic [ref=e1832]:
+                      - link "Елена Саморукова" [ref=e1833] [cursor=pointer]:
+                        - /url: /user/b97k0ry8tnutcrvqgfgvb5zgym
+                        - generic [ref=e1834]: Елена Саморукова
+                      - generic [ref=e1835]: 4 июл 2023
+                    - button "Меню комментария" [ref=e1837] [cursor=pointer]:
+                      - img [ref=e1838]
+                  - generic "Кликабельный текст поста" [ref=e1841]:
+                    - generic [ref=e1843]: Чит хорошего? Это же не офис. Даже окно не откроешь для того, чтобы подышать СВЕЖИМ воздухом, услышать шелест листвы, пение птиц... А если пожар, или лифт отключат? Не дай Бог такую квартиру, даром не надо!
+                  - generic [ref=e1845]:
+                    - button "Ответить" [ref=e1846] [cursor=pointer]
+                    - generic [ref=e1848]:
+                      - checkbox "29"
+                      - generic [ref=e1849] [cursor=pointer]:
+                        - img [ref=e1850]
+                        - generic [ref=e1851]: "29"
+                    - generic [ref=e1852]:
+                      - generic [ref=e1854]:
+                        - checkbox "5"
+                        - generic [ref=e1855] [cursor=pointer]:
+                          - img [ref=e1856]
+                          - generic [ref=e1857]: "5"
+                      - button [ref=e1859]:
+                        - img [ref=e1861] [cursor=pointer]
+                - generic [ref=e1869]:
+                  - generic [ref=e1870]:
+                    - generic [ref=e1871]:
+                      - link "Александра Круль" [ref=e1872] [cursor=pointer]:
+                        - /url: /user/k2a0l3o8_d8fvlrxze5xaldf3ss
+                        - generic [ref=e1873]: Александра Круль
+                      - generic [ref=e1874]: 3 июл 2023
+                    - button "Меню комментария" [ref=e1876] [cursor=pointer]:
+                      - img [ref=e1877]
+                  - generic "Кликабельный текст поста" [ref=e1880]:
+                    - generic [ref=e1882]: Детей там не хватает)))
+                  - generic [ref=e1884]:
+                    - button "Ответить" [ref=e1885] [cursor=pointer]
+                    - generic [ref=e1887]:
+                      - checkbox "30"
+                      - generic [ref=e1888] [cursor=pointer]:
+                        - img [ref=e1889]
+                        - generic [ref=e1890]: "30"
+                    - generic [ref=e1891]:
+                      - generic [ref=e1893]:
+                        - checkbox "6"
+                        - generic [ref=e1894] [cursor=pointer]:
+                          - img [ref=e1895]
+                          - generic [ref=e1896]: "6"
+                      - button [ref=e1898]:
+                        - img [ref=e1900] [cursor=pointer]
+                - generic [ref=e1907]:
+                  - generic [ref=e1908]:
+                    - generic [ref=e1909]:
+                      - generic [ref=e1910]:
+                        - link "Марыся Мишуткина" [ref=e1911] [cursor=pointer]:
+                          - /url: /id/6383a2d8532c9c7efdca667d
+                          - generic [ref=e1912]: Марыся Мишуткина
+                        - generic [ref=e1913]: 25 июн 2023
+                      - button "Меню комментария" [ref=e1915] [cursor=pointer]:
+                        - img [ref=e1916]
+                    - generic "Кликабельный текст поста" [ref=e1919]:
+                      - generic [ref=e1921]: Квартира шикарная. Актриса она хорошая, ей бы режиссера навроде Говорухина, который ее и прославил. Наконец она красива
+                    - generic [ref=e1923]:
+                      - button "Ответить" [ref=e1924] [cursor=pointer]
+                      - generic [ref=e1926]:
+                        - checkbox "38"
+                        - generic [ref=e1927] [cursor=pointer]:
+                          - img [ref=e1928]
+                          - generic [ref=e1929]: "38"
+                      - generic [ref=e1930]:
+                        - generic [ref=e1932]:
+                          - checkbox "13"
+                          - generic [ref=e1933] [cursor=pointer]:
+                            - img [ref=e1934]
+                            - generic [ref=e1935]: "13"
+                        - button [ref=e1937]:
+                          - img [ref=e1939] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1942] [cursor=pointer]:
+                    - generic [ref=e1944]: 7 ответов
+                - generic [ref=e1951]:
+                  - generic [ref=e1952]:
+                    - generic [ref=e1953]:
+                      - generic [ref=e1954]:
+                        - link "vovo gramov" [ref=e1955] [cursor=pointer]:
+                          - /url: /id/622796e9ab07561070f34024
+                          - generic [ref=e1956]: vovo gramov
+                        - generic [ref=e1957]: 4 дек 2023
+                      - button "Меню комментария" [ref=e1959] [cursor=pointer]:
+                        - img [ref=e1960]
+                    - generic "Кликабельный текст поста" [ref=e1963]:
+                      - generic [ref=e1965]: Больше обзор самой Ходченковой,чем её квартиры,этакой тихий пиарчик.
+                    - generic [ref=e1967]:
+                      - button "Ответить" [ref=e1968] [cursor=pointer]
+                      - generic [ref=e1970]:
+                        - checkbox "22"
+                        - generic [ref=e1971] [cursor=pointer]:
+                          - img [ref=e1972]
+                          - generic [ref=e1973]: "22"
+                      - generic [ref=e1974]:
+                        - generic [ref=e1976]:
+                          - checkbox
+                          - img [ref=e1978] [cursor=pointer]
+                        - button [ref=e1980]:
+                          - img [ref=e1982] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1985] [cursor=pointer]:
+                    - generic [ref=e1987]: 1 ответ
+                - generic [ref=e1994]:
+                  - generic [ref=e1995]:
+                    - generic [ref=e1996]:
+                      - generic [ref=e1997]:
+                        - link "Андрей Леонтьев" [ref=e1998] [cursor=pointer]:
+                          - /url: /user/1tlvwxnyr-rsidpfmdzpmwmkafs
+                          - generic [ref=e1999]: Андрей Леонтьев
+                        - generic [ref=e2000]: 5 июл 2023
+                      - button "Меню комментария" [ref=e2002] [cursor=pointer]:
+                        - img [ref=e2003]
+                    - generic "Кликабельный текст поста" [ref=e2006]:
+                      - generic [ref=e2008]: Сильно удивляет то, что никакая актрисулька имеет такие гонорары. Это касается не только Ходченковой. Это касается всего российского кино.
+                    - generic [ref=e2010]:
+                      - button "Ответить" [ref=e2011] [cursor=pointer]
+                      - generic [ref=e2013]:
+                        - checkbox "26"
+                        - generic [ref=e2014] [cursor=pointer]:
+                          - img [ref=e2015]
+                          - generic [ref=e2016]: "26"
+                      - generic [ref=e2017]:
+                        - generic [ref=e2019]:
+                          - checkbox "4"
+                          - generic [ref=e2020] [cursor=pointer]:
+                            - img [ref=e2021]
+                            - generic [ref=e2022]: "4"
+                        - button [ref=e2024]:
+                          - img [ref=e2026] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2029] [cursor=pointer]:
+                    - generic [ref=e2031]: 1 ответ
+                - generic [ref=e2039]:
+                  - generic [ref=e2040]:
+                    - generic [ref=e2041]:
+                      - link "Александр Косенков" [ref=e2042] [cursor=pointer]:
+                        - /url: /user/pveoi5pwcyw4zaswraw6ocahlye
+                        - generic [ref=e2043]: Александр Косенков
+                      - generic [ref=e2044]: 4 июл 2023
+                    - button "Меню комментария" [ref=e2046] [cursor=pointer]:
+                      - img [ref=e2047]
+                  - generic "Кликабельный текст поста" [ref=e2050]:
+                    - generic [ref=e2052]: Офигеть муравейник! Там, если только сдавать квартиру... Сам бы жить не стал.
+                  - generic [ref=e2054]:
+                    - button "Ответить" [ref=e2055] [cursor=pointer]
+                    - generic [ref=e2057]:
+                      - checkbox "21"
+                      - generic [ref=e2058] [cursor=pointer]:
+                        - img [ref=e2059]
+                        - generic [ref=e2060]: "21"
+                    - generic [ref=e2061]:
+                      - generic [ref=e2063]:
+                        - checkbox "1"
+                        - generic [ref=e2064] [cursor=pointer]:
+                          - img [ref=e2065]
+                          - generic [ref=e2066]: "1"
+                      - button [ref=e2068]:
+                        - img [ref=e2070] [cursor=pointer]
+                - generic [ref=e2077]:
+                  - generic [ref=e2078]:
+                    - generic [ref=e2079]:
+                      - generic [ref=e2080]:
+                        - link "Italrus I." [ref=e2081] [cursor=pointer]:
+                          - /url: /user/54mzt58yd6tt55aqxn3u53ggpg
+                          - generic [ref=e2082]: Italrus I.
+                        - generic [ref=e2083]: 3 июл 2023
+                      - button "Меню комментария" [ref=e2085] [cursor=pointer]:
+                        - img [ref=e2086]
+                    - generic "Кликабельный текст поста" [ref=e2089]:
+                      - generic [ref=e2091]: Какая женщина, така и квартира.)))
+                    - generic [ref=e2093]:
+                      - button "Ответить" [ref=e2094] [cursor=pointer]
+                      - generic [ref=e2096]:
+                        - checkbox "22"
+                        - generic [ref=e2097] [cursor=pointer]:
+                          - img [ref=e2098]
+                          - generic [ref=e2099]: "22"
+                      - generic [ref=e2100]:
+                        - generic [ref=e2102]:
+                          - checkbox "2"
+                          - generic [ref=e2103] [cursor=pointer]:
+                            - img [ref=e2104]
+                            - generic [ref=e2105]: "2"
+                        - button [ref=e2107]:
+                          - img [ref=e2109] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2112] [cursor=pointer]:
+                    - generic [ref=e2114]: 7 ответов
+                - generic [ref=e2122]:
+                  - generic [ref=e2123]:
+                    - generic [ref=e2124]:
+                      - link "Татьяна Мишкур" [ref=e2125] [cursor=pointer]:
+                        - /url: /id/6231d6ca82c8c453a302111c
+                        - generic [ref=e2126]: Татьяна Мишкур
+                      - generic [ref=e2127]: 15 сен 2023
+                    - button "Меню комментария" [ref=e2129] [cursor=pointer]:
+                      - img [ref=e2130]
+                  - generic "Кликабельный текст поста" [ref=e2133]:
+                    - generic [ref=e2135]: В таких квартирах живут артисты. А по большому счету если что случится с ними, никто и не вспомнит о их ролях и фильмах. Разовый товар. За что им так платят. Звёзды. А на самом деле пустой флакон.
+                  - generic [ref=e2137]:
+                    - button "Ответить" [ref=e2138] [cursor=pointer]
+                    - generic [ref=e2140]:
+                      - checkbox "18"
+                      - generic [ref=e2141] [cursor=pointer]:
+                        - img [ref=e2142]
+                        - generic [ref=e2143]: "18"
+                    - generic [ref=e2144]:
+                      - generic [ref=e2146]:
+                        - checkbox
+                        - img [ref=e2148] [cursor=pointer]
+                      - button [ref=e2150]:
+                        - img [ref=e2152] [cursor=pointer]
+                - generic [ref=e2159]:
+                  - generic [ref=e2160]:
+                    - generic [ref=e2161]:
+                      - generic [ref=e2162]:
+                        - link "Сергей С." [ref=e2163] [cursor=pointer]:
+                          - /url: /id/5ff03206abbc2742d3292833
+                          - generic [ref=e2164]: Сергей С.
+                        - generic [ref=e2165]: 4 июл 2023
+                      - button "Меню комментария" [ref=e2167] [cursor=pointer]:
+                        - img [ref=e2168]
+                    - generic "Кликабельный текст поста" [ref=e2171]:
+                      - generic [ref=e2173]: Почитал комментарии, и в ужасе. Боже, какой же завистливый у нас народ! Неужели везде так?
+                    - generic [ref=e2175]:
+                      - button "Ответить" [ref=e2176] [cursor=pointer]
+                      - generic [ref=e2178]:
+                        - checkbox "27"
+                        - generic [ref=e2179] [cursor=pointer]:
+                          - img [ref=e2180]
+                          - generic [ref=e2181]: "27"
+                      - generic [ref=e2182]:
+                        - generic [ref=e2184]:
+                          - checkbox "7"
+                          - generic [ref=e2185] [cursor=pointer]:
+                            - img [ref=e2186]
+                            - generic [ref=e2187]: "7"
+                        - button [ref=e2189]:
+                          - img [ref=e2191] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2194] [cursor=pointer]:
+                    - generic [ref=e2196]: 2 ответа
+                - generic [ref=e2204]:
+                  - generic [ref=e2205]:
+                    - generic [ref=e2206]:
+                      - link "АННА Павлова" [ref=e2207] [cursor=pointer]:
+                        - /url: /id/656c4133e8284b6ff63611b3
+                        - generic [ref=e2208]: АННА Павлова
+                      - generic [ref=e2209]: 4 дек 2023
+                    - button "Меню комментария" [ref=e2211] [cursor=pointer]:
+                      - img [ref=e2212]
+                  - generic "Кликабельный текст поста" [ref=e2215]:
+                    - generic [ref=e2217]: Ужас охватывает от такой высоты!! Даже бесплатно не надо такую квартиру. Глубокая вода и высота...мои страхи!
+                  - generic [ref=e2219]:
+                    - button "Ответить" [ref=e2220] [cursor=pointer]
+                    - generic [ref=e2222]:
+                      - checkbox "18"
+                      - generic [ref=e2223] [cursor=pointer]:
+                        - img [ref=e2224]
+                        - generic [ref=e2225]: "18"
+                    - generic [ref=e2226]:
+                      - generic [ref=e2228]:
+                        - checkbox
+                        - img [ref=e2230] [cursor=pointer]
+                      - button [ref=e2232]:
+                        - img [ref=e2234] [cursor=pointer]
+                - generic [ref=e2242]:
+                  - generic [ref=e2243]:
+                    - generic [ref=e2244]:
+                      - link "Лулу" [ref=e2245] [cursor=pointer]:
+                        - /url: /id/6898af1e3f6a6e4a449095e1
+                        - generic [ref=e2246]: Лулу
+                      - generic [ref=e2247]: 11 ноя 2023
+                    - button "Меню комментария" [ref=e2249] [cursor=pointer]:
+                      - img [ref=e2250]
+                  - generic "Кликабельный текст поста" [ref=e2253]:
+                    - generic [ref=e2255]: Я свою старенькую квартиру в сталинке с видом на парк, ни за что бы не променяла на эту пластиковую коробку. И неважно какой там метраж, коммуникации и т.д…
+                  - generic [ref=e2257]:
+                    - button "Ответить" [ref=e2258] [cursor=pointer]
+                    - generic [ref=e2260]:
+                      - checkbox "18"
+                      - generic [ref=e2261] [cursor=pointer]:
+                        - img [ref=e2262]
+                        - generic [ref=e2263]: "18"
+                    - generic [ref=e2264]:
+                      - generic [ref=e2266]:
+                        - checkbox
+                        - img [ref=e2268] [cursor=pointer]
+                      - button [ref=e2270]:
+                        - img [ref=e2272] [cursor=pointer]
+                - generic [ref=e2279]:
+                  - generic [ref=e2280]:
+                    - generic [ref=e2281]:
+                      - generic [ref=e2282]:
+                        - link "Светик" [ref=e2283] [cursor=pointer]:
+                          - /url: /id/62290dcca3cab77819803213
+                          - generic [ref=e2284]: Светик
+                        - generic [ref=e2285]: 8 ноя 2023
+                      - button "Меню комментария" [ref=e2287] [cursor=pointer]:
+                        - img [ref=e2288]
+                    - generic "Кликабельный текст поста" [ref=e2291]:
+                      - generic [ref=e2293]: Счастье не в квартирах на 70 этаже, а в семье и детях.
+                    - generic [ref=e2295]:
+                      - button "Ответить" [ref=e2296] [cursor=pointer]
+                      - generic [ref=e2298]:
+                        - checkbox "20"
+                        - generic [ref=e2299] [cursor=pointer]:
+                          - img [ref=e2300]
+                          - generic [ref=e2301]: "20"
+                      - generic [ref=e2302]:
+                        - generic [ref=e2304]:
+                          - checkbox "2"
+                          - generic [ref=e2305] [cursor=pointer]:
+                            - img [ref=e2306]
+                            - generic [ref=e2307]: "2"
+                        - button [ref=e2309]:
+                          - img [ref=e2311] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2314] [cursor=pointer]:
+                    - generic [ref=e2316]: 1 ответ
+                - generic [ref=e2323]:
+                  - generic [ref=e2324]:
+                    - generic [ref=e2325]:
+                      - generic [ref=e2326]:
+                        - link "Татьяна Кобра" [ref=e2327] [cursor=pointer]:
+                          - /url: /id/635c1d55da17383bb4b85626
+                          - generic [ref=e2328]: Татьяна Кобра
+                        - generic [ref=e2329]: 3 ноя 2023
+                      - button "Меню комментария" [ref=e2331] [cursor=pointer]:
+                        - img [ref=e2332]
+                    - generic "Кликабельный текст поста" [ref=e2335]:
+                      - generic [ref=e2336]:
+                        - generic [ref=e2337]: Москва сити - это ПОНТЫ!!! Это для бизнеса! Жить здесь - это себя не любить! Только в нашей стране считается, что жить в центре города - это КРУТО! За рубежем это не работает! Круто - это особняк
+                        - generic [ref=e2338]: "за городом с бассейном!!! Квартира Ходченковой не живая: холодно, не уютно, смотрится пустой... БРР!!! Что поделать: сказывается бедненькое детство!!!"
+                    - generic [ref=e2340]:
+                      - button "Ответить" [ref=e2341] [cursor=pointer]
+                      - generic [ref=e2343]:
+                        - checkbox "19"
+                        - generic [ref=e2344] [cursor=pointer]:
+                          - img [ref=e2345]
+                          - generic [ref=e2346]: "19"
+                      - generic [ref=e2347]:
+                        - generic [ref=e2349]:
+                          - checkbox "1"
+                          - generic [ref=e2350] [cursor=pointer]:
+                            - img [ref=e2351]
+                            - generic [ref=e2352]: "1"
+                        - button [ref=e2354]:
+                          - img [ref=e2356] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2359] [cursor=pointer]:
+                    - generic [ref=e2361]: 6 ответов
+                - generic [ref=e2368]:
+                  - generic [ref=e2369]:
+                    - generic [ref=e2370]:
+                      - generic [ref=e2371]:
+                        - link "Юлия" [ref=e2372] [cursor=pointer]:
+                          - /url: /id/609f7767a77bca689f1e9f1b
+                          - generic [ref=e2373]: Юлия
+                        - generic [ref=e2374]: 4 июл 2023
+                      - button "Меню комментария" [ref=e2376] [cursor=pointer]:
+                        - img [ref=e2377]
+                    - generic "Кликабельный текст поста" [ref=e2380]:
+                      - generic [ref=e2382]: От такой высоты подташнивает
+                    - generic [ref=e2384]:
+                      - button "Ответить" [ref=e2385] [cursor=pointer]
+                      - generic [ref=e2387]:
+                        - checkbox "18"
+                        - generic [ref=e2388] [cursor=pointer]:
+                          - img [ref=e2389]
+                          - generic [ref=e2390]: "18"
+                      - generic [ref=e2391]:
+                        - generic [ref=e2393]:
+                          - checkbox
+                          - img [ref=e2395] [cursor=pointer]
+                        - button [ref=e2397]:
+                          - img [ref=e2399] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2402] [cursor=pointer]:
+                    - generic [ref=e2404]: 1 ответ
+                - generic [ref=e2412]:
+                  - generic [ref=e2413]:
+                    - generic [ref=e2414]:
+                      - link "Галина Галия" [ref=e2415] [cursor=pointer]:
+                        - /url: /id/5f0400b0dbb8e02aa53babb7
+                        - generic [ref=e2416]: Галина Галия
+                      - generic [ref=e2417]: 3 июл 2023
+                    - button "Меню комментария" [ref=e2419] [cursor=pointer]:
+                      - img [ref=e2420]
+                  - generic "Кликабельный текст поста" [ref=e2423]:
+                    - generic [ref=e2425]: Дорого богато, но счастья женского нет, нет там места для мужа, сама заработала и живу как хочу....
+                  - generic [ref=e2427]:
+                    - button "Ответить" [ref=e2428] [cursor=pointer]
+                    - generic [ref=e2430]:
+                      - checkbox "26"
+                      - generic [ref=e2431] [cursor=pointer]:
+                        - img [ref=e2432]
+                        - generic [ref=e2433]: "26"
+                    - generic [ref=e2434]:
+                      - generic [ref=e2436]:
+                        - checkbox "8"
+                        - generic [ref=e2437] [cursor=pointer]:
+                          - img [ref=e2438]
+                          - generic [ref=e2439]: "8"
+                      - button [ref=e2441]:
+                        - img [ref=e2443] [cursor=pointer]
+                - generic [ref=e2450]:
+                  - generic [ref=e2451]:
+                    - generic [ref=e2452]:
+                      - generic [ref=e2453]:
+                        - link "Наталья Демиденко" [ref=e2454] [cursor=pointer]:
+                          - /url: /id/6252ef97b250b242be6bb09a
+                          - generic [ref=e2455]: Наталья Демиденко
+                        - generic [ref=e2456]: 17 окт 2024
+                      - button "Меню комментария" [ref=e2458] [cursor=pointer]:
+                        - img [ref=e2459]
+                    - generic "Кликабельный текст поста" [ref=e2462]:
+                      - generic [ref=e2464]: Одно слово 71 этаж, говорит за себя, ни за что бы не стала жить в таком доме, на таком этажа, это даже для здоровья вредно, за стоимость этой квартиры лучше дом в пригороде.
+                    - generic [ref=e2466]:
+                      - button "Ответить" [ref=e2467] [cursor=pointer]
+                      - generic [ref=e2469]:
+                        - checkbox "15"
+                        - generic [ref=e2470] [cursor=pointer]:
+                          - img [ref=e2471]
+                          - generic [ref=e2472]: "15"
+                      - generic [ref=e2473]:
+                        - generic [ref=e2475]:
+                          - checkbox
+                          - img [ref=e2477] [cursor=pointer]
+                        - button [ref=e2479]:
+                          - img [ref=e2481] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2484] [cursor=pointer]:
+                    - generic [ref=e2486]: 1 ответ
+                - generic [ref=e2494]:
+                  - generic [ref=e2495]:
+                    - generic [ref=e2496]:
+                      - link "Мария Крымова" [ref=e2497] [cursor=pointer]:
+                        - /url: /id/637f3a95b23f890cedf80ef2
+                        - generic [ref=e2498]: Мария Крымова
+                      - generic [ref=e2499]: 4 дек 2023
+                    - button "Меню комментария" [ref=e2501] [cursor=pointer]:
+                      - img [ref=e2502]
+                  - generic "Кликабельный текст поста" [ref=e2505]:
+                    - generic [ref=e2507]: Не знаю, не за какие деньги не стала бы жить на 71этаже. Ужас
+                  - generic [ref=e2509]:
+                    - button "Ответить" [ref=e2510] [cursor=pointer]
+                    - generic [ref=e2512]:
+                      - checkbox "15"
+                      - generic [ref=e2513] [cursor=pointer]:
+                        - img [ref=e2514]
+                        - generic [ref=e2515]: "15"
+                    - generic [ref=e2516]:
+                      - generic [ref=e2518]:
+                        - checkbox
+                        - img [ref=e2520] [cursor=pointer]
+                      - button [ref=e2522]:
+                        - img [ref=e2524] [cursor=pointer]
+                - generic [ref=e2531]:
+                  - generic [ref=e2532]:
+                    - generic [ref=e2533]:
+                      - generic [ref=e2534]:
+                        - link "Галина Николаевна Борщ" [ref=e2535] [cursor=pointer]:
+                          - /url: /id/643028d8b628cd1a3c07988d
+                          - generic [ref=e2536]: Галина Николаевна Борщ
+                        - generic [ref=e2537]: 3 июл 2023
+                      - button "Меню комментария" [ref=e2539] [cursor=pointer]:
+                        - img [ref=e2540]
+                    - generic "Кликабельный текст поста" [ref=e2543]:
+                      - generic [ref=e2545]: Да и коммунальные услуги стоят немалые деньги!
+                    - generic [ref=e2547]:
+                      - button "Ответить" [ref=e2548] [cursor=pointer]
+                      - generic [ref=e2550]:
+                        - checkbox "15"
+                        - generic [ref=e2551] [cursor=pointer]:
+                          - img [ref=e2552]
+                          - generic [ref=e2553]: "15"
+                      - generic [ref=e2554]:
+                        - generic [ref=e2556]:
+                          - checkbox
+                          - img [ref=e2558] [cursor=pointer]
+                        - button [ref=e2560]:
+                          - img [ref=e2562] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2565] [cursor=pointer]:
+                    - generic [ref=e2567]: 2 ответа
+                - generic [ref=e2574]:
+                  - generic [ref=e2575]:
+                    - generic [ref=e2576]:
+                      - generic [ref=e2577]:
+                        - link "Tanya Kutsenko" [ref=e2578] [cursor=pointer]:
+                          - /url: /user/to1-0sup30ehbwdcz2qrkj3isks
+                          - generic [ref=e2579]: Tanya Kutsenko
+                        - generic [ref=e2580]: 3 июл 2023
+                      - button "Меню комментария" [ref=e2582] [cursor=pointer]:
+                        - img [ref=e2583]
+                    - generic "Кликабельный текст поста" [ref=e2586]:
+                      - generic [ref=e2588]: Светлана Ходченкова мне нравится,сильная актриса! А я в такой квартире не смогла бы, как рыбка в аквариуме .
+                    - generic [ref=e2590]:
+                      - button "Ответить" [ref=e2591] [cursor=pointer]
+                      - generic [ref=e2593]:
+                        - checkbox "19"
+                        - generic [ref=e2594] [cursor=pointer]:
+                          - img [ref=e2595]
+                          - generic [ref=e2596]: "19"
+                      - generic [ref=e2597]:
+                        - generic [ref=e2599]:
+                          - checkbox "4"
+                          - generic [ref=e2600] [cursor=pointer]:
+                            - img [ref=e2601]
+                            - generic [ref=e2602]: "4"
+                        - button [ref=e2604]:
+                          - img [ref=e2606] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2609] [cursor=pointer]:
+                    - generic [ref=e2611]: 1 ответ
+                - generic [ref=e2619]:
+                  - generic [ref=e2620]:
+                    - generic [ref=e2621]:
+                      - link "Ирина Егорова" [ref=e2622] [cursor=pointer]:
+                        - /url: /user/cwfx90tfc9ncm787z_biwqhr_l0
+                        - generic [ref=e2623]: Ирина Егорова
+                      - generic [ref=e2624]: 17 авг 2024
+                    - button "Меню комментария" [ref=e2626] [cursor=pointer]:
+                      - img [ref=e2627]
+                  - generic "Кликабельный текст поста" [ref=e2630]:
+                    - generic [ref=e2632]: Квартира с видом на "каменные джунгли". Жуть((
+                  - generic [ref=e2634]:
+                    - button "Ответить" [ref=e2635] [cursor=pointer]
+                    - generic [ref=e2637]:
+                      - checkbox "14"
+                      - generic [ref=e2638] [cursor=pointer]:
+                        - img [ref=e2639]
+                        - generic [ref=e2640]: "14"
+                    - generic [ref=e2641]:
+                      - generic [ref=e2643]:
+                        - checkbox
+                        - img [ref=e2645] [cursor=pointer]
+                      - button [ref=e2647]:
+                        - img [ref=e2649] [cursor=pointer]
+                - generic [ref=e2657]:
+                  - generic [ref=e2658]:
+                    - generic [ref=e2659]:
+                      - link "Ужвонод" [ref=e2660] [cursor=pointer]:
+                        - /url: /id/640aff9d208ecd0da49f84b4
+                        - generic [ref=e2661]: Ужвонод
+                      - generic [ref=e2662]: 9 дек 2023
+                    - button "Меню комментария" [ref=e2664] [cursor=pointer]:
+                      - img [ref=e2665]
+                  - generic "Кликабельный текст поста" [ref=e2668]:
+                    - generic [ref=e2670]: А как поживает внутреннее черепное давление на 71 этаже?
+                  - generic [ref=e2672]:
+                    - button "Ответить" [ref=e2673] [cursor=pointer]
+                    - generic [ref=e2675]:
+                      - checkbox "16"
+                      - generic [ref=e2676] [cursor=pointer]:
+                        - img [ref=e2677]
+                        - generic [ref=e2678]: "16"
+                    - generic [ref=e2679]:
+                      - generic [ref=e2681]:
+                        - checkbox "2"
+                        - generic [ref=e2682] [cursor=pointer]:
+                          - img [ref=e2683]
+                          - generic [ref=e2684]: "2"
+                      - button [ref=e2686]:
+                        - img [ref=e2688] [cursor=pointer]
+                - generic [ref=e2696]:
+                  - generic [ref=e2697]:
+                    - generic [ref=e2698]:
+                      - link "ВАЙБЕР" [ref=e2699] [cursor=pointer]:
+                        - /url: /id/6491490ecf2e5002d569a33b
+                        - generic [ref=e2700]: ВАЙБЕР
+                      - generic [ref=e2701]: 12 ноя 2023
+                    - button "Меню комментария" [ref=e2703] [cursor=pointer]:
+                      - img [ref=e2704]
+                  - generic "Кликабельный текст поста" [ref=e2707]:
+                    - generic [ref=e2709]: А мне что то не нравится
+                  - generic [ref=e2711]:
+                    - button "Ответить" [ref=e2712] [cursor=pointer]
+                    - generic [ref=e2714]:
+                      - checkbox "14"
+                      - generic [ref=e2715] [cursor=pointer]:
+                        - img [ref=e2716]
+                        - generic [ref=e2717]: "14"
+                    - generic [ref=e2718]:
+                      - generic [ref=e2720]:
+                        - checkbox
+                        - img [ref=e2722] [cursor=pointer]
+                      - button [ref=e2724]:
+                        - img [ref=e2726] [cursor=pointer]
+                - generic [ref=e2733]:
+                  - generic [ref=e2734]:
+                    - generic [ref=e2735]:
+                      - generic [ref=e2736]:
+                        - link "Галина Иващенко" [ref=e2737] [cursor=pointer]:
+                          - /url: /user/9rexcauaxtvvx232856mw9842c
+                          - generic [ref=e2738]: Галина Иващенко
+                        - generic [ref=e2739]: 24 июн 2023
+                      - button "Меню комментария" [ref=e2741] [cursor=pointer]:
+                        - img [ref=e2742]
+                    - generic "Кликабельный текст поста" [ref=e2745]:
+                      - generic [ref=e2747]: На какие такие деньги она купила там квартиру?? Что, актрисы сейчас получают миллионы??
+                    - generic [ref=e2749]:
+                      - button "Ответить" [ref=e2750] [cursor=pointer]
+                      - generic [ref=e2752]:
+                        - checkbox "29"
+                        - generic [ref=e2753] [cursor=pointer]:
+                          - img [ref=e2754]
+                          - generic [ref=e2755]: "29"
+                      - generic [ref=e2756]:
+                        - generic [ref=e2758]:
+                          - checkbox "15"
+                          - generic [ref=e2759] [cursor=pointer]:
+                            - img [ref=e2760]
+                            - generic [ref=e2761]: "15"
+                        - button [ref=e2763]:
+                          - img [ref=e2765] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2768] [cursor=pointer]:
+                    - generic [ref=e2770]: 32 ответа
+                - generic [ref=e2777]:
+                  - generic [ref=e2778]:
+                    - generic [ref=e2779]:
+                      - generic [ref=e2780]:
+                        - link "марина абросимова" [ref=e2781] [cursor=pointer]:
+                          - /url: /id/6241e1de729bf019a617247c
+                          - generic [ref=e2782]: марина абросимова
+                        - generic [ref=e2783]: 4 июл 2023
+                      - button "Меню комментария" [ref=e2785] [cursor=pointer]:
+                        - img [ref=e2786]
+                    - generic "Кликабельный текст поста" [ref=e2789] [cursor=pointer]:
+                      - generic [ref=e2790]:
+                        - generic [ref=e2791]: Квартира состоявшегося в бизнесе холостяка/ холостячки... или номер приличного отеля не меньше 5 звезд...
+                        - generic [ref=e2792]:
+                          - text: Детей нет и не предвидится ..с такими окнами вся личная жизнь на ветер! Очень жаль Светлану...надеюсь ,что чудо произойдет и наступит перелом в ее жизни , а следом и побег из этого помещения в уютный ДОМ! ...с толстыми
+                          - generic [ref=e2793]: ...ещё
+                    - generic [ref=e2795]:
+                      - button "Ответить" [ref=e2796] [cursor=pointer]
+                      - generic [ref=e2798]:
+                        - checkbox "20"
+                        - generic [ref=e2799] [cursor=pointer]:
+                          - img [ref=e2800]
+                          - generic [ref=e2801]: "20"
+                      - generic [ref=e2802]:
+                        - generic [ref=e2804]:
+                          - checkbox "7"
+                          - generic [ref=e2805] [cursor=pointer]:
+                            - img [ref=e2806]
+                            - generic [ref=e2807]: "7"
+                        - button [ref=e2809]:
+                          - img [ref=e2811] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2814] [cursor=pointer]:
+                    - generic [ref=e2816]: 3 ответа
+                - generic [ref=e2824]:
+                  - generic [ref=e2825]:
+                    - generic [ref=e2826]:
+                      - link "rjirfbhbcrf" [ref=e2827] [cursor=pointer]:
+                        - /url: /id/675820914894df28f03190f8
+                        - generic [ref=e2828]: rjirfbhbcrf
+                      - generic [ref=e2829]: 2 сен 2024
+                    - button "Меню комментария" [ref=e2831] [cursor=pointer]:
+                      - img [ref=e2832]
+                  - generic "Кликабельный текст поста" [ref=e2835]:
+                    - generic [ref=e2837]: без детей, без мужа так и умрет на 71 этаже, а в окно не кусты деревьев , а железобетон смотрит
+                  - generic [ref=e2839]:
+                    - button "Ответить" [ref=e2840] [cursor=pointer]
+                    - generic [ref=e2842]:
+                      - checkbox "13"
+                      - generic [ref=e2843] [cursor=pointer]:
+                        - img [ref=e2844]
+                        - generic [ref=e2845]: "13"
+                    - generic [ref=e2846]:
+                      - generic [ref=e2848]:
+                        - checkbox "1"
+                        - generic [ref=e2849] [cursor=pointer]:
+                          - img [ref=e2850]
+                          - generic [ref=e2851]: "1"
+                      - button [ref=e2853]:
+                        - img [ref=e2855] [cursor=pointer]
+                - generic [ref=e2863]:
+                  - generic [ref=e2864]:
+                    - generic [ref=e2865]:
+                      - link "Татьяна П." [ref=e2866] [cursor=pointer]:
+                        - /url: /user/nkqajrdb3mu9j6bp7b085tbyrr
+                        - generic [ref=e2867]: Татьяна П.
+                      - generic [ref=e2868]: 24 мая 2024
+                    - button "Меню комментария" [ref=e2870] [cursor=pointer]:
+                      - img [ref=e2871]
+                  - generic "Кликабельный текст поста" [ref=e2874]:
+                    - generic [ref=e2876]: Не украла, заработала САМА... Современно, престижно...Вид из окна ночью , наверно, потрясающий.
+                  - generic [ref=e2878]:
+                    - button "Ответить" [ref=e2879] [cursor=pointer]
+                    - generic [ref=e2881]:
+                      - checkbox "11"
+                      - generic [ref=e2882] [cursor=pointer]:
+                        - img [ref=e2883]
+                        - generic [ref=e2884]: "11"
+                    - generic [ref=e2885]:
+                      - generic [ref=e2887]:
+                        - checkbox
+                        - img [ref=e2889] [cursor=pointer]
+                      - button [ref=e2891]:
+                        - img [ref=e2893] [cursor=pointer]
+                - generic [ref=e2900]:
+                  - generic [ref=e2901]:
+                    - generic [ref=e2903]:
+                      - link "Vadim _907" [ref=e2904] [cursor=pointer]:
+                        - /url: /user/gqewrin_llpzpltdn6mepxaf3uy
+                        - generic [ref=e2905]: Vadim _907
+                      - generic [ref=e2906]: 8 янв 2024
+                    - generic [ref=e2908]: Комментарий удалён
+                  - button "Показать ответы на комментарий" [ref=e2910] [cursor=pointer]:
+                    - generic [ref=e2912]: 1 ответ
+                - generic [ref=e2920]:
+                  - generic [ref=e2921]:
+                    - generic [ref=e2922]:
+                      - link "L" [ref=e2923] [cursor=pointer]:
+                        - /url: /id/656195a865c1165014915916
+                        - generic [ref=e2924]: L
+                      - generic [ref=e2925]: 4 июл 2023
+                    - button "Меню комментария" [ref=e2927] [cursor=pointer]:
+                      - img [ref=e2928]
+                  - generic "Кликабельный текст поста" [ref=e2931]:
+                    - generic [ref=e2933]: Всё равно, как общага
+                  - generic [ref=e2935]:
+                    - button "Ответить" [ref=e2936] [cursor=pointer]
+                    - generic [ref=e2938]:
+                      - checkbox "14"
+                      - generic [ref=e2939] [cursor=pointer]:
+                        - img [ref=e2940]
+                        - generic [ref=e2941]: "14"
+                    - generic [ref=e2942]:
+                      - generic [ref=e2944]:
+                        - checkbox "2"
+                        - generic [ref=e2945] [cursor=pointer]:
+                          - img [ref=e2946]
+                          - generic [ref=e2947]: "2"
+                      - button [ref=e2949]:
+                        - img [ref=e2951] [cursor=pointer]
+                - generic [ref=e2959]:
+                  - generic [ref=e2960]:
+                    - generic [ref=e2961]:
+                      - link "татьяна л" [ref=e2962] [cursor=pointer]:
+                        - /url: /id/62274a6055305211ee9f1858
+                        - generic [ref=e2963]: татьяна л
+                      - generic [ref=e2964]: 27 окт 2024
+                    - button "Меню комментария" [ref=e2966] [cursor=pointer]:
+                      - img [ref=e2967]
+                  - generic "Кликабельный текст поста" [ref=e2970]:
+                    - generic [ref=e2972]: А где квартира? Одна Светлана во всех ракурсах... Так бы и писали...
+                  - generic [ref=e2974]:
+                    - button "Ответить" [ref=e2975] [cursor=pointer]
+                    - generic [ref=e2977]:
+                      - checkbox "11"
+                      - generic [ref=e2978] [cursor=pointer]:
+                        - img [ref=e2979]
+                        - generic [ref=e2980]: "11"
+                    - generic [ref=e2981]:
+                      - generic [ref=e2983]:
+                        - checkbox
+                        - img [ref=e2985] [cursor=pointer]
+                      - button [ref=e2987]:
+                        - img [ref=e2989] [cursor=pointer]
+                - button "Показать ещё" [ref=e793] [cursor=pointer]:
+                  - generic [ref=e794]: Ещё 50 комментариев
+              - generic "Блок рекомендаций" [ref=e363]:
+                - text: Рекомендуем почитать
+                - generic [ref=e364]:
+                  - article [ref=e365]:
+                    - link [ref=e366] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aY2XTUdj7UchdPAt?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CO%2Fu84jFMyBrUMgJagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                    - generic [ref=e367]:
+                      - generic [ref=e369]:
+                        - img [ref=e371]
+                        - generic [ref=e374]: 3 минуты
+                      - img [ref=e797]
+                    - generic [ref=e378]:
+                      - generic [ref=e379]:
+                        - generic [ref=e380]:
+                          - link "Аватар канала" [ref=e382] [cursor=pointer]:
+                            - /url: /id/5de5623395aa9f00b1a4d60f
+                          - generic [ref=e385]:
+                            - link "Название канала" [ref=e387] [cursor=pointer]:
+                              - /url: /id/5de5623395aa9f00b1a4d60f
+                              - generic "Анастасия BORSCH-TV" [ref=e388]:
+                                - generic [ref=e389]: Анастасия BORSCH-TV
+                                - img [ref=e390]
+                            - generic [ref=e394]: 152,4 тыс читали · 4 месяца назад
+                        - button "Три точки" [ref=e395] [cursor=pointer]:
+                          - img [ref=e396]
+                      - generic [ref=e398]:
+                        - 'link "Создали 600 квадратов искусства из трех квартир: Смотрим \"убежище\" Боярской и Матвеева" [ref=e399] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aY2XTUdj7UchdPAt?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CO%2Fu84jFMyBrUMgJagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                          - generic [ref=e400]: "Создали 600 квадратов искусства из трех квартир: Смотрим \"убежище\" Боярской и Матвеева"
+                        - generic [ref=e401]: Квартира Елизавета Боярская и Максим Матвеев — это не просто место для жизни, а продуманное пространство с характером. Супруги выбрали дом с историей на улице Белинского в Санкт-Петербурге. Здание было возведено ещё в XVIII веке и прошло непростую судьбу. В 80-е годы прошлого века дом почти полностью снесли. Однако в 2005 году его восстановили, максимально приблизив внешний облик к историческому оригиналу. При этом использовали современные технологии и сохранили статус объекта культурного наследия...
+                  - article [ref=e402]:
+                    - link [ref=e403] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aiebENU51jhyAWmW?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIXm99XqMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                    - generic [ref=e404]:
+                      - generic [ref=e406]:
+                        - img [ref=e408]
+                        - generic [ref=e411]: 5 минут
+                      - img [ref=e798]
+                    - generic [ref=e415]:
+                      - generic [ref=e416]:
+                        - generic [ref=e417]:
+                          - link "Аватар канала" [ref=e419] [cursor=pointer]:
+                            - /url: /id/5d497ee0e854a900b4e94e17
+                          - generic [ref=e422]:
+                            - link "Название канала" [ref=e424] [cursor=pointer]:
+                              - /url: /id/5d497ee0e854a900b4e94e17
+                              - generic "VEASY" [ref=e425]:
+                                - generic [ref=e426]: VEASY
+                            - generic [ref=e429]: 20,1 тыс читали · 1 неделю назад
+                        - button "Три точки" [ref=e430] [cursor=pointer]:
+                          - img [ref=e431]
+                      - generic [ref=e433]:
+                        - 'link "Живет словно в музее: Показываем богатую квартиру актера Станислава Садальского" [ref=e434] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aiebENU51jhyAWmW?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIXm99XqMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                          - generic [ref=e435]: "Живет словно в музее: Показываем богатую квартиру актера Станислава Садальского"
+                        - generic [ref=e436]: Имя Станислава Садальского знакомо нескольким поколениям зрителей. Кто-то помнит его по фильмам советской эпохи, кто-то по сериалам, а кто-то узнает по голосу из знаменитого мультфильма «Падал прошлогодний снег». За долгие годы в кино и на телевидении артист сыграл десятки ярких персонажей, однако многие поклонники уверены, что его талант заслуживал еще большего признания. Но сегодня речь пойдет не о ролях. Есть у Садальского еще одна интересная сторона жизни его квартира, которая давно вызывает любопытство у поклонников...
+                  - article [ref=e437]:
+                    - link [ref=e438] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ajIqFjOYlGUxu-7m?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CP%2B6tqHtMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                    - generic [ref=e439]:
+                      - generic [ref=e441]:
+                        - img [ref=e443]
+                        - generic [ref=e446]: 6 минут
+                      - img [ref=e799]
+                    - generic [ref=e450]:
+                      - generic [ref=e451]:
+                        - generic [ref=e452]:
+                          - link "Аватар канала" [ref=e454] [cursor=pointer]:
+                            - /url: /id/67034b5c60479e7c512615f1
+                          - generic [ref=e457]:
+                            - link "Название канала" [ref=e459] [cursor=pointer]:
+                              - /url: /id/67034b5c60479e7c512615f1
+                              - generic "Все о стройке" [ref=e460]:
+                                - generic [ref=e461]: Все о стройке
+                            - generic [ref=e464]: 24,3 тыс читали · 2 дня назад
+                        - button "Три точки" [ref=e465] [cursor=pointer]:
+                          - img [ref=e466]
+                      - generic [ref=e468]:
+                        - 'link "Где живет Светлана Зейналова: квартира с необычной планировкой, дача в Подмосковье и ремонт, который пришлось переделывать заново" [ref=e469] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ajIqFjOYlGUxu-7m?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CP%2B6tqHtMyBrUI4JagQBayxsiAHU9seqxunz0h6QAQA%3D&clid=1400&rid=611851715.899.1781874405691.43763&referrer_clid=1400&
+                          - generic [ref=e470]: "Где живет Светлана Зейналова: квартира с необычной планировкой, дача в Подмосковье и ремонт, который пришлось переделывать заново"
+                        - generic [ref=e471]: "От квартиры на северо-западе Москвы до уютного загородного дома с камином: как телеведущая создала пространство для большой семьи. Светлана Зейналова уже много лет остается одним из самых узнаваемых лиц российского телевидения. Миллионы зрителей знают ее как ведущую популярных программ на Первом канале, однако за пределами телеэкрана жизнь знаменитости построена вокруг семьи, детей и дома. История недвижимости Светланы Зейналовой отличается от типичных рассказов о звездных особняках и элитных пентхаусах..."
+          - generic "Статья 2" [ref=e810]:
+            - generic [ref=e813]:
+              - generic [ref=e816]:
+                - generic [ref=e817]:
+                  - generic [ref=e819]:
+                    - link "Аватар канала" [ref=e820] [cursor=pointer]:
+                      - /url: /aesthetic_karol
+                    - generic [ref=e822]:
+                      - link "Название канала" [ref=e823] [cursor=pointer]:
+                        - /url: /aesthetic_karol
+                        - generic [ref=e824]: КАРОЛИНА | ТВОЙ ТРЕНЕР
+                      - generic [ref=e825]: 17,8 тыс подписчиков
+                    - button "Подписаться" [ref=e827] [cursor=pointer]
+                  - heading "«Решение принимали вместе. Поняли, что однажды просто поубиваем друг друга»" [level=1] [ref=e828]
+                  - generic [ref=e830]:
+                    - generic [ref=e832]: 8 июня
+                    - generic [ref=e833]:
+                      - generic [ref=e834]:
+                        - img [ref=e835]
+                        - generic [ref=e837]: "479"
+                      - generic [ref=e838]:
+                        - img [ref=e839]
+                        - generic [ref=e841]: 5 мин
+                - generic [ref=e843]:
+                  - generic "Кликабельный текст поста" [ref=e845] [cursor=pointer]:
+                    - generic [ref=e849]:
+                      - text: "Есть актрисы, которые входят в кадр — и пространство перестраивается под них. Не под роль, не под партнёра, а именно под них. Светлана Ходченкова из таких. В ней что-то не сходится с первого взгляда: холодная"
+                      - generic [ref=e850]:
+                        - text: ...
+                        - generic [ref=e851]:
+                          - text: Читать далее
+                          - img [ref=e852]
+                  - img [ref=e859]
+              - generic "Социальный блок" [ref=e861]:
+                - generic [ref=e862]:
+                  - button [ref=e865] [cursor=pointer]:
+                    - generic:
+                      - generic:
+                        - img
+                  - button "Нравится" [ref=e866] [cursor=pointer]:
+                    - generic [ref=e867]:
+                      - img [ref=e869]
+                      - generic "Подпись к кнопке" [ref=e870]: "9"
+                  - button "Комментировать" [ref=e872] [cursor=pointer]:
+                    - generic [ref=e873]:
+                      - img [ref=e875]
+                      - generic "Подпись к кнопке" [ref=e876]: "2"
+                  - button "Поделиться" [ref=e879] [cursor=pointer]:
+                    - img [ref=e882]
+                - button "Не нравится" [ref=e884] [cursor=pointer]:
+                  - img [ref=e887]
+          - button "Что это значит":
+            - generic:
+              - img
+              - generic: Что это значит
+  - iframe
+  - generic [ref=e902]:
+    - generic [ref=e904]:
+      - generic [ref=e905]:
+        - img [ref=e908] [cursor=pointer]
+        - img [ref=e915] [cursor=pointer]
+      - generic [ref=e919]: Реклама
+    - img [ref=e924]:
+      - generic [ref=e925]: ЕСТЬ ПРОТИВОПОКАЗАНИЯ. ПОСОВЕТУЙТЕСЬ С ВРАЧОМ
+  - iframe [ref=e926]:
+    

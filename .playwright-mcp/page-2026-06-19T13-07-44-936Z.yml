@@ -1,0 +1,1894 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Добавить в корзину" [ref=e2] [cursor=pointer]:
+      - /url: "#"
+    - link "Позвонить" [ref=e3] [cursor=pointer]:
+      - /url: tel:+74952122734
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - banner "Шапка сайта" [ref=e7]:
+        - link "Логотип Бренда" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img [ref=e10]
+        - generic [ref=e13]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic [ref=e17]: Найти в Дзене
+        - generic [ref=e18]:
+          - button "Настройки" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "Войти" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+    - generic [ref=e32]:
+      - complementary "Боковое меню навигации" [ref=e34]:
+        - list [ref=e35]:
+          - link "Главная" [ref=e36] [cursor=pointer]:
+            - /url: https://dzen.ru/
+            - listitem [ref=e37]:
+              - img [ref=e40]
+          - link "Подписки" [ref=e41] [cursor=pointer]:
+            - /url: https://dzen.ru/subscriptions-manager
+            - listitem [ref=e42]:
+              - img [ref=e45]
+          - link "Найти" [ref=e46] [cursor=pointer]:
+            - /url: https://dzen.ru/explore
+            - listitem [ref=e47]:
+              - img [ref=e50]
+          - link "Новости" [ref=e51] [cursor=pointer]:
+            - /url: https://dzen.ru/news
+            - listitem [ref=e52]:
+              - img [ref=e55]
+          - link "Статьи" [ref=e56] [cursor=pointer]:
+            - /url: https://dzen.ru/articles
+            - listitem [ref=e57]:
+              - img [ref=e60]
+          - link "Видео" [ref=e61] [cursor=pointer]:
+            - /url: https://dzen.ru/video
+            - listitem [ref=e62]:
+              - img [ref=e65]
+          - link "Ролики" [ref=e66] [cursor=pointer]:
+            - /url: https://dzen.ru/shorts
+            - listitem [ref=e67]:
+              - img [ref=e70]
+          - link "Видеоигры" [ref=e73] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/games
+            - listitem [ref=e74]:
+              - img [ref=e77]
+          - link "Детям" [ref=e78] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/multiki
+            - listitem [ref=e79]:
+              - img [ref=e82]
+        - button [ref=e84]:
+          - img [ref=e86]
+      - main [ref=e89]:
+        - generic [ref=e92]:
+          - generic "Статья 1" [ref=e93]:
+            - generic [ref=e96] [cursor=pointer]:
+              - generic [ref=e98]:
+                - heading "Рекламу можно отключить" [level=3] [ref=e99]
+                - paragraph [ref=e100]: С подпиской Дзен Про она исчезнет из статей, видео и новостей
+              - button "Отключить рекламу" [ref=e101]:
+                - generic [ref=e102]: Отключить рекламу
+              - generic:
+                - img
+              - button [ref=e103]
+            - generic [ref=e106]:
+              - generic [ref=e109]:
+                - generic [ref=e110]:
+                  - generic [ref=e112]:
+                    - link "Аватар канала" [ref=e113] [cursor=pointer]:
+                      - /url: /domeoremont
+                    - generic [ref=e115]:
+                      - link "Название канала" [ref=e116] [cursor=pointer]:
+                        - /url: /domeoremont
+                        - generic [ref=e117]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e119]
+                      - generic [ref=e121]: 343,6 тыс подписчиков
+                    - button "Подписаться" [ref=e123] [cursor=pointer]
+                  - heading "Никогда не делайте этих ошибок! 13 признаков колхозной кухни" [level=1] [ref=e124]
+                  - generic [ref=e126]:
+                    - generic [ref=e128]: 16 июля 2023
+                    - generic [ref=e129]:
+                      - generic [ref=e130]:
+                        - img [ref=e131]
+                        - generic [ref=e133]: 535,8 тыс
+                      - generic [ref=e134]:
+                        - img [ref=e135]
+                        - generic [ref=e137]: 5 мин
+                - generic [ref=e138]:
+                  - generic [ref=e139]:
+                    - generic [ref=e140]: Оглавление
+                    - list [ref=e141]:
+                      - listitem [ref=e142] [cursor=pointer]:
+                        - link "Хотите качественный ремонт квартиры?👇" [ref=e143]:
+                          - /url: "#hotite_kachestvennii_remont_kvartir"
+                          - generic [ref=e144]: Хотите качественный ремонт квартиры?👇
+                      - listitem [ref=e145] [cursor=pointer]:
+                        - link "•❌ 1. Пятнистые столешницы." [ref=e146]:
+                          - /url: "#_1_pyatniste_stoleshnic"
+                          - generic [ref=e147]: •❌ 1. Пятнистые столешницы.
+                      - listitem [ref=e148] [cursor=pointer]:
+                        - link "•❌ 2. Круглые мойки из нержавеющей стали, либо накладные, либо с крылом." [ref=e149]:
+                          - /url: "#_2_krygle_moiiki_iz_nerjaveyuscheii_stali"
+                          - generic [ref=e150]: •❌ 2. Круглые мойки из нержавеющей стали, либо накладные, либо с крылом.
+                    - button "Показать ещё" [ref=e151] [cursor=pointer]
+                  - generic [ref=e152]:
+                    - paragraph [ref=e175]: Друзья, представьте себе идеальную кухню - современную, стильную, эстетически привлекательную. Теперь представьте себе обратное - колхозную кухню, которая кричит о непрофессионализме и неграмотном подходе к дизайну. Что делает кухню колхозной? Что так сильно портит ее внешний вид и создает негативное впечатление?
+                    - generic [ref=e176]:
+                      - figure "Текст помог составить прораб Domeo" [ref=e181] [cursor=pointer]:
+                        - img "Текст помог составить прораб Domeo" [ref=e182]
+                      - generic [ref=e183]: Текст помог составить прораб Domeo
+                    - paragraph [ref=e184]: В этой статье я хотел бы поделиться с вами 14 признаками колхозной кухни, чтобы вы избежали этих ошибок и создали кухню, которая будет восхищать своим стилем и функциональностью.
+                    - paragraph [ref=e185]: Давайте разберемся вместе, какие элементы и детали являются главными виновниками колхозного облика и как их заменить на более элегантные и современные альтернативы.
+                    - heading "Хотите качественный ремонт квартиры?👇" [level=2]
+                    - figure [ref=e191] [cursor=pointer]:
+                      - img "-2" [ref=e192]
+                    - paragraph [ref=e193]:
+                      - link "РАССЧИТАЙТЕ СТОИМОСТЬ РЕМОНТА БЕСПЛАТНО ЗА 30 СЕКУНД ЗДЕСЬ!" [ref=e194] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Danna%26utm_term%3D1607-nikogdanedelayte1R
+                    - heading "❌ 1. Пятнистые столешницы." [level=3]
+                    - paragraph [ref=e195]: Раньше такие пластики, например, бежевого цвета, были популярны, но после установки их всегда хотелось тщательно отмыть. Даже если вы используете премиальные фасады, стоимость кухни будет выглядеть как из 2000-х годов, что выглядит очень устаревшим.
+                    - paragraph [ref=e196]: ✅Я предлагаю не использовать такой декор вообще и просить производителей столешниц изъять его из оборота, чтобы избежать создания колхозных старинных кухонных гарнитуров.
+                    - generic [ref=e197]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e202] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e203]'
+                      - generic [ref=e204]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph
+                    - heading "❌ 2. Круглые мойки из нержавеющей стали, либо накладные, либо с крылом." [level=3]
+                    - paragraph [ref=e205]: Они сильно выбиваются из интерьера и выглядят на столешнице как заплатка. Кроме того, такие мойки имеют маленький радиус, что ограничивает их вместимость.
+                    - generic [ref=e206]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e211] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e212]'
+                      - generic [ref=e213]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph [ref=e214]: ✅Идеальной альтернативой являются прямоугольные мойки из нержавеющей стали, толщиной 3 мм, которые выглядят современно и стильно.
+                    - generic [ref=e215]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e220] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e221]'
+                      - generic [ref=e222]: "Designed by Freepik. Источник: www.freepik.com"
+                    - heading "❌ 3. Стыковка столешницы и кухонного фартука с помощью алюминиевых планок." [level=3]
+                    - paragraph [ref=e223]: Их задача была нивелировать неровности после ремонта и закрывать открытый спил столешницы от попадания влаги и сколов. Однако, такие планки портят эстетику кухни и не обеспечивают должную защиту от влаги.
+                    - paragraph [ref=e224]: Лучшим альтернативным решением является использование евро-запилов и специальных клеевых соединений для стыковки всех элементов столешницы без использования алюминиевых планок.
+                    - heading "❌ 4. Использование пластикового плинтуса на столешнице." [level=3]
+                    - paragraph [ref=e225]: Он гарантированно отправит эстетику кухни на дно, так же как и множество алюминиевых планок на столешнице и кухонных фартуках.
+                    - paragraph [ref=e226]: Альтернативным вариантом я предлагаю использовать бюджетную пластиковую столешницу по технологии платформинга. Сначала установить кухню и столешницу, а затем накрыть ее фартуками из керамогранита, обработав зазор герметиком. Это выглядит красиво и эстетично.
+                    - generic [ref=e227]:
+                      - 'figure "Однушка. Дизайн и ремонт: DOMEO" [ref=e232] [cursor=pointer]':
+                        - 'img "Однушка. Дизайн и ремонт: DOMEO" [ref=e233]'
+                      - generic [ref=e234]: "Однушка. Дизайн и ремонт: DOMEO"
+                    - paragraph
+                    - heading "❌ 5. Использование столешницы платформы с облицовкой торца ДСП." [level=3]
+                    - paragraph [ref=e235]: Или пластиком, которая образует завал от радиуса ВЗ до самого ужасного и круглого абсолютно не вписывающегося в минималистические интерьеры. Проблема заключается в том, что такие столешницы всегда будут ассоциироваться с дешевыми бюджетными кухонными гарнитурами.
+                    - paragraph [ref=e236]: Альтернативой является использование столешницы, где торец облицован ABS кромкой, что выглядит стильно и минималистично.
+                    - heading "❌ 6. Напуск столешницы." [level=3]
+                    - paragraph [ref=e237]: Когда все эти элементы присутствуют на минималистической кухне, эстетика и функциональность страдают. Отсутствие ручек на кухонных фасадах делает открытие кухни неудобным, что противоречит концепции минимализма.
+                    - heading "❌ 7. Не продуманный конструктив антресолей." [level=3]
+                    - paragraph [ref=e238]: За последние 5-6 лет, тренд на кухни до потолка привел к множеству уродливых конструкций кухонных гарнитуров. Во-первых, использование антресольных ручек, которые создают визуальный шум и превращают кухню в чемоданчик. Во-вторых, неполное доведение кухни до потолка с оставленной полоской между столешницей и потолком, которую люди используют для хранения всякой шляпы. В-третьих, неправильные пропорции антресольных кухонь, когда часть кухни слишком укорочена или сплющена, что нарушает функциональность.
+                    - generic [ref=e239]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e244] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e245]'
+                      - generic [ref=e246]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph
+                    - blockquote [ref=e247]: "Современная кухня, выполненная специалистами компании Domeo: матовый фасад, кухня до потолка.👇"
+                    - generic [ref=e248]:
+                      - generic [ref=e258]:
+                        - generic:
+                          - generic:
+                            - generic "Активное изображение" [ref=e259] [cursor=pointer]:
+                              - figure "Кухня, 2-комнатная квартира 37,5 м2. Дизайн и ремонт Domeo." [ref=e262]:
+                                - img "Кухня, 2-комнатная квартира 37,5 м2. Дизайн и ремонт Domeo." [ref=e263]
+                            - figure [ref=e268] [cursor=pointer]:
+                              - img "-8-2" [ref=e269]
+                      - generic [ref=e272]: Кухня, 2-комнатная квартира 37,5 м2. Дизайн и ремонт Domeo.
+                    - heading "Сколько стоит такой ремонт?" [level=3]
+                    - figure [ref=e278] [cursor=pointer]:
+                      - img "-9" [ref=e279]
+                    - heading "✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [level=2]:
+                      - text: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e280] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Danna%26utm_term%3D1607-nikogdanedelayte2R
+                      - text: ✅
+                    - heading "❌ 8. Использование витрин, похожих на бабушкины серванты." [level=3]
+                    - paragraph [ref=e281]: Это тренд, который начал появляться снова, но с уродливыми шкафами из двухтысячных годов. Примером неудачной витрины может служить прозрачное стекло, широкая алюминиевая рамка, отсутствие внутреннего освещения и странное дерево. Сравнительно, классная витрина имеет тонкую алюминиевую рамку, прозрачное стекло, акцентное дерево и эффектную вертикальную подсветку.
+                    - heading "❌ 9. Использование круглой хромированной трубы в качестве опоры под барной стойкой." [level=3]
+                    - paragraph [ref=e282]: Эта идея возникла ещё в 2000-х годах, когда было модно использовать хромированные шесты.
+                    - paragraph [ref=e283]: Альтернативным вариантом являются стильные и современные барные подстолья различных форм или просто прямоугольная труба.
+                    - heading "❌ 10. Использование евровинта на торце вашей кухни, который закрыт заглушкой." [level=3]
+                    - paragraph [ref=e284]: Её часто применяют кустарщики и мебельные фабрики, работающие в самом бюджетном сегменте. Если у вас на торце кухни видно использование евровинта, закрытого заглушкой, то скорее всего вам продали самую дешевую модульную кухню.
+                    - generic [ref=e285]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e290] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e291]'
+                      - generic [ref=e292]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph
+                    - heading "❌ 11. Использование грубого дерева ярких оттенков в качестве кухонных фасадов." [level=3]
+                    - paragraph [ref=e293]: Это означает, что вместо спокойных и нейтральных оттенков дерева, используются яркие и выразительные цвета, которые не гармонируют с остальным интерьером. Это создает неприятный визуальный эффект и делает кухню выглядеть колхозно.
+                    - generic [ref=e294]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e299] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e300]'
+                      - generic [ref=e301]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph [ref=e302]: Рекомендую выбирать спокойные оттенки дерева без выраженной текстуры для достижения более сбалансированного и стильного внешнего вида.
+                    - heading "❌ 12. Неправильно проработанный конструктив угла." [level=3]
+                    - paragraph [ref=e303]: В некоторых случаях используются трапециевидные модули, которые выглядят громоздко и не сочетаются с минималистичным интерьером. Также не рекомендую помещать кухонную мойку в самый угол, так как это неудобно и некрасиво.
+                    - paragraph [ref=e304]: Вместо этого, стоит прорабатывать каждый конкретный случай индивидуально и использовать технические решения, которые обеспечат функциональность и эстетику угла на кухне.
+                    - heading "❌ 13. Фасады с чистоклом." [level=3]
+                    - paragraph [ref=e305]: Чистокл- это искусственно созданная патина или состаривание фасадов, которые придают им винтажный вид. Однако, это решение не всегда сочетается с остальным интерьером и может создавать грязный и неопрятный вид.
+                    - generic [ref=e306]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e311] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e312]'
+                      - generic [ref=e313]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph [ref=e314]: Рекомендую выбирать более современные и эстетичные фасады без искусственной патины, чтобы создать более свежий и аккуратный общий облик кухни.
+                    - figure [ref=e320] [cursor=pointer]:
+                      - img "-13" [ref=e321]
+                    - blockquote [ref=e322]: "Domeo советует начать свой ремонт с 2-х простых шагов:"
+                    - blockquote [ref=e323]:
+                      - text: "1. Рассчитать стоимость ремонта в 3-х вариантах и сравнить. Бесплатно получите расчет тут: ✅"
+                      - link "https://clck.ru/34zPPq" [ref=e324] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fclck.ru%2F34zPPq
+                    - blockquote [ref=e325]:
+                      - text: "2. Выбрать подходящего дизайнера для визуализации своих идей! Бесплатно выберите своего дизайнера здесь: ✅"
+                      - link "https://clck.ru/34YbPg" [ref=e326] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-design.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Danna%26utm_term%3D0606-negaleytedenegnaremont3D
+                    - figure [ref=e332] [cursor=pointer]:
+                      - img "-14" [ref=e333]
+                    - paragraph [ref=e334]: Это были основные признаки колхозной кухни. При проектировании своей кухни стоит избегать их использования. Следуя моим рекомендациям и избегая колхозных элементов, вы сможете создать привлекательное и функциональное пространство, в котором приятно готовить и проводить время. Пусть ваша кухня станет истинным произведением искусства, отражающим вашу индивидуальность и хороший вкус.
+                    - heading "Узнайте первыми о новом благотворительном проекте компании Domeo - Легкий дом" [level=3]:
+                      - text: Узнайте первыми о новом благотворительном проекте компании Domeo -
+                      - link "Легкий дом" [ref=e335] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo.ru%2Fld%2F
+                    - paragraph [ref=e336]:
+                      - generic [ref=e337]: "Читайте о запуске проекта здесь и узнайте, что должен знать каждый россиянин:"
+                    - link "6 способов, как облегчить поход в туалет для пожилых людей DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 20 ноября 2023" [ref=e340] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ZVY-FkMxmhivo01E
+                      - img [ref=e669]
+                      - generic [ref=e346]:
+                        - generic [ref=e347]: 6 способов, как облегчить поход в туалет для пожилых людей
+                        - generic [ref=e348]:
+                          - generic [ref=e349]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e352]
+                          - generic [ref=e353]: · 20 ноября 2023
+                    - paragraph
+                    - paragraph [ref=e354]:
+                      - generic [ref=e355]: Вам точно понравятся эти статьи:👇
+                    - blockquote [ref=e356]:
+                      - 'link "Терраса на даче своими руками: советы по оформлению" [ref=e357] [cursor=pointer]':
+                        - /url: https://dzen.ru/a/ZLC8o3_mIXEqwbFw
+                    - blockquote [ref=e358]:
+                      - link "Ну и «совок»! 5 вещей, которые кричат о том, что интерьер окончательно устарел" [ref=e359] [cursor=pointer]:
+                        - /url: https://dzen.ru/a/ZLCuw5-h-FlXny-W
+                    - figure [ref=e365] [cursor=pointer]:
+                      - img "-15" [ref=e366]
+                    - paragraph
+              - generic [ref=e367]:
+                - generic "Плашка подписки на канал" [ref=e368]:
+                  - generic [ref=e369]:
+                    - generic [ref=e370]: Подпишитесь на канал,
+                    - generic [ref=e371]: чтобы не пропустить новые публикации
+                  - button "Подписаться" [ref=e372] [cursor=pointer]:
+                    - generic [ref=e373]: Подписаться
+                - generic "Социальный блок" [ref=e374]:
+                  - generic [ref=e375]:
+                    - button [ref=e378] [cursor=pointer]:
+                      - generic:
+                        - generic:
+                          - img
+                    - button "Нравится" [ref=e379] [cursor=pointer]:
+                      - generic [ref=e380]:
+                        - img [ref=e382]
+                        - generic "Подпись к кнопке" [ref=e383]: "724"
+                    - button "Комментировать" [ref=e385] [cursor=pointer]:
+                      - generic [ref=e386]:
+                        - img [ref=e388]
+                        - generic "Подпись к кнопке" [ref=e389]: "1467"
+                  - generic [ref=e390]:
+                    - button "Не нравится" [ref=e391] [cursor=pointer]:
+                      - img [ref=e394]
+                    - button [ref=e396] [cursor=pointer]:
+                      - img [ref=e399]
+              - generic [ref=e739]:
+                - generic [ref=e741]:
+                  - generic [ref=e742]: Комментарии1467
+                  - button "Сначала популярные" [ref=e743] [cursor=pointer]:
+                    - generic [ref=e744]: Сначала популярные
+                    - img [ref=e746]
+                - generic [ref=e748]:
+                  - generic [ref=e749]:
+                    - textbox "Поле ввода комментария" [ref=e750]:
+                      - /placeholder: Написать комментарий
+                    - generic:
+                      - generic: 0 / 2500
+                      - generic [ref=e751]:
+                        - button "Смайлики и эмоции" [disabled] [ref=e752]:
+                          - img [ref=e754]
+                        - button "Добавить картинку" [disabled] [ref=e756]:
+                          - img [ref=e758]
+                        - button "Отправить комментарий" [disabled] [ref=e760]:
+                          - img [ref=e762]
+                  - generic [ref=e764]: Войти, чтобы комментировать
+                - generic [ref=e770]:
+                  - generic [ref=e771]:
+                    - generic [ref=e773]:
+                      - generic [ref=e774]: Пользователь удалён
+                      - generic [ref=e775]: 16 июл 2023
+                      - generic "Изменено" [ref=e776]:
+                        - img [ref=e777]
+                    - generic [ref=e780]: Комментарий недоступен
+                  - button "Показать ответы на комментарий" [ref=e782] [cursor=pointer]:
+                    - generic [ref=e784]: 63 ответа
+                - generic [ref=e791]:
+                  - generic [ref=e792]:
+                    - generic [ref=e793]:
+                      - generic [ref=e794]:
+                        - generic [ref=e795]:
+                          - button "Сергей Петров" [ref=e796]:
+                            - link "Сергей Петров" [ref=e797] [cursor=pointer]:
+                              - /url: /id/6224db1a7d728d3bad1983fc
+                              - generic [ref=e798]: Сергей Петров
+                            - img [ref=e800] [cursor=pointer]
+                          - generic [ref=e802]:
+                            - generic:
+                              - generic: Самый популярный комментарий от подписчика Дзен Про
+                            - img [ref=e804]
+                        - generic [ref=e806]: 25 ноя 2023
+                      - button "Меню комментария" [ref=e808] [cursor=pointer]:
+                        - img [ref=e809]
+                    - generic "Кликабельный текст поста" [ref=e812]:
+                      - generic [ref=e814]: Плевать я хотел на всяких советчиков, буду делать как нравится мне. "Сейчас это не модно", "колхозная кухня" - да эта мода навязывается продавцами, подобной и скрытой рекламой. Я за 50 лет послестуденческих лет сменил 4 квартиры и каждый раз при оформлении новой мне навязывали разные модные решения. А вот фиг вам.
+                    - generic [ref=e816]:
+                      - button "Ответить" [ref=e817] [cursor=pointer]
+                      - generic [ref=e819]:
+                        - checkbox "24"
+                        - generic [ref=e820] [cursor=pointer]:
+                          - img [ref=e821]
+                          - generic [ref=e822]: "24"
+                      - generic [ref=e823]:
+                        - generic [ref=e825]:
+                          - checkbox "2"
+                          - generic [ref=e826] [cursor=pointer]:
+                            - img [ref=e827]
+                            - generic [ref=e828]: "2"
+                        - button [ref=e830]:
+                          - img [ref=e832] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e835] [cursor=pointer]:
+                    - generic [ref=e837]: 2 ответа
+                - generic [ref=e844]:
+                  - generic [ref=e845]:
+                    - generic [ref=e846]:
+                      - generic [ref=e847]:
+                        - link "Борщов А.Н." [ref=e848] [cursor=pointer]:
+                          - /url: /id/640632740f2fda79821d5ff4
+                          - generic [ref=e849]: Борщов А.Н.
+                        - generic [ref=e850]: 16 июл 2023
+                      - button "Меню комментария" [ref=e852] [cursor=pointer]:
+                        - img [ref=e853]
+                    - generic "Кликабельный текст поста" [ref=e856]:
+                      - generic [ref=e857]:
+                        - generic [ref=e858]: Горе-дизайнеры, вы, что употребляете?
+                        - generic [ref=e859]: Люди делают то, что им нравится, или то, на что им хватает средств.
+                        - generic [ref=e860]: А покажите нам вашу квартиру (дом), машину, рабочее место, ваш обед или ужин, ваше фото... а мы подумаем, где колхоз, а где что-то иное...
+                    - generic [ref=e862]:
+                      - button "Ответить" [ref=e863] [cursor=pointer]
+                      - generic [ref=e865]:
+                        - checkbox "2186"
+                        - generic [ref=e866] [cursor=pointer]:
+                          - img [ref=e867]
+                          - generic [ref=e868]: "2186"
+                      - generic [ref=e869]:
+                        - generic [ref=e871]:
+                          - checkbox "75"
+                          - generic [ref=e872] [cursor=pointer]:
+                            - img [ref=e873]
+                            - generic [ref=e874]: "75"
+                        - button [ref=e876]:
+                          - img [ref=e878] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e881] [cursor=pointer]:
+                    - generic [ref=e883]: 65 ответов
+                - generic [ref=e890]:
+                  - generic [ref=e891]:
+                    - generic [ref=e892]:
+                      - generic [ref=e893]:
+                        - link "Любовь Пашукевич" [ref=e894] [cursor=pointer]:
+                          - /url: /user/qt7g0zd0jk7tli5a8u7xz4mi3z0
+                          - generic [ref=e895]: Любовь Пашукевич
+                        - generic [ref=e896]: 16 июл 2023
+                      - button "Меню комментария" [ref=e898] [cursor=pointer]:
+                        - img [ref=e899]
+                    - generic "Кликабельный текст поста" [ref=e902]:
+                      - generic [ref=e904]: А про колхозную-можно и в пятак получить,сильно городской автор.
+                    - generic [ref=e906]:
+                      - button "Ответить" [ref=e907] [cursor=pointer]
+                      - generic [ref=e909]:
+                        - checkbox "1895"
+                        - generic [ref=e910] [cursor=pointer]:
+                          - img [ref=e911]
+                          - generic [ref=e912]: "1895"
+                      - generic [ref=e913]:
+                        - generic [ref=e915]:
+                          - checkbox "40"
+                          - generic [ref=e916] [cursor=pointer]:
+                            - img [ref=e917]
+                            - generic [ref=e918]: "40"
+                        - button [ref=e920]:
+                          - img [ref=e922] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e925] [cursor=pointer]:
+                    - generic [ref=e927]: 33 ответа
+                - generic [ref=e934]:
+                  - generic [ref=e935]:
+                    - generic [ref=e936]:
+                      - generic [ref=e937]:
+                        - link "Цветкова Галина" [ref=e938] [cursor=pointer]:
+                          - /url: /user/66ey1n2b4xrraneet5s9zh2nqmq
+                          - generic [ref=e939]: Цветкова Галина
+                        - generic [ref=e940]: 16 июл 2023
+                      - button "Меню комментария" [ref=e942] [cursor=pointer]:
+                        - img [ref=e943]
+                    - generic "Кликабельный текст поста" [ref=e946]:
+                      - generic [ref=e948]: Уважаемый автор, бесконечное употребление слова "колхоз" в уничижительном смысле не делает вам чести. Колхозы кормили страну, а колхозники - люди не менее достойные, чем дизайнеры.
+                    - generic [ref=e950]:
+                      - button "Ответить" [ref=e951] [cursor=pointer]
+                      - generic [ref=e953]:
+                        - checkbox "625"
+                        - generic [ref=e954] [cursor=pointer]:
+                          - img [ref=e955]
+                          - generic [ref=e956]: "625"
+                      - generic [ref=e957]:
+                        - generic [ref=e959]:
+                          - checkbox "3"
+                          - generic [ref=e960] [cursor=pointer]:
+                            - img [ref=e961]
+                            - generic [ref=e962]: "3"
+                        - button [ref=e964]:
+                          - img [ref=e966] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e969] [cursor=pointer]:
+                    - generic [ref=e971]: 10 ответов
+                - generic [ref=e978]:
+                  - generic [ref=e979]:
+                    - generic [ref=e980]:
+                      - generic [ref=e981]:
+                        - link "Ирина Ч." [ref=e982] [cursor=pointer]:
+                          - /url: /id/66802a852e9692015a54e4d9
+                          - generic [ref=e983]: Ирина Ч.
+                        - generic [ref=e984]: 16 июл 2023
+                      - button "Меню комментария" [ref=e986] [cursor=pointer]:
+                        - img [ref=e987]
+                    - generic "Кликабельный текст поста" [ref=e990]:
+                      - generic [ref=e992]: Бестактность, бескультурье автора.
+                    - generic [ref=e994]:
+                      - button "Ответить" [ref=e995] [cursor=pointer]
+                      - generic [ref=e997]:
+                        - checkbox "403"
+                        - generic [ref=e998] [cursor=pointer]:
+                          - img [ref=e999]
+                          - generic [ref=e1000]: "403"
+                      - generic [ref=e1001]:
+                        - generic [ref=e1003]:
+                          - checkbox "1"
+                          - generic [ref=e1004] [cursor=pointer]:
+                            - img [ref=e1005]
+                            - generic [ref=e1006]: "1"
+                        - button [ref=e1008]:
+                          - img [ref=e1010] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1013] [cursor=pointer]:
+                    - generic [ref=e1015]: 6 ответов
+                - generic [ref=e1022]:
+                  - generic [ref=e1023]:
+                    - generic [ref=e1024]:
+                      - generic [ref=e1025]:
+                        - link "Абдулла Либерман" [ref=e1026] [cursor=pointer]:
+                          - /url: /user/j22vejoijm9pxgrflflttsg-zqe
+                          - generic [ref=e1027]: Абдулла Либерман
+                        - generic [ref=e1028]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1030] [cursor=pointer]:
+                        - img [ref=e1031]
+                    - generic "Кликабельный текст поста" [ref=e1034]:
+                      - generic [ref=e1036]: Напуск столешницы необходим и ни один дизайнер не убедит меня в обратном.
+                    - generic [ref=e1038]:
+                      - button "Ответить" [ref=e1039] [cursor=pointer]
+                      - generic [ref=e1041]:
+                        - checkbox "361"
+                        - generic [ref=e1042] [cursor=pointer]:
+                          - img [ref=e1043]
+                          - generic [ref=e1044]: "361"
+                      - generic [ref=e1045]:
+                        - generic [ref=e1047]:
+                          - checkbox "1"
+                          - generic [ref=e1048] [cursor=pointer]:
+                            - img [ref=e1049]
+                            - generic [ref=e1050]: "1"
+                        - button [ref=e1052]:
+                          - img [ref=e1054] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1057] [cursor=pointer]:
+                    - generic [ref=e1059]: 11 ответов
+                - generic [ref=e1066]:
+                  - generic [ref=e1067]:
+                    - generic [ref=e1068]:
+                      - generic [ref=e1069]:
+                        - link "Денис _" [ref=e1070] [cursor=pointer]:
+                          - /url: /id/5db0746c06cc4600b034e44d
+                          - generic [ref=e1071]: Денис _
+                        - generic [ref=e1072]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1074] [cursor=pointer]:
+                        - img [ref=e1075]
+                    - generic "Кликабельный текст поста" [ref=e1078]:
+                      - generic [ref=e1080]: жиыет у меня один заказчик в колхозе, так как фермер. Несколько домов и квартир, много машин, даже роллс ройс есть. Так вот я к чему, автору далеко до этого "колхозника", а люди делают то что функционально и нравится им, а не дизайнерам. Достаточно на одежду кутюрье посмотреть, чтобы понять что мода и жизнь это разные вещи
+                    - generic [ref=e1082]:
+                      - button "Ответить" [ref=e1083] [cursor=pointer]
+                      - generic [ref=e1085]:
+                        - checkbox "308"
+                        - generic [ref=e1086] [cursor=pointer]:
+                          - img [ref=e1087]
+                          - generic [ref=e1088]: "308"
+                      - generic [ref=e1089]:
+                        - generic [ref=e1091]:
+                          - checkbox "25"
+                          - generic [ref=e1092] [cursor=pointer]:
+                            - img [ref=e1093]
+                            - generic [ref=e1094]: "25"
+                        - button [ref=e1096]:
+                          - img [ref=e1098] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1101] [cursor=pointer]:
+                    - generic [ref=e1103]: 3 ответа
+                - generic [ref=e1110]:
+                  - generic [ref=e1111]:
+                    - generic [ref=e1112]:
+                      - generic [ref=e1113]:
+                        - link "dolganova.marina.6261@mail.ru" [ref=e1114] [cursor=pointer]:
+                          - /url: /id/66d6a586436df404d0194ea7
+                          - generic [ref=e1115]: dolganova.marina.6261@mail.ru
+                        - generic [ref=e1116]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1118] [cursor=pointer]:
+                        - img [ref=e1119]
+                    - generic "Кликабельный текст поста" [ref=e1122]:
+                      - generic [ref=e1124]: Да... Трудно Вам, брат-дизайнер с нами -колхозниками...
+                    - generic [ref=e1126]:
+                      - button "Ответить" [ref=e1127] [cursor=pointer]
+                      - generic [ref=e1129]:
+                        - checkbox "263"
+                        - generic [ref=e1130] [cursor=pointer]:
+                          - img [ref=e1131]
+                          - generic [ref=e1132]: "263"
+                      - generic [ref=e1133]:
+                        - generic [ref=e1135]:
+                          - checkbox "1"
+                          - generic [ref=e1136] [cursor=pointer]:
+                            - img [ref=e1137]
+                            - generic [ref=e1138]: "1"
+                        - button [ref=e1140]:
+                          - img [ref=e1142] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1145] [cursor=pointer]:
+                    - generic [ref=e1147]: 1 ответ
+                - generic [ref=e1154]:
+                  - generic [ref=e1155]:
+                    - generic [ref=e1156]:
+                      - generic [ref=e1157]:
+                        - link "Чёрная Кошка" [ref=e1158] [cursor=pointer]:
+                          - /url: /id/6228780b0b33fc2021c72a40
+                          - generic [ref=e1159]: Чёрная Кошка
+                        - generic [ref=e1160]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1162] [cursor=pointer]:
+                        - img [ref=e1163]
+                    - generic "Кликабельный текст поста" [ref=e1166]:
+                      - generic [ref=e1168]: Городской ты наш, а не пойти ли тебе куда подальше.
+                    - generic [ref=e1170]:
+                      - button "Ответить" [ref=e1171] [cursor=pointer]
+                      - generic [ref=e1173]:
+                        - checkbox "233"
+                        - generic [ref=e1174] [cursor=pointer]:
+                          - img [ref=e1175]
+                          - generic [ref=e1176]: "233"
+                      - generic [ref=e1177]:
+                        - generic [ref=e1179]:
+                          - checkbox
+                          - img [ref=e1181] [cursor=pointer]
+                        - button [ref=e1183]:
+                          - img [ref=e1185] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1188] [cursor=pointer]:
+                    - generic [ref=e1190]: 2 ответа
+                - generic [ref=e1197]:
+                  - generic [ref=e1198]:
+                    - generic [ref=e1199]:
+                      - generic [ref=e1200]:
+                        - link "Любовь Нерадовская" [ref=e1201] [cursor=pointer]:
+                          - /url: /user/qaekhng8h3jrbejtnhptbm91yp8
+                          - generic [ref=e1202]: Любовь Нерадовская
+                        - generic [ref=e1203]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1205] [cursor=pointer]:
+                        - img [ref=e1206]
+                    - generic "Кликабельный текст поста" [ref=e1209]:
+                      - generic [ref=e1211]: Интересно, колхозный автор, а кроме синонима ,колхозный’, другие отсутствуют?! Или скудное образование мешает?!
+                    - generic [ref=e1213]:
+                      - button "Ответить" [ref=e1214] [cursor=pointer]
+                      - generic [ref=e1216]:
+                        - checkbox "228"
+                        - generic [ref=e1217] [cursor=pointer]:
+                          - img [ref=e1218]
+                          - generic [ref=e1219]: "228"
+                      - generic [ref=e1220]:
+                        - generic [ref=e1222]:
+                          - checkbox "2"
+                          - generic [ref=e1223] [cursor=pointer]:
+                            - img [ref=e1224]
+                            - generic [ref=e1225]: "2"
+                        - button [ref=e1227]:
+                          - img [ref=e1229] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1232] [cursor=pointer]:
+                    - generic [ref=e1234]: 6 ответов
+                - generic [ref=e1241]:
+                  - generic [ref=e1242]:
+                    - generic [ref=e1243]:
+                      - generic [ref=e1244]:
+                        - link "Бухталекс и СемьЯ" [ref=e1245] [cursor=pointer]:
+                          - /url: /id/623dff9eca8cb172346eec6e
+                          - generic [ref=e1246]: Бухталекс и СемьЯ
+                        - generic [ref=e1247]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1249] [cursor=pointer]:
+                        - img [ref=e1250]
+                    - generic "Кликабельный текст поста" [ref=e1253]:
+                      - generic [ref=e1254]:
+                        - generic [ref=e1255]: "\"для хранения всякой шляпы\"."
+                        - generic [ref=e1256]: Может статья - шляпа?
+                    - generic [ref=e1258]:
+                      - button "Ответить" [ref=e1259] [cursor=pointer]
+                      - generic [ref=e1261]:
+                        - checkbox "152"
+                        - generic [ref=e1262] [cursor=pointer]:
+                          - img [ref=e1263]
+                          - generic [ref=e1264]: "152"
+                      - generic [ref=e1265]:
+                        - generic [ref=e1267]:
+                          - checkbox
+                          - img [ref=e1269] [cursor=pointer]
+                        - button [ref=e1271]:
+                          - img [ref=e1273] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1276] [cursor=pointer]:
+                    - generic [ref=e1278]: 4 ответа
+                - generic [ref=e1285]:
+                  - generic [ref=e1286]:
+                    - generic [ref=e1287]:
+                      - generic [ref=e1288]:
+                        - link "Марина Жбанникова" [ref=e1289] [cursor=pointer]:
+                          - /url: /user/gwcbxk5k5pxtc14xaj95k3u0am
+                          - generic [ref=e1290]: Марина Жбанникова
+                        - generic [ref=e1291]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1293] [cursor=pointer]:
+                        - img [ref=e1294]
+                    - generic "Кликабельный текст поста" [ref=e1297]:
+                      - generic [ref=e1299]: А мне нравятся яркие цвета, и никто не убедит, что надо делать блеклые
+                    - generic [ref=e1301]:
+                      - button "Ответить" [ref=e1302] [cursor=pointer]
+                      - generic [ref=e1304]:
+                        - checkbox "145"
+                        - generic [ref=e1305] [cursor=pointer]:
+                          - img [ref=e1306]
+                          - generic [ref=e1307]: "145"
+                      - generic [ref=e1308]:
+                        - generic [ref=e1310]:
+                          - checkbox "4"
+                          - generic [ref=e1311] [cursor=pointer]:
+                            - img [ref=e1312]
+                            - generic [ref=e1313]: "4"
+                        - button [ref=e1315]:
+                          - img [ref=e1317] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1320] [cursor=pointer]:
+                    - generic [ref=e1322]: 4 ответа
+                - generic [ref=e1329]:
+                  - generic [ref=e1330]:
+                    - generic [ref=e1331]:
+                      - generic [ref=e1332]:
+                        - link "Сармата" [ref=e1333] [cursor=pointer]:
+                          - /url: /id/5f3c068224a3ed06931a5d58
+                          - generic [ref=e1334]: Сармата
+                        - generic [ref=e1335]: 17 июл 2023
+                      - button "Меню комментария" [ref=e1337] [cursor=pointer]:
+                        - img [ref=e1338]
+                    - generic "Кликабельный текст поста" [ref=e1341]:
+                      - generic [ref=e1343]: Вот и жрите пищевой мусор типа бургеров да полуфабрикаты, в своих "дизайнерских" кухнях! А мы в своих колхозных прекрасно питаемся пирогами, борщами и пельменями!
+                    - generic [ref=e1345]:
+                      - button "Ответить" [ref=e1346] [cursor=pointer]
+                      - generic [ref=e1348]:
+                        - checkbox "133"
+                        - generic [ref=e1349] [cursor=pointer]:
+                          - img [ref=e1350]
+                          - generic [ref=e1351]: "133"
+                      - generic [ref=e1352]:
+                        - generic [ref=e1354]:
+                          - checkbox "1"
+                          - generic [ref=e1355] [cursor=pointer]:
+                            - img [ref=e1356]
+                            - generic [ref=e1357]: "1"
+                        - button [ref=e1359]:
+                          - img [ref=e1361] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1364] [cursor=pointer]:
+                    - generic [ref=e1366]: 3 ответа
+                - generic [ref=e1373]:
+                  - generic [ref=e1374]:
+                    - generic [ref=e1375]:
+                      - generic [ref=e1376]:
+                        - link "Ola_Sha" [ref=e1377] [cursor=pointer]:
+                          - /url: /id/61c899208d2e9e7520054b6c
+                          - generic [ref=e1378]: Ola_Sha
+                        - generic [ref=e1379]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1381] [cursor=pointer]:
+                        - img [ref=e1382]
+                    - generic "Кликабельный текст поста" [ref=e1385] [cursor=pointer]:
+                      - generic [ref=e1387]:
+                        - text: Употреблять слово "колхозный" в контексте это однозначно дно. При этом не озаботиться грамотным составлением текста. Многие утверждения спорны или абсолютно не разумны с точки зрения функциональности. В любом случае, подобные заголовки всегда настраиывают аудиторию на негативынй лад. Хотя, видимо, это один из способов продвижения своих до невозможности
+                        - generic [ref=e1388]: ...ещё
+                    - generic [ref=e1390]:
+                      - button "Ответить" [ref=e1391] [cursor=pointer]
+                      - generic [ref=e1393]:
+                        - checkbox "130"
+                        - generic [ref=e1394] [cursor=pointer]:
+                          - img [ref=e1395]
+                          - generic [ref=e1396]: "130"
+                      - generic [ref=e1397]:
+                        - generic [ref=e1399]:
+                          - checkbox
+                          - img [ref=e1401] [cursor=pointer]
+                        - button [ref=e1403]:
+                          - img [ref=e1405] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1408] [cursor=pointer]:
+                    - generic [ref=e1410]: 3 ответа
+                - generic [ref=e1417]:
+                  - generic [ref=e1418]:
+                    - generic [ref=e1419]:
+                      - generic [ref=e1420]:
+                        - link "ирина бондарева" [ref=e1421] [cursor=pointer]:
+                          - /url: /id/5f2a332064ea3c650d6cb23e
+                          - generic [ref=e1422]: ирина бондарева
+                        - generic [ref=e1423]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1425] [cursor=pointer]:
+                        - img [ref=e1426]
+                    - generic "Кликабельный текст поста" [ref=e1429] [cursor=pointer]:
+                      - generic [ref=e1431]:
+                        - text: Кухня-это место,где готовят еду,а не любуются фасадами.А на вашу кухню можно заходить только как в музей.Готовить на ней нереально,там же нет места элементарным вещам- полотенца,прихватке,ну и т.п.Если вы на своей кухне только разогревание блюда из кулинарии то да,это вариант.А я на своей кухне готовлю для семьи,и какой она будет- решать только мне.Ваши советы оставьте при
+                        - generic [ref=e1432]: ...ещё
+                    - generic [ref=e1434]:
+                      - button "Ответить" [ref=e1435] [cursor=pointer]
+                      - generic [ref=e1437]:
+                        - checkbox "134"
+                        - generic [ref=e1438] [cursor=pointer]:
+                          - img [ref=e1439]
+                          - generic [ref=e1440]: "134"
+                      - generic [ref=e1441]:
+                        - generic [ref=e1443]:
+                          - checkbox "4"
+                          - generic [ref=e1444] [cursor=pointer]:
+                            - img [ref=e1445]
+                            - generic [ref=e1446]: "4"
+                        - button [ref=e1448]:
+                          - img [ref=e1450] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1453] [cursor=pointer]:
+                    - generic [ref=e1455]: 2 ответа
+                - generic [ref=e1462]:
+                  - generic [ref=e1463]:
+                    - generic [ref=e1464]:
+                      - generic [ref=e1465]:
+                        - link "Алексей Воронов" [ref=e1466] [cursor=pointer]:
+                          - /url: /user/A5hYSp6
+                          - generic [ref=e1467]: Алексей Воронов
+                        - generic [ref=e1468]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1470] [cursor=pointer]:
+                        - img [ref=e1471]
+                    - generic "Кликабельный текст поста" [ref=e1474]:
+                      - generic [ref=e1476]: Мне очень нравится пятнистая столешница и другой не надо,я наверное КОЛХОЗНИК оказывается!!!!
+                    - generic [ref=e1478]:
+                      - button "Ответить" [ref=e1479] [cursor=pointer]
+                      - generic [ref=e1481]:
+                        - checkbox "125"
+                        - generic [ref=e1482] [cursor=pointer]:
+                          - img [ref=e1483]
+                          - generic [ref=e1484]: "125"
+                      - generic [ref=e1485]:
+                        - generic [ref=e1487]:
+                          - checkbox "1"
+                          - generic [ref=e1488] [cursor=pointer]:
+                            - img [ref=e1489]
+                            - generic [ref=e1490]: "1"
+                        - button [ref=e1492]:
+                          - img [ref=e1494] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1497] [cursor=pointer]:
+                    - generic [ref=e1499]: 2 ответа
+                - generic [ref=e1506]:
+                  - generic [ref=e1507]:
+                    - generic [ref=e1508]:
+                      - generic [ref=e1509]:
+                        - link "Лео К." [ref=e1510] [cursor=pointer]:
+                          - /url: /user/h3jkzdqgn19ape9pbyxr20eja8
+                          - generic [ref=e1511]: Лео К.
+                        - generic [ref=e1512]: 30 сен 2023
+                      - button "Меню комментария" [ref=e1514] [cursor=pointer]:
+                        - img [ref=e1515]
+                    - generic "Кликабельный текст поста" [ref=e1518]:
+                      - generic [ref=e1520]: А колхозные продукты на вашей модной кухне есть разрешается???
+                    - generic [ref=e1522]:
+                      - button "Ответить" [ref=e1523] [cursor=pointer]
+                      - generic [ref=e1525]:
+                        - checkbox "95"
+                        - generic [ref=e1526] [cursor=pointer]:
+                          - img [ref=e1527]
+                          - generic [ref=e1528]: "95"
+                      - generic [ref=e1529]:
+                        - generic [ref=e1531]:
+                          - checkbox "1"
+                          - generic [ref=e1532] [cursor=pointer]:
+                            - img [ref=e1533]
+                            - generic [ref=e1534]: "1"
+                        - button [ref=e1536]:
+                          - img [ref=e1538] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1541] [cursor=pointer]:
+                    - generic [ref=e1543]: 2 ответа
+                - generic [ref=e1550]:
+                  - generic [ref=e1551]:
+                    - generic [ref=e1552]:
+                      - generic [ref=e1553]:
+                        - link "Киррил" [ref=e1554] [cursor=pointer]:
+                          - /url: /id/635780c1fb540d0bc96fdfec
+                          - generic [ref=e1555]: Киррил
+                        - generic [ref=e1556]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1558] [cursor=pointer]:
+                        - img [ref=e1559]
+                    - generic "Кликабельный текст поста" [ref=e1562]:
+                      - generic [ref=e1564]: Не смог дочитать, слишком много опечаток и ошибок. Раз статья рекламная, значит она стоит денег заказчику. Непрофессионально (заметьте, слитно)
+                    - generic [ref=e1566]:
+                      - button "Ответить" [ref=e1567] [cursor=pointer]
+                      - generic [ref=e1569]:
+                        - checkbox "92"
+                        - generic [ref=e1570] [cursor=pointer]:
+                          - img [ref=e1571]
+                          - generic [ref=e1572]: "92"
+                      - generic [ref=e1573]:
+                        - generic [ref=e1575]:
+                          - checkbox "1"
+                          - generic [ref=e1576] [cursor=pointer]:
+                            - img [ref=e1577]
+                            - generic [ref=e1578]: "1"
+                        - button [ref=e1580]:
+                          - img [ref=e1582] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1585] [cursor=pointer]:
+                    - generic [ref=e1587]: 1 ответ
+                - generic [ref=e1594]:
+                  - generic [ref=e1595]:
+                    - generic [ref=e1596]:
+                      - generic [ref=e1597]:
+                        - link "Юлия Жестовская" [ref=e1598] [cursor=pointer]:
+                          - /url: /id/6380754131bb0067dbd16729
+                          - generic [ref=e1599]: Юлия Жестовская
+                        - generic [ref=e1600]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1602] [cursor=pointer]:
+                        - img [ref=e1603]
+                    - generic "Кликабельный текст поста" [ref=e1606]:
+                      - generic [ref=e1608]: Да плевать мне. Я купила кухню вообще колхозные не бывает . Без всяких украшательств, мало того,что глянец, так ещё и металлик сверху золотистый ,внизу шоколад. Рада очень. Не скучно, легко моется, смотрится нарядно и по шарам не бьёт. А то ,что вы предложили больница больницей . Жесть. И столешница у меня каменная .
+                    - generic [ref=e1610]:
+                      - button "Ответить" [ref=e1611] [cursor=pointer]
+                      - generic [ref=e1613]:
+                        - checkbox "87"
+                        - generic [ref=e1614] [cursor=pointer]:
+                          - img [ref=e1615]
+                          - generic [ref=e1616]: "87"
+                      - generic [ref=e1617]:
+                        - generic [ref=e1619]:
+                          - checkbox "10"
+                          - generic [ref=e1620] [cursor=pointer]:
+                            - img [ref=e1621]
+                            - generic [ref=e1622]: "10"
+                        - button [ref=e1624]:
+                          - img [ref=e1626] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1629] [cursor=pointer]:
+                    - generic [ref=e1631]: 1 ответ
+                - generic [ref=e1638]:
+                  - generic [ref=e1639]:
+                    - generic [ref=e1640]:
+                      - generic [ref=e1641]:
+                        - link "Profi" [ref=e1642] [cursor=pointer]:
+                          - /url: /id/62158dadbe00b3339fd3fd94
+                          - generic [ref=e1643]: Profi
+                        - generic [ref=e1644]: 16 июл 2023
+                        - generic "Изменено" [ref=e1645]:
+                          - img [ref=e1646]
+                      - button "Меню комментария" [ref=e1649] [cursor=pointer]:
+                        - img [ref=e1650]
+                    - generic "Кликабельный текст поста" [ref=e1653]:
+                      - generic [ref=e1655]: Уважаемый, дизайнер, о непрофессионализме и неграмотном подходе к родному языку не только кричит, а вопит Ваша статья! Хотя бы стиль и тон смените. А то ни там, ни там. А переписывать чужие статейки особого ума не надо!
+                    - generic [ref=e1657]:
+                      - button "Ответить" [ref=e1658] [cursor=pointer]
+                      - generic [ref=e1660]:
+                        - checkbox "70"
+                        - generic [ref=e1661] [cursor=pointer]:
+                          - img [ref=e1662]
+                          - generic [ref=e1663]: "70"
+                      - generic [ref=e1664]:
+                        - generic [ref=e1666]:
+                          - checkbox "2"
+                          - generic [ref=e1667] [cursor=pointer]:
+                            - img [ref=e1668]
+                            - generic [ref=e1669]: "2"
+                        - button [ref=e1671]:
+                          - img [ref=e1673] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1676] [cursor=pointer]:
+                    - generic [ref=e1678]: 1 ответ
+                - generic [ref=e1685]:
+                  - generic [ref=e1686]:
+                    - generic [ref=e1687]:
+                      - generic [ref=e1688]:
+                        - link "Елена Т." [ref=e1689] [cursor=pointer]:
+                          - /url: /user/f4c96ecjb0d3h9k9yc1q874nfw
+                          - generic [ref=e1690]: Елена Т.
+                        - generic [ref=e1691]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1693] [cursor=pointer]:
+                        - img [ref=e1694]
+                    - generic "Кликабельный текст поста" [ref=e1697]:
+                      - generic [ref=e1699]: Автор, а у вас какая кухня??? Или может быть вы каждый год меняете ее? Она же из моды выходит!!! Лучше бы помалкивал "дизайнер". То , что вы написали - написали про себя. Это вы "колхоз", потому что грамотный дизайнер не будет писать в такой уничижительной форме!
+                    - generic [ref=e1701]:
+                      - button "Ответить" [ref=e1702] [cursor=pointer]
+                      - generic [ref=e1704]:
+                        - checkbox "67"
+                        - generic [ref=e1705] [cursor=pointer]:
+                          - img [ref=e1706]
+                          - generic [ref=e1707]: "67"
+                      - generic [ref=e1708]:
+                        - generic [ref=e1710]:
+                          - checkbox "1"
+                          - generic [ref=e1711] [cursor=pointer]:
+                            - img [ref=e1712]
+                            - generic [ref=e1713]: "1"
+                        - button [ref=e1715]:
+                          - img [ref=e1717] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1720] [cursor=pointer]:
+                    - generic [ref=e1722]: 1 ответ
+                - generic [ref=e1729]:
+                  - generic [ref=e1730]:
+                    - generic [ref=e1731]:
+                      - generic [ref=e1732]:
+                        - link "Елена Зубкова" [ref=e1733] [cursor=pointer]:
+                          - /url: /id/5dd58a33e745e8330fb16a71
+                          - generic [ref=e1734]: Елена Зубкова
+                        - generic [ref=e1735]: 30 окт 2023
+                      - button "Меню комментария" [ref=e1737] [cursor=pointer]:
+                        - img [ref=e1738]
+                    - generic "Кликабельный текст поста" [ref=e1741]:
+                      - generic [ref=e1742]:
+                        - generic [ref=e1743]: Ишь, аристократ вылупился! "Колхозная" кухня ему, дезигнеру недозвездному.
+                        - generic [ref=e1744]: А жрать в три горла то, что в том самом колхозе выращивают - только в путь, да побольше! Мясо, маслице, яйца, булки с печеньем - не колхозные?
+                        - generic [ref=e1745]: Поколение потребителей.
+                    - generic [ref=e1747]:
+                      - button "Ответить" [ref=e1748] [cursor=pointer]
+                      - generic [ref=e1750]:
+                        - checkbox "61"
+                        - generic [ref=e1751] [cursor=pointer]:
+                          - img [ref=e1752]
+                          - generic [ref=e1753]: "61"
+                      - generic [ref=e1754]:
+                        - generic [ref=e1756]:
+                          - checkbox
+                          - img [ref=e1758] [cursor=pointer]
+                        - button [ref=e1760]:
+                          - img [ref=e1762] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1765] [cursor=pointer]:
+                    - generic [ref=e1767]: 1 ответ
+                - generic [ref=e1775]:
+                  - generic [ref=e1776]:
+                    - generic [ref=e1777]:
+                      - link "Ольга А." [ref=e1778] [cursor=pointer]:
+                        - /url: /id/626be1ab918d0a0021943bbb
+                        - generic [ref=e1779]: Ольга А.
+                      - generic [ref=e1780]: 17 июл 2023
+                    - button "Меню комментария" [ref=e1782] [cursor=pointer]:
+                      - img [ref=e1783]
+                  - generic "Кликабельный текст поста" [ref=e1786]:
+                    - generic [ref=e1788]: Автор, этот материал отражает ВАШУ индивидуальность - безграмотную, высокомерную и просто хамоватую. Прекрасный пример антирекламы.
+                  - generic [ref=e1790]:
+                    - button "Ответить" [ref=e1791] [cursor=pointer]
+                    - generic [ref=e1793]:
+                      - checkbox "61"
+                      - generic [ref=e1794] [cursor=pointer]:
+                        - img [ref=e1795]
+                        - generic [ref=e1796]: "61"
+                    - generic [ref=e1797]:
+                      - generic [ref=e1799]:
+                        - checkbox "1"
+                        - generic [ref=e1800] [cursor=pointer]:
+                          - img [ref=e1801]
+                          - generic [ref=e1802]: "1"
+                      - button [ref=e1804]:
+                        - img [ref=e1806] [cursor=pointer]
+                - generic [ref=e1813]:
+                  - generic [ref=e1814]:
+                    - generic [ref=e1815]:
+                      - generic [ref=e1816]:
+                        - link "Северянин" [ref=e1817] [cursor=pointer]:
+                          - /url: /id/625cefc55d8ccb62ba203093
+                          - generic [ref=e1818]: Северянин
+                        - generic [ref=e1819]: 13 ноя 2023
+                      - button "Меню комментария" [ref=e1821] [cursor=pointer]:
+                        - img [ref=e1822]
+                    - generic "Кликабельный текст поста" [ref=e1825] [cursor=pointer]:
+                      - generic [ref=e1827]:
+                        - text: "\"Я предлагаю не использовать такой декор вообще и просить производителей столешниц изъять его из оборота, чтобы избежать создания колхозных старинных кухонных гарнитуров.\" Просто ОФУЕТЬ какой заботливый дизайнер!!! А я предлагаю СОМОВУ МАКСИМУ больше не публиковать такую АХИНЕЮ!!!! а взять в ипотеку квартиру лет эдак на на 30-ть, а на сдачу извращаться с"
+                        - generic [ref=e1828]: ...ещё
+                    - generic [ref=e1830]:
+                      - button "Ответить" [ref=e1831] [cursor=pointer]
+                      - generic [ref=e1833]:
+                        - checkbox "61"
+                        - generic [ref=e1834] [cursor=pointer]:
+                          - img [ref=e1835]
+                          - generic [ref=e1836]: "61"
+                      - generic [ref=e1837]:
+                        - generic [ref=e1839]:
+                          - checkbox "2"
+                          - generic [ref=e1840] [cursor=pointer]:
+                            - img [ref=e1841]
+                            - generic [ref=e1842]: "2"
+                        - button [ref=e1844]:
+                          - img [ref=e1846] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1849] [cursor=pointer]:
+                    - generic [ref=e1851]: 1 ответ
+                - generic [ref=e1858]:
+                  - generic [ref=e1859]:
+                    - generic [ref=e1860]:
+                      - generic [ref=e1861]:
+                        - link "Aga" [ref=e1862] [cursor=pointer]:
+                          - /url: /id/5efabf6ade59ea30a83b36dc
+                          - generic [ref=e1863]: Aga
+                        - generic [ref=e1864]: 16 июл 2023
+                        - generic "Изменено" [ref=e1865]:
+                          - img [ref=e1866]
+                      - button "Меню комментария" [ref=e1869] [cursor=pointer]:
+                        - img [ref=e1870]
+                    - generic "Кликабельный текст поста" [ref=e1873]:
+                      - generic [ref=e1875]: По мне, так вообще без разницы, кто и как обустраивает СВОЮ кухню. Как удобно, как нравится, на что, в конце концов, хватило средств. А доморощенным 'дизайнерам' пора прекратить сочинять подобные 'опусы'. Автор, вы реально считаете, что люди умрут без ваших ценных знаний и не могут обустроить себе кухню?
+                    - generic [ref=e1877]:
+                      - button "Ответить" [ref=e1878] [cursor=pointer]
+                      - generic [ref=e1880]:
+                        - checkbox "58"
+                        - generic [ref=e1881] [cursor=pointer]:
+                          - img [ref=e1882]
+                          - generic [ref=e1883]: "58"
+                      - generic [ref=e1884]:
+                        - generic [ref=e1886]:
+                          - checkbox "2"
+                          - generic [ref=e1887] [cursor=pointer]:
+                            - img [ref=e1888]
+                            - generic [ref=e1889]: "2"
+                        - button [ref=e1891]:
+                          - img [ref=e1893] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1896] [cursor=pointer]:
+                    - generic [ref=e1898]: 1 ответ
+                - generic [ref=e1905]:
+                  - generic [ref=e1906]:
+                    - generic [ref=e1907]:
+                      - generic [ref=e1908]:
+                        - link "Mary Black жаба на метле" [ref=e1909] [cursor=pointer]:
+                          - /url: /id/5ee779a27641122779a4e63e
+                          - generic [ref=e1910]: Mary Black жаба на метле
+                        - generic [ref=e1911]: 27 окт 2023
+                      - button "Меню комментария" [ref=e1913] [cursor=pointer]:
+                        - img [ref=e1914]
+                    - generic "Кликабельный текст поста" [ref=e1917]:
+                      - generic [ref=e1919]: Автор, а кто вам сказал, что вы обладатель безупречного вкуса? Круглая мойка "выглядят на столешнице как заплатка" , а прямоугольная как что? Маленькая вместимость? Ну если посуду мыть раз в неделю, то да, маловато будет, тогда уж лучше использовать ванну - и прямоугольная и вместительная :)
+                    - generic [ref=e1921]:
+                      - button "Ответить" [ref=e1922] [cursor=pointer]
+                      - generic [ref=e1924]:
+                        - checkbox "55"
+                        - generic [ref=e1925] [cursor=pointer]:
+                          - img [ref=e1926]
+                          - generic [ref=e1927]: "55"
+                      - generic [ref=e1928]:
+                        - generic [ref=e1930]:
+                          - checkbox "5"
+                          - generic [ref=e1931] [cursor=pointer]:
+                            - img [ref=e1932]
+                            - generic [ref=e1933]: "5"
+                        - button [ref=e1935]:
+                          - img [ref=e1937] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1940] [cursor=pointer]:
+                    - generic [ref=e1942]: 3 ответа
+                - generic [ref=e1949]:
+                  - generic [ref=e1950]:
+                    - generic [ref=e1951]:
+                      - generic [ref=e1952]:
+                        - link "Вера И." [ref=e1953] [cursor=pointer]:
+                          - /url: /user/t9pbm942wxjwar5up9gqntkz70
+                          - generic [ref=e1954]: Вера И.
+                        - generic [ref=e1955]: 16 июл 2023
+                      - button "Меню комментария" [ref=e1957] [cursor=pointer]:
+                        - img [ref=e1958]
+                    - generic "Кликабельный текст поста" [ref=e1961]:
+                      - generic [ref=e1963]: Горе дизайнер, оставь свои советы своей бабушке.
+                    - generic [ref=e1965]:
+                      - button "Ответить" [ref=e1966] [cursor=pointer]
+                      - generic [ref=e1968]:
+                        - checkbox "50"
+                        - generic [ref=e1969] [cursor=pointer]:
+                          - img [ref=e1970]
+                          - generic [ref=e1971]: "50"
+                      - generic [ref=e1972]:
+                        - generic [ref=e1974]:
+                          - checkbox "1"
+                          - generic [ref=e1975] [cursor=pointer]:
+                            - img [ref=e1976]
+                            - generic [ref=e1977]: "1"
+                        - button [ref=e1979]:
+                          - img [ref=e1981] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e1984] [cursor=pointer]:
+                    - generic [ref=e1986]: 2 ответа
+                - generic [ref=e1993]:
+                  - generic [ref=e1994]:
+                    - generic [ref=e1995]:
+                      - generic [ref=e1996]:
+                        - link "Olga Pav" [ref=e1997] [cursor=pointer]:
+                          - /url: /id/61446c0146c14b761cc6238f
+                          - generic [ref=e1998]: Olga Pav
+                        - generic [ref=e1999]: 16 июл 2023
+                      - button "Меню комментария" [ref=e2001] [cursor=pointer]:
+                        - img [ref=e2002]
+                    - generic "Кликабельный текст поста" [ref=e2005]:
+                      - generic [ref=e2006]:
+                        - generic [ref=e2007]: Люди не нанимают дизайнеров , потому что не хватает средств.
+                        - generic [ref=e2008]: Хотя, иной дизайнер так загогулину завернет, что потом и 10 не исправят.
+                    - generic [ref=e2010]:
+                      - button "Ответить" [ref=e2011] [cursor=pointer]
+                      - generic [ref=e2013]:
+                        - checkbox "46"
+                        - generic [ref=e2014] [cursor=pointer]:
+                          - img [ref=e2015]
+                          - generic [ref=e2016]: "46"
+                      - generic [ref=e2017]:
+                        - generic [ref=e2019]:
+                          - checkbox
+                          - img [ref=e2021] [cursor=pointer]
+                        - button [ref=e2023]:
+                          - img [ref=e2025] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2028] [cursor=pointer]:
+                    - generic [ref=e2030]: 1 ответ
+                - generic [ref=e2038]:
+                  - generic [ref=e2039]:
+                    - generic [ref=e2040]:
+                      - link "Антон Борисенко" [ref=e2041] [cursor=pointer]:
+                        - /url: /id/623408441b1644153711a797
+                        - generic [ref=e2042]: Антон Борисенко
+                      - generic [ref=e2043]: 16 июл 2023
+                    - button "Меню комментария" [ref=e2045] [cursor=pointer]:
+                      - img [ref=e2046]
+                  - generic "Кликабельный текст поста" [ref=e2049]:
+                    - generic [ref=e2050]:
+                      - generic [ref=e2051]: Очередной горе-дезайнер.
+                      - generic [ref=e2052]: Даже пока до горе-дизайнера не дорос.
+                  - generic [ref=e2054]:
+                    - button "Ответить" [ref=e2055] [cursor=pointer]
+                    - generic [ref=e2057]:
+                      - checkbox "44"
+                      - generic [ref=e2058] [cursor=pointer]:
+                        - img [ref=e2059]
+                        - generic [ref=e2060]: "44"
+                    - generic [ref=e2061]:
+                      - generic [ref=e2063]:
+                        - checkbox "1"
+                        - generic [ref=e2064] [cursor=pointer]:
+                          - img [ref=e2065]
+                          - generic [ref=e2066]: "1"
+                      - button [ref=e2068]:
+                        - img [ref=e2070] [cursor=pointer]
+                - generic [ref=e2078]:
+                  - generic [ref=e2079]:
+                    - generic [ref=e2080]:
+                      - link "Вредная Мюмла" [ref=e2081] [cursor=pointer]:
+                        - /url: /id/626c50a902d18c713afbe6bb
+                        - generic [ref=e2082]: Вредная Мюмла
+                      - generic [ref=e2083]: 6 ноя 2023
+                      - generic "Изменено" [ref=e2084]:
+                        - img [ref=e2085]
+                    - button "Меню комментария" [ref=e2088] [cursor=pointer]:
+                      - img [ref=e2089]
+                  - generic "Кликабельный текст поста" [ref=e2092]:
+                    - generic [ref=e2094]: Никогда не делайте этих ошибок! Не употребляйте слова "колхозный" в абсолютно неуместном контексте и не общайтесь с читателями в императивной форме. Поверьте, такой он вызывает не желание последовать вашим рекомендациям, а раздражение.
+                  - generic [ref=e2096]:
+                    - button "Ответить" [ref=e2097] [cursor=pointer]
+                    - generic [ref=e2099]:
+                      - checkbox "41"
+                      - generic [ref=e2100] [cursor=pointer]:
+                        - img [ref=e2101]
+                        - generic [ref=e2102]: "41"
+                    - generic [ref=e2103]:
+                      - generic [ref=e2105]:
+                        - checkbox
+                        - img [ref=e2107] [cursor=pointer]
+                      - button [ref=e2109]:
+                        - img [ref=e2111] [cursor=pointer]
+                - generic [ref=e2119]:
+                  - generic [ref=e2120]:
+                    - generic [ref=e2121]:
+                      - link "вера з." [ref=e2122] [cursor=pointer]:
+                        - /url: /id/624b0699f35e68184c457990
+                        - generic [ref=e2123]: вера з.
+                      - generic [ref=e2124]: 17 июл 2023
+                    - button "Меню комментария" [ref=e2126] [cursor=pointer]:
+                      - img [ref=e2127]
+                  - generic "Кликабельный текст поста" [ref=e2130]:
+                    - generic [ref=e2132]: Прочитала только чтобы посчитать сколько раз употребоялось слово ,,колхоз,,. На 7 варианте сбилась. И ещё, ,,хранить всякую шляпу,, это как? Мальчик, не пиши больше. Не твоё это
+                  - generic [ref=e2134]:
+                    - button "Ответить" [ref=e2135] [cursor=pointer]
+                    - generic [ref=e2137]:
+                      - checkbox "40"
+                      - generic [ref=e2138] [cursor=pointer]:
+                        - img [ref=e2139]
+                        - generic [ref=e2140]: "40"
+                    - generic [ref=e2141]:
+                      - generic [ref=e2143]:
+                        - checkbox
+                        - img [ref=e2145] [cursor=pointer]
+                      - button [ref=e2147]:
+                        - img [ref=e2149] [cursor=pointer]
+                - generic [ref=e2156]:
+                  - generic [ref=e2157]:
+                    - generic [ref=e2158]:
+                      - generic [ref=e2159]:
+                        - link "Александр Голубков" [ref=e2160] [cursor=pointer]:
+                          - /url: /id/5c3ddcb4a3352000adce0d43
+                          - generic [ref=e2161]: Александр Голубков
+                        - generic [ref=e2162]: 16 июл 2023
+                      - button "Меню комментария" [ref=e2164] [cursor=pointer]:
+                        - img [ref=e2165]
+                    - generic "Кликабельный текст поста" [ref=e2168]:
+                      - generic [ref=e2170]: Да одного слова "чИстокол" (ржунимагу) достаточно, чтобы оценить уровень интеллекта автора! Ему просто нужно кому-то кухни "впарить"!
+                    - generic [ref=e2172]:
+                      - button "Ответить" [ref=e2173] [cursor=pointer]
+                      - generic [ref=e2175]:
+                        - checkbox "41"
+                        - generic [ref=e2176] [cursor=pointer]:
+                          - img [ref=e2177]
+                          - generic [ref=e2178]: "41"
+                      - generic [ref=e2179]:
+                        - generic [ref=e2181]:
+                          - checkbox "1"
+                          - generic [ref=e2182] [cursor=pointer]:
+                            - img [ref=e2183]
+                            - generic [ref=e2184]: "1"
+                        - button [ref=e2186]:
+                          - img [ref=e2188] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2191] [cursor=pointer]:
+                    - generic [ref=e2193]: 2 ответа
+                - generic [ref=e2200]:
+                  - generic [ref=e2201]:
+                    - generic [ref=e2202]:
+                      - generic [ref=e2203]:
+                        - link "елена с." [ref=e2204] [cursor=pointer]:
+                          - /url: /user/9zmq7p92fxttrknrtk2m2e0hdc
+                          - generic [ref=e2205]: елена с.
+                        - generic [ref=e2206]: 16 июл 2023
+                      - button "Меню комментария" [ref=e2208] [cursor=pointer]:
+                        - img [ref=e2209]
+                    - generic "Кликабельный текст поста" [ref=e2212]:
+                      - generic [ref=e2214]: "\"Сильно городской\" автор:), \"не продуманный\" пишется слитно в русском языке. А в заголовке такие ошибки вообще позор. Про кухни даже говорить не буду, соответствует общему уровню развития"
+                    - generic [ref=e2216]:
+                      - button "Ответить" [ref=e2217] [cursor=pointer]
+                      - generic [ref=e2219]:
+                        - checkbox "39"
+                        - generic [ref=e2220] [cursor=pointer]:
+                          - img [ref=e2221]
+                          - generic [ref=e2222]: "39"
+                      - generic [ref=e2223]:
+                        - generic [ref=e2225]:
+                          - checkbox "2"
+                          - generic [ref=e2226] [cursor=pointer]:
+                            - img [ref=e2227]
+                            - generic [ref=e2228]: "2"
+                        - button [ref=e2230]:
+                          - img [ref=e2232] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2235] [cursor=pointer]:
+                    - generic [ref=e2237]: 1 ответ
+                - generic [ref=e2245]:
+                  - generic [ref=e2246]:
+                    - generic [ref=e2247]:
+                      - link "tatsirina@yandex.ru" [ref=e2248] [cursor=pointer]:
+                        - /url: /id/65cf99935235e6704dd1ef34
+                        - generic [ref=e2249]: tatsirina@yandex.ru
+                      - generic [ref=e2250]: 16 июл 2023
+                    - button "Меню комментария" [ref=e2252] [cursor=pointer]:
+                      - img [ref=e2253]
+                  - generic "Кликабельный текст поста" [ref=e2256]:
+                    - generic [ref=e2258]: Горе-дизайнер, научись сначала писать без ошибок, а затем уже лезь с советами.
+                  - generic [ref=e2260]:
+                    - button "Ответить" [ref=e2261] [cursor=pointer]
+                    - generic [ref=e2263]:
+                      - checkbox "36"
+                      - generic [ref=e2264] [cursor=pointer]:
+                        - img [ref=e2265]
+                        - generic [ref=e2266]: "36"
+                    - generic [ref=e2267]:
+                      - generic [ref=e2269]:
+                        - checkbox
+                        - img [ref=e2271] [cursor=pointer]
+                      - button [ref=e2273]:
+                        - img [ref=e2275] [cursor=pointer]
+                - generic [ref=e2283]:
+                  - generic [ref=e2284]:
+                    - generic [ref=e2285]:
+                      - link "Олег Д." [ref=e2286] [cursor=pointer]:
+                        - /url: /id/5f08f141ecb1302860643198
+                        - generic [ref=e2287]: Олег Д.
+                      - generic [ref=e2288]: 7 ноя 2023
+                    - button "Меню комментария" [ref=e2290] [cursor=pointer]:
+                      - img [ref=e2291]
+                  - generic "Кликабельный текст поста" [ref=e2294]:
+                    - generic [ref=e2296]: Никогда не делайте этих ошибок! Никогда не пишите статьи!
+                  - generic [ref=e2298]:
+                    - button "Ответить" [ref=e2299] [cursor=pointer]
+                    - generic [ref=e2301]:
+                      - checkbox "37"
+                      - generic [ref=e2302] [cursor=pointer]:
+                        - img [ref=e2303]
+                        - generic [ref=e2304]: "37"
+                    - generic [ref=e2305]:
+                      - generic [ref=e2307]:
+                        - checkbox "2"
+                        - generic [ref=e2308] [cursor=pointer]:
+                          - img [ref=e2309]
+                          - generic [ref=e2310]: "2"
+                      - button [ref=e2312]:
+                        - img [ref=e2314] [cursor=pointer]
+                - generic [ref=e2321]:
+                  - generic [ref=e2322]:
+                    - generic [ref=e2323]:
+                      - generic [ref=e2324]:
+                        - link "наталья барбакова" [ref=e2325] [cursor=pointer]:
+                          - /url: /user/h9v3b5fyxupe25pqwkg36jqc38
+                          - generic [ref=e2326]: наталья барбакова
+                        - generic [ref=e2327]: 22 сен 2023
+                      - button "Меню комментария" [ref=e2329] [cursor=pointer]:
+                        - img [ref=e2330]
+                    - generic "Кликабельный текст поста" [ref=e2333] [cursor=pointer]:
+                      - generic [ref=e2335]:
+                        - text: "Умник, \"колхоз\" это предприятие для коллективного ведения сельского хозяйства. Это для общего развития тебе, а в остальном ты разбираешься в кухнях как свинья в апельсинах, на фиг твои антресоли под потолок, если у меня рост 161 сантиметр, нельзя мойку а углу, да пожалуйста, только в наших кухнях, при их размерах, это самое оптимальное ее место, больше места перед плитой, поэтому: мойка"
+                        - generic [ref=e2336]: ...ещё
+                    - generic [ref=e2338]:
+                      - button "Ответить" [ref=e2339] [cursor=pointer]
+                      - generic [ref=e2341]:
+                        - checkbox "34"
+                        - generic [ref=e2342] [cursor=pointer]:
+                          - img [ref=e2343]
+                          - generic [ref=e2344]: "34"
+                      - generic [ref=e2345]:
+                        - generic [ref=e2347]:
+                          - checkbox "1"
+                          - generic [ref=e2348] [cursor=pointer]:
+                            - img [ref=e2349]
+                            - generic [ref=e2350]: "1"
+                        - button [ref=e2352]:
+                          - img [ref=e2354] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2357] [cursor=pointer]:
+                    - generic [ref=e2359]: 1 ответ
+                - generic [ref=e2366]:
+                  - generic [ref=e2367]:
+                    - generic [ref=e2368]:
+                      - generic [ref=e2369]:
+                        - link "Людмила Парсаданова" [ref=e2370] [cursor=pointer]:
+                          - /url: /id/62051a245f0c085b357ea67c
+                          - generic [ref=e2371]: Людмила Парсаданова
+                        - generic [ref=e2372]: 16 июл 2023
+                      - button "Меню комментария" [ref=e2374] [cursor=pointer]:
+                        - img [ref=e2375]
+                    - generic "Кликабельный текст поста" [ref=e2378]:
+                      - generic [ref=e2380]: И мы когда то были молоды, и другие платья носили. А у вас автор или у ваших близких наверное самые, самые кухни? И меняете каждый сезон? А то, может у вас и колхозной, как говорите, своей кухни нет. Живете на съемник квартире.
+                    - generic [ref=e2382]:
+                      - button "Ответить" [ref=e2383] [cursor=pointer]
+                      - generic [ref=e2385]:
+                        - checkbox "34"
+                        - generic [ref=e2386] [cursor=pointer]:
+                          - img [ref=e2387]
+                          - generic [ref=e2388]: "34"
+                      - generic [ref=e2389]:
+                        - generic [ref=e2391]:
+                          - checkbox "1"
+                          - generic [ref=e2392] [cursor=pointer]:
+                            - img [ref=e2393]
+                            - generic [ref=e2394]: "1"
+                        - button [ref=e2396]:
+                          - img [ref=e2398] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2401] [cursor=pointer]:
+                    - generic [ref=e2403]: 1 ответ
+                - generic [ref=e2410]:
+                  - generic [ref=e2411]:
+                    - generic [ref=e2412]:
+                      - generic [ref=e2413]:
+                        - link "Наталия Ульянова" [ref=e2414] [cursor=pointer]:
+                          - /url: /user/eqmpifhwrprfcao2mnjejrmfv5a
+                          - generic [ref=e2415]: Наталия Ульянова
+                        - generic [ref=e2416]: 26 мар 2024
+                      - button "Меню комментария" [ref=e2418] [cursor=pointer]:
+                        - img [ref=e2419]
+                    - generic "Кликабельный текст поста" [ref=e2422]:
+                      - generic [ref=e2424]: Автору не надо употреблять слово " колхозная", было не одно поколение людей, живущих в частных больших домах и работающих в колхозах, и это не значило, что они были хуже городских, живущих в однокомнатных хрущевках с 5метровой кухней .Откуда такое презрение к сельской жизни ?! Новые материалы , мода, технологии вошли в нашу жизнь ! И причем тут ," колхозная" ?.....
+                    - generic [ref=e2426]:
+                      - button "Ответить" [ref=e2427] [cursor=pointer]
+                      - generic [ref=e2429]:
+                        - checkbox "32"
+                        - generic [ref=e2430] [cursor=pointer]:
+                          - img [ref=e2431]
+                          - generic [ref=e2432]: "32"
+                      - generic [ref=e2433]:
+                        - generic [ref=e2435]:
+                          - checkbox
+                          - img [ref=e2437] [cursor=pointer]
+                        - button [ref=e2439]:
+                          - img [ref=e2441] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2444] [cursor=pointer]:
+                    - generic [ref=e2446]: 1 ответ
+                - generic [ref=e2453]:
+                  - generic [ref=e2454]:
+                    - generic [ref=e2455]:
+                      - generic [ref=e2456]:
+                        - link "Дикая Мяу" [ref=e2457] [cursor=pointer]:
+                          - /url: /id/67c0815e6663f940de241a6f
+                          - generic [ref=e2458]: Дикая Мяу
+                        - generic [ref=e2459]: 10 дек 2023
+                      - button "Меню комментария" [ref=e2461] [cursor=pointer]:
+                        - img [ref=e2462]
+                    - generic "Кликабельный текст поста" [ref=e2465]:
+                      - generic [ref=e2467]: "На МОЕЙ кухне критерий оценки только один: она должна устраивать лично МЕНЯ. Точка."
+                    - generic [ref=e2469]:
+                      - button "Ответить" [ref=e2470] [cursor=pointer]
+                      - generic [ref=e2472]:
+                        - checkbox "32"
+                        - generic [ref=e2473] [cursor=pointer]:
+                          - img [ref=e2474]
+                          - generic [ref=e2475]: "32"
+                      - generic [ref=e2476]:
+                        - generic [ref=e2478]:
+                          - checkbox
+                          - img [ref=e2480] [cursor=pointer]
+                        - button [ref=e2482]:
+                          - img [ref=e2484] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2487] [cursor=pointer]:
+                    - generic [ref=e2489]: 1 ответ
+                - generic [ref=e2497]:
+                  - generic [ref=e2498]:
+                    - generic [ref=e2499]:
+                      - link "Лидия П." [ref=e2500] [cursor=pointer]:
+                        - /url: /user/f0cpqmg4kg8gukx1q31zk317vw
+                        - generic [ref=e2501]: Лидия П.
+                      - generic [ref=e2502]: 2 апр 2024
+                    - button "Меню комментария" [ref=e2504] [cursor=pointer]:
+                      - img [ref=e2505]
+                  - generic "Кликабельный текст поста" [ref=e2508]:
+                    - generic [ref=e2510]: Автор, для начала перестаньте употреблять слово "колхозный" в уничижительном виде. Сомневаюсь, что вы член королевской семьи...
+                  - generic [ref=e2512]:
+                    - button "Ответить" [ref=e2513] [cursor=pointer]
+                    - generic [ref=e2515]:
+                      - checkbox "29"
+                      - generic [ref=e2516] [cursor=pointer]:
+                        - img [ref=e2517]
+                        - generic [ref=e2518]: "29"
+                    - generic [ref=e2519]:
+                      - generic [ref=e2521]:
+                        - checkbox
+                        - img [ref=e2523] [cursor=pointer]
+                      - button [ref=e2525]:
+                        - img [ref=e2527] [cursor=pointer]
+                - generic [ref=e2534]:
+                  - generic [ref=e2535]:
+                    - generic [ref=e2536]:
+                      - generic [ref=e2537]:
+                        - link "Оксана Лбедева" [ref=e2538] [cursor=pointer]:
+                          - /url: /user/kjwez5ajo1jmsmjfczthbbex2zw
+                          - generic [ref=e2539]: Оксана Лбедева
+                        - generic [ref=e2540]: 22 ноя 2023
+                      - button "Меню комментария" [ref=e2542] [cursor=pointer]:
+                        - img [ref=e2543]
+                    - generic "Кликабельный текст поста" [ref=e2546] [cursor=pointer]:
+                      - generic [ref=e2548]:
+                        - text: Слушайте вы прямо городские усе.если бы не колхоз да не бабушки жевали бы вы лебеду с крапивой,а не оладушки.и между прочим ,сервант который мне достался от бабушки имеет прекрасную витрину и он деревянный,а не из ДСП с пленкой.каждый человек ставит себе в дом то что может или хочет.то что лично ему нравится.лично мне очень нравится бабушкин вариант и антресоли до
+                        - generic [ref=e2549]: ...ещё
+                    - generic [ref=e2551]:
+                      - button "Ответить" [ref=e2552] [cursor=pointer]
+                      - generic [ref=e2554]:
+                        - checkbox "32"
+                        - generic [ref=e2555] [cursor=pointer]:
+                          - img [ref=e2556]
+                          - generic [ref=e2557]: "32"
+                      - generic [ref=e2558]:
+                        - generic [ref=e2560]:
+                          - checkbox "3"
+                          - generic [ref=e2561] [cursor=pointer]:
+                            - img [ref=e2562]
+                            - generic [ref=e2563]: "3"
+                        - button [ref=e2565]:
+                          - img [ref=e2567] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2570] [cursor=pointer]:
+                    - generic [ref=e2572]: 1 ответ
+                - generic [ref=e2580]:
+                  - generic [ref=e2582]:
+                    - generic [ref=e2583]: Пользователь удалён
+                    - generic [ref=e2584]: 12 окт 2023
+                    - generic "Изменено" [ref=e2585]:
+                      - img [ref=e2586]
+                  - generic [ref=e2589]: Комментарий недоступен
+                - generic [ref=e2595]:
+                  - generic [ref=e2596]:
+                    - generic [ref=e2597]:
+                      - generic [ref=e2598]:
+                        - link "Ольга Красикова" [ref=e2599] [cursor=pointer]:
+                          - /url: /user/pjgz_418sqgajqn_j-r4fo9pnve
+                          - generic [ref=e2600]: Ольга Красикова
+                        - generic [ref=e2601]: 26 дек 2023
+                      - button "Меню комментария" [ref=e2603] [cursor=pointer]:
+                        - img [ref=e2604]
+                    - generic "Кликабельный текст поста" [ref=e2607]:
+                      - generic [ref=e2609]: У вас на фото "как надо"- все мертвое, ощущение морга. Жизни в этих интерьерах нет. Мода-быстротечна, скоро и этот ужас канет в лету.
+                    - generic [ref=e2611]:
+                      - button "Ответить" [ref=e2612] [cursor=pointer]
+                      - generic [ref=e2614]:
+                        - checkbox "28"
+                        - generic [ref=e2615] [cursor=pointer]:
+                          - img [ref=e2616]
+                          - generic [ref=e2617]: "28"
+                      - generic [ref=e2618]:
+                        - generic [ref=e2620]:
+                          - checkbox
+                          - img [ref=e2622] [cursor=pointer]
+                        - button [ref=e2624]:
+                          - img [ref=e2626] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2629] [cursor=pointer]:
+                    - generic [ref=e2631]: 1 ответ
+                - generic [ref=e2639]:
+                  - generic [ref=e2640]:
+                    - generic [ref=e2641]:
+                      - link "Irina Kharitohova" [ref=e2642] [cursor=pointer]:
+                        - /url: /user/p4zv75b8ycradckmh9dgycjguc
+                        - generic [ref=e2643]: Irina Kharitohova
+                      - generic [ref=e2644]: 9 ноя 2023
+                    - button "Меню комментария" [ref=e2646] [cursor=pointer]:
+                      - img [ref=e2647]
+                  - generic "Кликабельный текст поста" [ref=e2650]:
+                    - generic [ref=e2652]: У вас слово колхозный в каждом предложении. Это что, ругательство? Люди , живущие в деревне, хуже вас? Вы плохо воспитаны. Кухни делаются на много лет, тогда было так модно.
+                  - generic [ref=e2654]:
+                    - button "Ответить" [ref=e2655] [cursor=pointer]
+                    - generic [ref=e2657]:
+                      - checkbox "28"
+                      - generic [ref=e2658] [cursor=pointer]:
+                        - img [ref=e2659]
+                        - generic [ref=e2660]: "28"
+                    - generic [ref=e2661]:
+                      - generic [ref=e2663]:
+                        - checkbox
+                        - img [ref=e2665] [cursor=pointer]
+                      - button [ref=e2667]:
+                        - img [ref=e2669] [cursor=pointer]
+                - generic [ref=e2676]:
+                  - generic [ref=e2677]:
+                    - generic [ref=e2678]:
+                      - generic [ref=e2679]:
+                        - link "Светлана С." [ref=e2680] [cursor=pointer]:
+                          - /url: /id/6228b5497e72187ca53d8a00
+                          - generic [ref=e2681]: Светлана С.
+                        - generic [ref=e2682]: 19 окт 2023
+                      - button "Меню комментария" [ref=e2684] [cursor=pointer]:
+                        - img [ref=e2685]
+                    - generic "Кликабельный текст поста" [ref=e2688]:
+                      - generic [ref=e2690]: "Простите меня за грубость: но у автора этой статьи,видимо какая то психологическая травма связанная со словом КОЛХОЗ! Слов нет...."
+                    - generic [ref=e2692]:
+                      - button "Ответить" [ref=e2693] [cursor=pointer]
+                      - generic [ref=e2695]:
+                        - checkbox "29"
+                        - generic [ref=e2696] [cursor=pointer]:
+                          - img [ref=e2697]
+                          - generic [ref=e2698]: "29"
+                      - generic [ref=e2699]:
+                        - generic [ref=e2701]:
+                          - checkbox "1"
+                          - generic [ref=e2702] [cursor=pointer]:
+                            - img [ref=e2703]
+                            - generic [ref=e2704]: "1"
+                        - button [ref=e2706]:
+                          - img [ref=e2708] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2711] [cursor=pointer]:
+                    - generic [ref=e2713]: 2 ответа
+                - generic [ref=e2721]:
+                  - generic [ref=e2722]:
+                    - generic [ref=e2723]:
+                      - link "Наталия Белова" [ref=e2724] [cursor=pointer]:
+                        - /url: /id/5e0ce741dddaf400b1f68aa7
+                        - generic [ref=e2725]: Наталия Белова
+                      - generic [ref=e2726]: 12 ноя 2023
+                    - button "Меню комментария" [ref=e2728] [cursor=pointer]:
+                      - img [ref=e2729]
+                  - generic "Кликабельный текст поста" [ref=e2732] [cursor=pointer]:
+                    - generic [ref=e2733]:
+                      - generic [ref=e2734]: "Иными словами: покупайте дрова из ИКЕА или пользуйтесь услугами консультантов и будет вам счастье! Наплюйте на ваши предпочтения, даже если у вас кухня из цельного дуба или стиль \"рустик\", но надо чтобы в тренде, чтобы минимализм, как в морге, а то, не дай Бог, придут люди и надругаетесь вы над их чувством прекрасного..."
+                      - generic [ref=e2735]: ещё
+                  - generic [ref=e2737]:
+                    - button "Ответить" [ref=e2738] [cursor=pointer]
+                    - generic [ref=e2740]:
+                      - checkbox "32"
+                      - generic [ref=e2741] [cursor=pointer]:
+                        - img [ref=e2742]
+                        - generic [ref=e2743]: "32"
+                    - generic [ref=e2744]:
+                      - generic [ref=e2746]:
+                        - checkbox "5"
+                        - generic [ref=e2747] [cursor=pointer]:
+                          - img [ref=e2748]
+                          - generic [ref=e2749]: "5"
+                      - button [ref=e2751]:
+                        - img [ref=e2753] [cursor=pointer]
+                - generic [ref=e2760]:
+                  - generic [ref=e2761]:
+                    - generic [ref=e2763]:
+                      - generic [ref=e2764]: Пользователь удалён
+                      - generic [ref=e2765]: 16 июл 2023
+                    - generic [ref=e2767]: Комментарий недоступен
+                  - button "Показать ответы на комментарий" [ref=e2769] [cursor=pointer]:
+                    - generic [ref=e2771]: 1 ответ
+                - generic [ref=e2779]:
+                  - generic [ref=e2780]:
+                    - generic [ref=e2781]:
+                      - link "Елена Елена" [ref=e2782] [cursor=pointer]:
+                        - /url: /id/68b49190844f072331c8ad1b
+                        - generic [ref=e2783]: Елена Елена
+                      - generic [ref=e2784]: 23 фев 2024
+                    - button "Меню комментария" [ref=e2786] [cursor=pointer]:
+                      - img [ref=e2787]
+                  - generic "Кликабельный текст поста" [ref=e2790]:
+                    - generic [ref=e2792]: Первый колхозный признак - автор статьи.
+                  - generic [ref=e2794]:
+                    - button "Ответить" [ref=e2795] [cursor=pointer]
+                    - generic [ref=e2797]:
+                      - checkbox "26"
+                      - generic [ref=e2798] [cursor=pointer]:
+                        - img [ref=e2799]
+                        - generic [ref=e2800]: "26"
+                    - generic [ref=e2801]:
+                      - generic [ref=e2803]:
+                        - checkbox
+                        - img [ref=e2805] [cursor=pointer]
+                      - button [ref=e2807]:
+                        - img [ref=e2809] [cursor=pointer]
+                - generic [ref=e2816]:
+                  - generic [ref=e2817]:
+                    - generic [ref=e2818]:
+                      - generic [ref=e2819]:
+                        - link "Марина" [ref=e2820] [cursor=pointer]:
+                          - /url: /id/644263a5fb60e54ea11d7b08
+                          - generic [ref=e2821]: Марина
+                        - generic [ref=e2822]: 29 ноя 2023
+                      - button "Меню комментария" [ref=e2824] [cursor=pointer]:
+                        - img [ref=e2825]
+                    - generic "Кликабельный текст поста" [ref=e2828] [cursor=pointer]:
+                      - generic [ref=e2830]:
+                        - text: Автор, смотрю вы знаток колхоза?! Так вот хочу заметить , при колхозах такой мебели никогда не было , чтобы вы знали ! Были деревянные столы, навесные полочки для посуды и буфеты, кстати сейчас к такому стилю многие испытывают симпатию ! А вообще считаю полным невежеством , говорить о колхозе, как о чём то позорном! Ту мебель, которую вы высмеиваете, была не в колхозах, а у
+                        - generic [ref=e2831]: ...ещё
+                    - generic [ref=e2833]:
+                      - button "Ответить" [ref=e2834] [cursor=pointer]
+                      - generic [ref=e2836]:
+                        - checkbox "27"
+                        - generic [ref=e2837] [cursor=pointer]:
+                          - img [ref=e2838]
+                          - generic [ref=e2839]: "27"
+                      - generic [ref=e2840]:
+                        - generic [ref=e2842]:
+                          - checkbox "1"
+                          - generic [ref=e2843] [cursor=pointer]:
+                            - img [ref=e2844]
+                            - generic [ref=e2845]: "1"
+                        - button [ref=e2847]:
+                          - img [ref=e2849] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e2852] [cursor=pointer]:
+                    - generic [ref=e2854]: 1 ответ
+                - generic [ref=e2862]:
+                  - generic [ref=e2863]:
+                    - generic [ref=e2864]:
+                      - link "Андрей Баранников" [ref=e2865] [cursor=pointer]:
+                        - /url: /user/yhjlcw1iclciw-hlh_mqhsq58oy
+                        - generic [ref=e2866]: Андрей Баранников
+                      - generic [ref=e2867]: 15 ноя 2023
+                    - button "Меню комментария" [ref=e2869] [cursor=pointer]:
+                      - img [ref=e2870]
+                  - generic "Кликабельный текст поста" [ref=e2873]:
+                    - generic [ref=e2875]: Кухня должна быть функциональной и нравится хозяйке. Остальное от лукавого
+                  - generic [ref=e2877]:
+                    - button "Ответить" [ref=e2878] [cursor=pointer]
+                    - generic [ref=e2880]:
+                      - checkbox "27"
+                      - generic [ref=e2881] [cursor=pointer]:
+                        - img [ref=e2882]
+                        - generic [ref=e2883]: "27"
+                    - generic [ref=e2884]:
+                      - generic [ref=e2886]:
+                        - checkbox "2"
+                        - generic [ref=e2887] [cursor=pointer]:
+                          - img [ref=e2888]
+                          - generic [ref=e2889]: "2"
+                      - button [ref=e2891]:
+                        - img [ref=e2893] [cursor=pointer]
+                - generic [ref=e2901]:
+                  - generic [ref=e2902]:
+                    - generic [ref=e2903]:
+                      - link "Время не ждет." [ref=e2904] [cursor=pointer]:
+                        - /url: /id/5d6d7832ba281e00ae4d0ba6
+                        - generic [ref=e2905]: Время не ждет.
+                      - generic [ref=e2906]: 7 фев 2024
+                    - button "Меню комментария" [ref=e2908] [cursor=pointer]:
+                      - img [ref=e2909]
+                  - generic "Кликабельный текст поста" [ref=e2912] [cursor=pointer]:
+                    - generic [ref=e2914]:
+                      - text: Дизайнеры этой фирмы страшно неграмотные и пошлые люди.Прекратите использовать слово колхоз в пренебрежительном значении.Это давно дурной тон.Вы из подвала вылезли?Прочитала 2 статью,ужас тихий.Такое вне пиление,что пишут люди с образованием не больше 8 классов.Термин "колхозники по отношению к Вам,это огромный комплимент.Вы не достойны.Это просто китч
+                      - generic [ref=e2915]: ...ещё
+                  - generic [ref=e2917]:
+                    - button "Ответить" [ref=e2918] [cursor=pointer]
+                    - generic [ref=e2920]:
+                      - checkbox "24"
+                      - generic [ref=e2921] [cursor=pointer]:
+                        - img [ref=e2922]
+                        - generic [ref=e2923]: "24"
+                    - generic [ref=e2924]:
+                      - generic [ref=e2926]:
+                        - checkbox
+                        - img [ref=e2928] [cursor=pointer]
+                      - button [ref=e2930]:
+                        - img [ref=e2932] [cursor=pointer]
+                - generic [ref=e2940]:
+                  - generic [ref=e2941]:
+                    - generic [ref=e2942]:
+                      - link "Елена Климова" [ref=e2943] [cursor=pointer]:
+                        - /url: /user/zmomg9w1d3dhqboohobn5ttokiw
+                        - generic [ref=e2944]: Елена Климова
+                      - generic [ref=e2945]: 11 окт 2023
+                    - button "Меню комментария" [ref=e2947] [cursor=pointer]:
+                      - img [ref=e2948]
+                  - generic "Кликабельный текст поста" [ref=e2951]:
+                    - generic [ref=e2953]: "Даже читать не стала, а сразу хотела спросить: - При чем здесь колхоз?"
+                  - generic [ref=e2955]:
+                    - button "Ответить" [ref=e2956] [cursor=pointer]
+                    - generic [ref=e2958]:
+                      - checkbox "24"
+                      - generic [ref=e2959] [cursor=pointer]:
+                        - img [ref=e2960]
+                        - generic [ref=e2961]: "24"
+                    - generic [ref=e2962]:
+                      - generic [ref=e2964]:
+                        - checkbox
+                        - img [ref=e2966] [cursor=pointer]
+                      - button [ref=e2968]:
+                        - img [ref=e2970] [cursor=pointer]
+                - button "Показать ещё" [ref=e2973] [cursor=pointer]:
+                  - generic [ref=e2974]: Ещё 50 комментариев
+              - generic "Блок рекомендаций" [ref=e419]:
+                - text: Рекомендуем почитать
+                - generic [ref=e420]:
+                  - article [ref=e421]:
+                    - link [ref=e422] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aeHQWShdUBNzruiq?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CKestMjaMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                    - generic [ref=e423]:
+                      - generic [ref=e425]:
+                        - img [ref=e427]
+                        - generic [ref=e430]: 5 минут
+                      - img [ref=e678]
+                    - generic [ref=e434]:
+                      - generic [ref=e435]:
+                        - generic [ref=e436]:
+                          - link "Аватар канала" [ref=e438] [cursor=pointer]:
+                            - /url: /domeoremont
+                          - generic [ref=e441]:
+                            - link "Название канала" [ref=e443] [cursor=pointer]:
+                              - /url: /domeoremont
+                              - generic "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ" [ref=e444]:
+                                - generic [ref=e445]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                                - img [ref=e446]
+                            - generic [ref=e450]: 2069 читали · 1 месяц назад
+                        - button "Три точки" [ref=e451] [cursor=pointer]:
+                          - img [ref=e452]
+                      - generic [ref=e454]:
+                        - link "12 признаков устаревшей кухни, которые выдают «колхоз» с первого взгляда" [ref=e455] [cursor=pointer]:
+                          - /url: https://dzen.ru/a/aeHQWShdUBNzruiq?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CKestMjaMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                          - generic [ref=e456]: 12 признаков устаревшей кухни, которые выдают «колхоз» с первого взгляда
+                        - generic [ref=e457]: "Иногда достаточно одной детали, чтобы понять: ремонт делался давно, и с тех пор ничего не менялось. Некоторые элементы стареют незаметно для хозяев, потому что привыкаешь, перестаёшь замечать. Но зайдите на кухню и посмотрите на неё глазами человека, который видит её первый раз. Собрала двенадцать таких признаков, чтобы можно было всё-все проверить! И решения с конкретными заменами, конечно же.😉 Кухня с фотопечатью в виде кофейных зёрен, тосканских пейзажей или надписей на латинице сейчас смотрится, как привет из нулевых..."
+                  - article [ref=e458]:
+                    - link [ref=e459] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ajHIciV-PCISdW3X?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CLfx3pPtMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                    - generic [ref=e460]:
+                      - generic [ref=e462]:
+                        - img [ref=e464]
+                        - generic [ref=e467]: 3 минуты
+                      - img [ref=e683]
+                    - generic [ref=e471]:
+                      - generic [ref=e472]:
+                        - generic [ref=e473]:
+                          - link "Аватар канала" [ref=e475] [cursor=pointer]:
+                            - /url: /id/5b87b085dfba1d00acec4f83
+                          - generic [ref=e478]:
+                            - link "Название канала" [ref=e480] [cursor=pointer]:
+                              - /url: /id/5b87b085dfba1d00acec4f83
+                              - generic "Про Город Нижний Новгород" [ref=e481]:
+                                - generic [ref=e482]: Про Город Нижний Новгород
+                            - generic [ref=e485]: 865 читали · 2 дня назад
+                        - button "Три точки" [ref=e486] [cursor=pointer]:
+                          - img [ref=e487]
+                      - generic [ref=e489]:
+                        - 'link "Чистоплотную хозяйку видно сразу: 10 вещей, которые выдают грязнулю на кухне" [ref=e490] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ajHIciV-PCISdW3X?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CLfx3pPtMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                          - generic [ref=e491]: "Чистоплотную хозяйку видно сразу: 10 вещей, которые выдают грязнулю на кухне"
+                        - generic [ref=e492]: "Мы привыкли думать, что уют на кухне зависит от дорогого ремонта или нового гарнитура. Но правда в том, что идеальный порядок начинается не с покупок, а с... выноса мусора. Вернее, с безжалостного избавления от того хлама, который годами оседает на полках, столах и холодильнике, превращая самую светлую комнату в склад ненужностей. Психологи подтверждают: визуальный шум на кухне напрямую влияет на наше настроение, аппетит и даже отношения с домочадцами. Беспорядок создает фоновый стресс, заставляет нас переедать и постоянно отвлекаться..."
+                  - article [ref=e493]:
+                    - link [ref=e494] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aiFzfYv7R3hKjwjg?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CPfQi5PqMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                    - generic [ref=e495]:
+                      - generic [ref=e497]:
+                        - img [ref=e499]
+                        - generic [ref=e502]: 3 минуты
+                      - img [ref=e2977]
+                    - generic [ref=e506]:
+                      - generic [ref=e507]:
+                        - generic [ref=e508]:
+                          - link "Аватар канала" [ref=e510] [cursor=pointer]:
+                            - /url: /id/5ad22778dcaf8eda2a874e6d
+                          - generic [ref=e513]:
+                            - link "Название канала" [ref=e515] [cursor=pointer]:
+                              - /url: /id/5ad22778dcaf8eda2a874e6d
+                              - generic "INMYROOM" [ref=e516]:
+                                - generic [ref=e517]: INMYROOM
+                                - img [ref=e518]
+                            - generic [ref=e522]: 29,3 тыс читали · 1 неделю назад
+                        - button "Три точки" [ref=e523] [cursor=pointer]:
+                          - img [ref=e524]
+                      - generic [ref=e526]:
+                        - 'link "Их советуют убрать с глаз: 6 вещей, которые незаметно портят интерьер" [ref=e527] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aiFzfYv7R3hKjwjg?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CPfQi5PqMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                          - generic [ref=e528]: "Их советуют убрать с глаз: 6 вещей, которые незаметно портят интерьер"
+                        - generic [ref=e529]: "Разбираемся, какие вещи чаще всего создают ощущение беспорядка и как организовать хранение правильно В последние годы понятие «визуальный шум» стало одним из самых обсуждаемых в дизайне. Но речь идет не о том, чтобы превратить квартиру в пустое пространство с белыми стенами и минимумом вещей: наоборот, современный интерьер становится интереснее, технологичнее и функциональнее. Главное, чтобы каждая вещь находилась на своем месте и не перегружала пространство. Чаще всего ощущение беспорядка создают не крупные предметы мебели, а мелочи, которые постоянно остаются на виду..."
+          - generic "Статья 2" [ref=e694]:
+            - generic [ref=e697]:
+              - generic [ref=e3024]:
+                - generic [ref=e3025]:
+                  - generic [ref=e3027]:
+                    - link "Аватар канала" [ref=e3028] [cursor=pointer]:
+                      - /url: /remplanner
+                    - generic [ref=e3030]:
+                      - link "Название канала" [ref=e3031] [cursor=pointer]:
+                        - /url: /remplanner
+                        - generic [ref=e3032]: REMPLANNER | СТУДИЯ ДИЗАЙНА | ПЛАНИРОВЩИК ДЛЯ РЕМОНТА
+                      - generic [ref=e3033]: 143,5 тыс подписчиков
+                    - button "Подписаться" [ref=e3035] [cursor=pointer]
+                  - heading "7 вариантов оформления инсталляции для унитаза" [level=1] [ref=e3036]
+                  - generic [ref=e3038]:
+                    - generic [ref=e3040]: 22 марта 2025
+                    - generic [ref=e3041]:
+                      - generic [ref=e3042]:
+                        - img [ref=e3043]
+                        - generic [ref=e3045]: 28,6 тыс
+                      - generic [ref=e3046]:
+                        - img [ref=e3047]
+                        - generic [ref=e3049]: 3 мин
+                - generic "Кликабельный текст поста" [ref=e3053] [cursor=pointer]:
+                  - generic [ref=e3057]:
+                    - text: Сегодня почти каждый ремонт санузла связан с установкой инсталляции под навесной унитаз либо бачка скрытого монтажа. Оба решения имеют общую деталь – они требуют какого-то декоративного
+                    - generic [ref=e3058]:
+                      - text: ...
+                      - generic [ref=e3059]:
+                        - text: Читать далее
+                        - img [ref=e3060]
+              - generic "Социальный блок" [ref=e3068]:
+                - generic [ref=e3069]:
+                  - button [ref=e3072] [cursor=pointer]:
+                    - generic:
+                      - generic:
+                        - img
+                  - button "Нравится" [ref=e3073] [cursor=pointer]:
+                    - generic [ref=e3074]:
+                      - img [ref=e3076]
+                      - generic "Подпись к кнопке" [ref=e3077]: "202"
+                  - button "Комментировать" [ref=e3079] [cursor=pointer]:
+                    - generic [ref=e3080]:
+                      - img [ref=e3082]
+                      - generic "Подпись к кнопке" [ref=e3083]: "8"
+                  - button "Поделиться" [ref=e3086] [cursor=pointer]:
+                    - img [ref=e3089]
+                - button "Не нравится" [ref=e3091] [cursor=pointer]:
+                  - img [ref=e3094]
+          - button "Что это значит":
+            - generic:
+              - img
+              - generic: Что это значит
+  - iframe

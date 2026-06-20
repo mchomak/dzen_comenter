@@ -1,0 +1,372 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Добавить в корзину" [ref=e2] [cursor=pointer]:
+      - /url: "#"
+    - link "Позвонить" [ref=e3] [cursor=pointer]:
+      - /url: tel:+74952122734
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - banner "Шапка сайта" [ref=e7]:
+        - link "Логотип Бренда" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img [ref=e10]
+        - generic [ref=e13]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic [ref=e17]: Найти в Дзене
+        - generic [ref=e18]:
+          - button "Настройки" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "Войти" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+    - generic [ref=e32]:
+      - complementary "Боковое меню навигации" [ref=e34]:
+        - list [ref=e35]:
+          - link "Главная" [ref=e36] [cursor=pointer]:
+            - /url: https://dzen.ru/
+            - listitem [ref=e37]:
+              - img [ref=e40]
+          - link "Подписки" [ref=e41] [cursor=pointer]:
+            - /url: https://dzen.ru/subscriptions-manager
+            - listitem [ref=e42]:
+              - img [ref=e45]
+          - link "Найти" [ref=e46] [cursor=pointer]:
+            - /url: https://dzen.ru/explore
+            - listitem [ref=e47]:
+              - img [ref=e50]
+          - link "Новости" [ref=e51] [cursor=pointer]:
+            - /url: https://dzen.ru/news
+            - listitem [ref=e52]:
+              - img [ref=e55]
+          - link "Статьи" [ref=e56] [cursor=pointer]:
+            - /url: https://dzen.ru/articles
+            - listitem [ref=e57]:
+              - img [ref=e60]
+          - link "Видео" [ref=e61] [cursor=pointer]:
+            - /url: https://dzen.ru/video
+            - listitem [ref=e62]:
+              - img [ref=e65]
+          - link "Ролики" [ref=e66] [cursor=pointer]:
+            - /url: https://dzen.ru/shorts
+            - listitem [ref=e67]:
+              - img [ref=e70]
+          - link "Видеоигры" [ref=e73] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/games
+            - listitem [ref=e74]:
+              - img [ref=e77]
+          - link "Детям" [ref=e78] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/multiki
+            - listitem [ref=e79]:
+              - img [ref=e82]
+        - button [ref=e84]:
+          - img [ref=e86]
+      - main [ref=e89]:
+        - generic [ref=e92]:
+          - generic "Статья 1" [ref=e93]:
+            - generic [ref=e96] [cursor=pointer]:
+              - generic [ref=e98]:
+                - heading "Рекламу можно отключить" [level=3] [ref=e99]
+                - paragraph [ref=e100]: С подпиской Дзен Про она исчезнет из статей, видео и новостей
+              - button "Отключить рекламу" [ref=e101]:
+                - generic [ref=e102]: Отключить рекламу
+              - generic:
+                - img
+              - button [ref=e103]
+            - generic [ref=e106]:
+              - generic [ref=e109]:
+                - generic [ref=e110]:
+                  - generic [ref=e112]:
+                    - link "Аватар канала" [ref=e113] [cursor=pointer]:
+                      - /url: /domeoremont
+                    - generic [ref=e115]:
+                      - link "Название канала" [ref=e116] [cursor=pointer]:
+                        - /url: /domeoremont
+                        - generic [ref=e117]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e119]
+                      - generic [ref=e121]: 343,6 тыс подписчиков
+                    - button "Подписаться" [ref=e123] [cursor=pointer]
+                  - heading "Никогда не делайте этих ошибок! 13 признаков колхозной кухни" [level=1] [ref=e124]
+                  - generic [ref=e126]:
+                    - generic [ref=e128]: 16 июля 2023
+                    - generic [ref=e129]:
+                      - generic [ref=e130]:
+                        - img [ref=e131]
+                        - generic [ref=e133]: 535,8 тыс
+                      - generic [ref=e134]:
+                        - img [ref=e135]
+                        - generic [ref=e137]: 5 мин
+                - generic [ref=e138]:
+                  - generic [ref=e139]:
+                    - generic [ref=e140]: Оглавление
+                    - list [ref=e141]:
+                      - listitem [ref=e142] [cursor=pointer]:
+                        - link "Хотите качественный ремонт квартиры?👇" [ref=e143]:
+                          - /url: "#hotite_kachestvennii_remont_kvartir"
+                          - generic [ref=e144]: Хотите качественный ремонт квартиры?👇
+                      - listitem [ref=e145] [cursor=pointer]:
+                        - link "•❌ 1. Пятнистые столешницы." [ref=e146]:
+                          - /url: "#_1_pyatniste_stoleshnic"
+                          - generic [ref=e147]: •❌ 1. Пятнистые столешницы.
+                      - listitem [ref=e148] [cursor=pointer]:
+                        - link "•❌ 2. Круглые мойки из нержавеющей стали, либо накладные, либо с крылом." [ref=e149]:
+                          - /url: "#_2_krygle_moiiki_iz_nerjaveyuscheii_stali"
+                          - generic [ref=e150]: •❌ 2. Круглые мойки из нержавеющей стали, либо накладные, либо с крылом.
+                    - button "Показать ещё" [ref=e151] [cursor=pointer]
+                  - generic [ref=e152]:
+                    - paragraph [ref=e175]: Друзья, представьте себе идеальную кухню - современную, стильную, эстетически привлекательную. Теперь представьте себе обратное - колхозную кухню, которая кричит о непрофессионализме и неграмотном подходе к дизайну. Что делает кухню колхозной? Что так сильно портит ее внешний вид и создает негативное впечатление?
+                    - generic [ref=e176]:
+                      - figure "Текст помог составить прораб Domeo" [ref=e181] [cursor=pointer]:
+                        - img "Текст помог составить прораб Domeo" [ref=e182]
+                      - generic [ref=e183]: Текст помог составить прораб Domeo
+                    - paragraph [ref=e184]: В этой статье я хотел бы поделиться с вами 14 признаками колхозной кухни, чтобы вы избежали этих ошибок и создали кухню, которая будет восхищать своим стилем и функциональностью.
+                    - paragraph [ref=e185]: Давайте разберемся вместе, какие элементы и детали являются главными виновниками колхозного облика и как их заменить на более элегантные и современные альтернативы.
+                    - heading "Хотите качественный ремонт квартиры?👇" [level=2]
+                    - figure [ref=e191] [cursor=pointer]:
+                      - img "-2" [ref=e192]
+                    - paragraph [ref=e193]:
+                      - link "РАССЧИТАЙТЕ СТОИМОСТЬ РЕМОНТА БЕСПЛАТНО ЗА 30 СЕКУНД ЗДЕСЬ!" [ref=e194] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Danna%26utm_term%3D1607-nikogdanedelayte1R
+                    - heading "❌ 1. Пятнистые столешницы." [level=3]
+                    - paragraph [ref=e195]: Раньше такие пластики, например, бежевого цвета, были популярны, но после установки их всегда хотелось тщательно отмыть. Даже если вы используете премиальные фасады, стоимость кухни будет выглядеть как из 2000-х годов, что выглядит очень устаревшим.
+                    - paragraph [ref=e196]: ✅Я предлагаю не использовать такой декор вообще и просить производителей столешниц изъять его из оборота, чтобы избежать создания колхозных старинных кухонных гарнитуров.
+                    - generic [ref=e197]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e202] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e203]'
+                      - generic [ref=e204]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph
+                    - heading "❌ 2. Круглые мойки из нержавеющей стали, либо накладные, либо с крылом." [level=3]
+                    - paragraph [ref=e205]: Они сильно выбиваются из интерьера и выглядят на столешнице как заплатка. Кроме того, такие мойки имеют маленький радиус, что ограничивает их вместимость.
+                    - generic [ref=e206]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e211] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e212]'
+                      - generic [ref=e213]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph [ref=e214]: ✅Идеальной альтернативой являются прямоугольные мойки из нержавеющей стали, толщиной 3 мм, которые выглядят современно и стильно.
+                    - generic [ref=e215]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e220] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e221]'
+                      - generic [ref=e222]: "Designed by Freepik. Источник: www.freepik.com"
+                    - heading "❌ 3. Стыковка столешницы и кухонного фартука с помощью алюминиевых планок." [level=3]
+                    - paragraph [ref=e223]: Их задача была нивелировать неровности после ремонта и закрывать открытый спил столешницы от попадания влаги и сколов. Однако, такие планки портят эстетику кухни и не обеспечивают должную защиту от влаги.
+                    - paragraph [ref=e224]: Лучшим альтернативным решением является использование евро-запилов и специальных клеевых соединений для стыковки всех элементов столешницы без использования алюминиевых планок.
+                    - heading "❌ 4. Использование пластикового плинтуса на столешнице." [level=3]
+                    - paragraph [ref=e225]: Он гарантированно отправит эстетику кухни на дно, так же как и множество алюминиевых планок на столешнице и кухонных фартуках.
+                    - paragraph [ref=e226]: Альтернативным вариантом я предлагаю использовать бюджетную пластиковую столешницу по технологии платформинга. Сначала установить кухню и столешницу, а затем накрыть ее фартуками из керамогранита, обработав зазор герметиком. Это выглядит красиво и эстетично.
+                    - generic [ref=e227]:
+                      - 'figure "Однушка. Дизайн и ремонт: DOMEO" [ref=e232] [cursor=pointer]':
+                        - 'img "Однушка. Дизайн и ремонт: DOMEO" [ref=e233]'
+                      - generic [ref=e234]: "Однушка. Дизайн и ремонт: DOMEO"
+                    - paragraph
+                    - heading "❌ 5. Использование столешницы платформы с облицовкой торца ДСП." [level=3]
+                    - paragraph [ref=e235]: Или пластиком, которая образует завал от радиуса ВЗ до самого ужасного и круглого абсолютно не вписывающегося в минималистические интерьеры. Проблема заключается в том, что такие столешницы всегда будут ассоциироваться с дешевыми бюджетными кухонными гарнитурами.
+                    - paragraph [ref=e236]: Альтернативой является использование столешницы, где торец облицован ABS кромкой, что выглядит стильно и минималистично.
+                    - heading "❌ 6. Напуск столешницы." [level=3]
+                    - paragraph [ref=e237]: Когда все эти элементы присутствуют на минималистической кухне, эстетика и функциональность страдают. Отсутствие ручек на кухонных фасадах делает открытие кухни неудобным, что противоречит концепции минимализма.
+                    - heading "❌ 7. Не продуманный конструктив антресолей." [level=3]
+                    - paragraph [ref=e238]: За последние 5-6 лет, тренд на кухни до потолка привел к множеству уродливых конструкций кухонных гарнитуров. Во-первых, использование антресольных ручек, которые создают визуальный шум и превращают кухню в чемоданчик. Во-вторых, неполное доведение кухни до потолка с оставленной полоской между столешницей и потолком, которую люди используют для хранения всякой шляпы. В-третьих, неправильные пропорции антресольных кухонь, когда часть кухни слишком укорочена или сплющена, что нарушает функциональность.
+                    - generic [ref=e239]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e244] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e245]'
+                      - generic [ref=e246]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph
+                    - blockquote [ref=e247]: "Современная кухня, выполненная специалистами компании Domeo: матовый фасад, кухня до потолка.👇"
+                    - generic [ref=e248]:
+                      - generic [ref=e258]:
+                        - generic:
+                          - generic:
+                            - generic "Активное изображение" [ref=e259] [cursor=pointer]:
+                              - figure "Кухня, 2-комнатная квартира 37,5 м2. Дизайн и ремонт Domeo." [ref=e262]:
+                                - img "Кухня, 2-комнатная квартира 37,5 м2. Дизайн и ремонт Domeo." [ref=e263]
+                            - figure [ref=e268] [cursor=pointer]:
+                              - img "-8-2" [ref=e269]
+                      - generic [ref=e272]: Кухня, 2-комнатная квартира 37,5 м2. Дизайн и ремонт Domeo.
+                    - heading "Сколько стоит такой ремонт?" [level=3]
+                    - figure [ref=e278] [cursor=pointer]:
+                      - img "-9" [ref=e279]
+                    - heading "✅ РАССЧИТАЙТЕ ЗДЕСЬ ✅" [level=2]:
+                      - text: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e280] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Danna%26utm_term%3D1607-nikogdanedelayte2R
+                      - text: ✅
+                    - heading "❌ 8. Использование витрин, похожих на бабушкины серванты." [level=3]
+                    - paragraph [ref=e281]: Это тренд, который начал появляться снова, но с уродливыми шкафами из двухтысячных годов. Примером неудачной витрины может служить прозрачное стекло, широкая алюминиевая рамка, отсутствие внутреннего освещения и странное дерево. Сравнительно, классная витрина имеет тонкую алюминиевую рамку, прозрачное стекло, акцентное дерево и эффектную вертикальную подсветку.
+                    - heading "❌ 9. Использование круглой хромированной трубы в качестве опоры под барной стойкой." [level=3]
+                    - paragraph [ref=e282]: Эта идея возникла ещё в 2000-х годах, когда было модно использовать хромированные шесты.
+                    - paragraph [ref=e283]: Альтернативным вариантом являются стильные и современные барные подстолья различных форм или просто прямоугольная труба.
+                    - heading "❌ 10. Использование евровинта на торце вашей кухни, который закрыт заглушкой." [level=3]
+                    - paragraph [ref=e284]: Её часто применяют кустарщики и мебельные фабрики, работающие в самом бюджетном сегменте. Если у вас на торце кухни видно использование евровинта, закрытого заглушкой, то скорее всего вам продали самую дешевую модульную кухню.
+                    - generic [ref=e285]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e290] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e291]'
+                      - generic [ref=e292]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph
+                    - heading "❌ 11. Использование грубого дерева ярких оттенков в качестве кухонных фасадов." [level=3]
+                    - paragraph [ref=e293]: Это означает, что вместо спокойных и нейтральных оттенков дерева, используются яркие и выразительные цвета, которые не гармонируют с остальным интерьером. Это создает неприятный визуальный эффект и делает кухню выглядеть колхозно.
+                    - generic [ref=e294]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e299] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e300]'
+                      - generic [ref=e301]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph [ref=e302]: Рекомендую выбирать спокойные оттенки дерева без выраженной текстуры для достижения более сбалансированного и стильного внешнего вида.
+                    - heading "❌ 12. Неправильно проработанный конструктив угла." [level=3]
+                    - paragraph [ref=e303]: В некоторых случаях используются трапециевидные модули, которые выглядят громоздко и не сочетаются с минималистичным интерьером. Также не рекомендую помещать кухонную мойку в самый угол, так как это неудобно и некрасиво.
+                    - paragraph [ref=e304]: Вместо этого, стоит прорабатывать каждый конкретный случай индивидуально и использовать технические решения, которые обеспечат функциональность и эстетику угла на кухне.
+                    - heading "❌ 13. Фасады с чистоклом." [level=3]
+                    - paragraph [ref=e305]: Чистокл- это искусственно созданная патина или состаривание фасадов, которые придают им винтажный вид. Однако, это решение не всегда сочетается с остальным интерьером и может создавать грязный и неопрятный вид.
+                    - generic [ref=e306]:
+                      - 'figure "Designed by Freepik. Источник: www.freepik.com" [ref=e311] [cursor=pointer]':
+                        - 'img "Designed by Freepik. Источник: www.freepik.com" [ref=e312]'
+                      - generic [ref=e313]: "Designed by Freepik. Источник: www.freepik.com"
+                    - paragraph [ref=e314]: Рекомендую выбирать более современные и эстетичные фасады без искусственной патины, чтобы создать более свежий и аккуратный общий облик кухни.
+                    - figure [ref=e320] [cursor=pointer]:
+                      - img "-13" [ref=e321]
+                    - blockquote [ref=e322]: "Domeo советует начать свой ремонт с 2-х простых шагов:"
+                    - blockquote [ref=e323]:
+                      - text: "1. Рассчитать стоимость ремонта в 3-х вариантах и сравнить. Бесплатно получите расчет тут: ✅"
+                      - link "https://clck.ru/34zPPq" [ref=e324] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fclck.ru%2F34zPPq
+                    - blockquote [ref=e325]:
+                      - text: "2. Выбрать подходящего дизайнера для визуализации своих идей! Бесплатно выберите своего дизайнера здесь: ✅"
+                      - link "https://clck.ru/34YbPg" [ref=e326] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-design.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Danna%26utm_term%3D0606-negaleytedenegnaremont3D
+                    - figure [ref=e332] [cursor=pointer]:
+                      - img "-14" [ref=e333]
+                    - paragraph [ref=e334]: Это были основные признаки колхозной кухни. При проектировании своей кухни стоит избегать их использования. Следуя моим рекомендациям и избегая колхозных элементов, вы сможете создать привлекательное и функциональное пространство, в котором приятно готовить и проводить время. Пусть ваша кухня станет истинным произведением искусства, отражающим вашу индивидуальность и хороший вкус.
+                    - heading "Узнайте первыми о новом благотворительном проекте компании Domeo - Легкий дом" [level=3]:
+                      - text: Узнайте первыми о новом благотворительном проекте компании Domeo -
+                      - link "Легкий дом" [ref=e335] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo.ru%2Fld%2F
+                    - paragraph [ref=e336]:
+                      - generic [ref=e337]: "Читайте о запуске проекта здесь и узнайте, что должен знать каждый россиянин:"
+                    - link "6 способов, как облегчить поход в туалет для пожилых людей DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 20 ноября 2023" [ref=e340] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ZVY-FkMxmhivo01E
+                      - generic [ref=e346]:
+                        - generic [ref=e347]: 6 способов, как облегчить поход в туалет для пожилых людей
+                        - generic [ref=e348]:
+                          - generic [ref=e349]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e352]
+                          - generic [ref=e353]: · 20 ноября 2023
+                    - paragraph
+                    - paragraph [ref=e354]:
+                      - generic [ref=e355]: Вам точно понравятся эти статьи:👇
+                    - blockquote [ref=e356]:
+                      - 'link "Терраса на даче своими руками: советы по оформлению" [ref=e357] [cursor=pointer]':
+                        - /url: https://dzen.ru/a/ZLC8o3_mIXEqwbFw
+                    - blockquote [ref=e358]:
+                      - link "Ну и «совок»! 5 вещей, которые кричат о том, что интерьер окончательно устарел" [ref=e359] [cursor=pointer]:
+                        - /url: https://dzen.ru/a/ZLCuw5-h-FlXny-W
+                    - figure [ref=e365] [cursor=pointer]:
+                      - img "-15" [ref=e366]
+                    - paragraph
+              - generic [ref=e367]:
+                - generic "Плашка подписки на канал" [ref=e368]:
+                  - generic [ref=e369]:
+                    - generic [ref=e370]: Подпишитесь на канал,
+                    - generic [ref=e371]: чтобы не пропустить новые публикации
+                  - button "Подписаться" [ref=e372] [cursor=pointer]:
+                    - generic [ref=e373]: Подписаться
+                - generic "Социальный блок" [ref=e374]:
+                  - generic [ref=e375]:
+                    - button [ref=e378] [cursor=pointer]:
+                      - generic:
+                        - generic:
+                          - img
+                    - button "Нравится" [ref=e379] [cursor=pointer]:
+                      - generic [ref=e380]:
+                        - img [ref=e382]
+                        - generic "Подпись к кнопке" [ref=e383]: "724"
+                    - button "Комментировать" [ref=e385] [cursor=pointer]:
+                      - generic [ref=e386]:
+                        - img [ref=e388]
+                        - generic "Подпись к кнопке" [ref=e389]: "1467"
+                  - generic [ref=e390]:
+                    - button "Не нравится" [ref=e391] [cursor=pointer]:
+                      - img [ref=e394]
+                    - button [ref=e396] [cursor=pointer]:
+                      - img [ref=e399]
+              - generic "Блок рекомендаций" [ref=e419]:
+                - text: Рекомендуем почитать
+                - generic [ref=e420]:
+                  - article [ref=e421]:
+                    - link [ref=e422] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aeHQWShdUBNzruiq?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CKestMjaMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                    - generic [ref=e425]:
+                      - img [ref=e427]
+                      - generic [ref=e430]: 5 минут
+                    - generic [ref=e434]:
+                      - generic [ref=e435]:
+                        - generic [ref=e436]:
+                          - link "Аватар канала" [ref=e438] [cursor=pointer]:
+                            - /url: /domeoremont
+                          - generic [ref=e441]:
+                            - link "Название канала" [ref=e443] [cursor=pointer]:
+                              - /url: /domeoremont
+                              - generic "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ" [ref=e444]:
+                                - generic [ref=e445]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                                - img [ref=e446]
+                            - generic [ref=e450]: 2069 читали · 1 месяц назад
+                        - button "Три точки" [ref=e451] [cursor=pointer]:
+                          - img [ref=e452]
+                      - generic [ref=e454]:
+                        - link "12 признаков устаревшей кухни, которые выдают «колхоз» с первого взгляда" [ref=e455] [cursor=pointer]:
+                          - /url: https://dzen.ru/a/aeHQWShdUBNzruiq?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CKestMjaMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                          - generic [ref=e456]: 12 признаков устаревшей кухни, которые выдают «колхоз» с первого взгляда
+                        - generic [ref=e457]: "Иногда достаточно одной детали, чтобы понять: ремонт делался давно, и с тех пор ничего не менялось. Некоторые элементы стареют незаметно для хозяев, потому что привыкаешь, перестаёшь замечать. Но зайдите на кухню и посмотрите на неё глазами человека, который видит её первый раз. Собрала двенадцать таких признаков, чтобы можно было всё-все проверить! И решения с конкретными заменами, конечно же.😉 Кухня с фотопечатью в виде кофейных зёрен, тосканских пейзажей или надписей на латинице сейчас смотрится, как привет из нулевых..."
+                  - article [ref=e458]:
+                    - link [ref=e459] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ajHIciV-PCISdW3X?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CLfx3pPtMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                    - generic [ref=e462]:
+                      - img [ref=e464]
+                      - generic [ref=e467]: 3 минуты
+                    - generic [ref=e471]:
+                      - generic [ref=e472]:
+                        - generic [ref=e473]:
+                          - link "Аватар канала" [ref=e475] [cursor=pointer]:
+                            - /url: /id/5b87b085dfba1d00acec4f83
+                          - generic [ref=e478]:
+                            - link "Название канала" [ref=e480] [cursor=pointer]:
+                              - /url: /id/5b87b085dfba1d00acec4f83
+                              - generic "Про Город Нижний Новгород" [ref=e481]:
+                                - generic [ref=e482]: Про Город Нижний Новгород
+                            - generic [ref=e485]: 865 читали · 2 дня назад
+                        - button "Три точки" [ref=e486] [cursor=pointer]:
+                          - img [ref=e487]
+                      - generic [ref=e489]:
+                        - 'link "Чистоплотную хозяйку видно сразу: 10 вещей, которые выдают грязнулю на кухне" [ref=e490] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ajHIciV-PCISdW3X?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CLfx3pPtMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                          - generic [ref=e491]: "Чистоплотную хозяйку видно сразу: 10 вещей, которые выдают грязнулю на кухне"
+                        - generic [ref=e492]: "Мы привыкли думать, что уют на кухне зависит от дорогого ремонта или нового гарнитура. Но правда в том, что идеальный порядок начинается не с покупок, а с... выноса мусора. Вернее, с безжалостного избавления от того хлама, который годами оседает на полках, столах и холодильнике, превращая самую светлую комнату в склад ненужностей. Психологи подтверждают: визуальный шум на кухне напрямую влияет на наше настроение, аппетит и даже отношения с домочадцами. Беспорядок создает фоновый стресс, заставляет нас переедать и постоянно отвлекаться..."
+                  - article [ref=e493]:
+                    - link [ref=e494] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aiFzfYv7R3hKjwjg?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CPfQi5PqMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                    - generic [ref=e497]:
+                      - img [ref=e499]
+                      - generic [ref=e502]: 3 минуты
+                    - generic [ref=e506]:
+                      - generic [ref=e507]:
+                        - generic [ref=e508]:
+                          - link "Аватар канала" [ref=e510] [cursor=pointer]:
+                            - /url: /id/5ad22778dcaf8eda2a874e6d
+                          - generic [ref=e513]:
+                            - link "Название канала" [ref=e515] [cursor=pointer]:
+                              - /url: /id/5ad22778dcaf8eda2a874e6d
+                              - generic "INMYROOM" [ref=e516]:
+                                - generic [ref=e517]: INMYROOM
+                                - img [ref=e518]
+                            - generic [ref=e522]: 29,3 тыс читали · 1 неделю назад
+                        - button "Три точки" [ref=e523] [cursor=pointer]:
+                          - img [ref=e524]
+                      - generic [ref=e526]:
+                        - 'link "Их советуют убрать с глаз: 6 вещей, которые незаметно портят интерьер" [ref=e527] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aiFzfYv7R3hKjwjg?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CPfQi5PqMyBrUI4JagQBayxsiAHBr7GO4dS87bgBkAEA&clid=1400&rid=2905736861.957.1781874460686.99627&referrer_clid=1400&
+                          - generic [ref=e528]: "Их советуют убрать с глаз: 6 вещей, которые незаметно портят интерьер"
+                        - generic [ref=e529]: "Разбираемся, какие вещи чаще всего создают ощущение беспорядка и как организовать хранение правильно В последние годы понятие «визуальный шум» стало одним из самых обсуждаемых в дизайне. Но речь идет не о том, чтобы превратить квартиру в пустое пространство с белыми стенами и минимумом вещей: наоборот, современный интерьер становится интереснее, технологичнее и функциональнее. Главное, чтобы каждая вещь находилась на своем месте и не перегружала пространство. Чаще всего ощущение беспорядка создают не крупные предметы мебели, а мелочи, которые постоянно остаются на виду..."
+                  - article [ref=e531]
+          - button "Что это значит":
+            - generic:
+              - img
+              - generic: Что это значит
+  - iframe

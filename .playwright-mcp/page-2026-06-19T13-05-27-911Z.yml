@@ -1,0 +1,512 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Добавить в корзину" [ref=e2] [cursor=pointer]:
+      - /url: "#"
+    - link "Позвонить" [ref=e3] [cursor=pointer]:
+      - /url: tel:+74952122734
+  - generic [ref=e5]:
+    - banner [ref=e6]:
+      - banner "Шапка сайта" [ref=e7]:
+        - link "Логотип Бренда" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img [ref=e10]
+        - generic [ref=e13]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic [ref=e17]: Найти в Дзене
+        - generic [ref=e18]:
+          - button "Настройки" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "Войти" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+    - generic [ref=e32]:
+      - complementary "Боковое меню навигации" [ref=e34]:
+        - list [ref=e35]:
+          - link "Главная" [ref=e36] [cursor=pointer]:
+            - /url: https://dzen.ru/
+            - listitem [ref=e37]:
+              - img [ref=e40]
+          - link "Подписки" [ref=e41] [cursor=pointer]:
+            - /url: https://dzen.ru/subscriptions-manager
+            - listitem [ref=e42]:
+              - img [ref=e45]
+          - link "Найти" [ref=e46] [cursor=pointer]:
+            - /url: https://dzen.ru/explore
+            - listitem [ref=e47]:
+              - img [ref=e50]
+          - link "Новости" [ref=e51] [cursor=pointer]:
+            - /url: https://dzen.ru/news
+            - listitem [ref=e52]:
+              - img [ref=e55]
+          - link "Статьи" [ref=e56] [cursor=pointer]:
+            - /url: https://dzen.ru/articles
+            - listitem [ref=e57]:
+              - img [ref=e60]
+          - link "Видео" [ref=e61] [cursor=pointer]:
+            - /url: https://dzen.ru/video
+            - listitem [ref=e62]:
+              - img [ref=e65]
+          - link "Ролики" [ref=e66] [cursor=pointer]:
+            - /url: https://dzen.ru/shorts
+            - listitem [ref=e67]:
+              - img [ref=e70]
+          - link "Видеоигры" [ref=e73] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/games
+            - listitem [ref=e74]:
+              - img [ref=e77]
+          - link "Детям" [ref=e78] [cursor=pointer]:
+            - /url: https://dzen.ru/topic/multiki
+            - listitem [ref=e79]:
+              - img [ref=e82]
+        - button [ref=e84]:
+          - img [ref=e86]
+      - main [ref=e89]:
+        - generic [ref=e100]:
+          - generic "Статья 1" [ref=e101]:
+            - generic [ref=e104]:
+              - generic [ref=e107]:
+                - generic [ref=e108]:
+                  - generic [ref=e110]:
+                    - link "Аватар канала" [ref=e111] [cursor=pointer]:
+                      - /url: /domeoremont
+                    - generic [ref=e113]:
+                      - link "Название канала" [ref=e114] [cursor=pointer]:
+                        - /url: /domeoremont
+                        - generic [ref=e115]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e117]
+                      - generic [ref=e119]: 343,6 тыс подписчиков
+                    - button "Подписаться" [ref=e121] [cursor=pointer]
+                  - heading "Показываю сад, огород и дом Елены Ваенги! И не подумаешь, что тут живёт певица!" [level=1] [ref=e122]
+                  - generic [ref=e124]:
+                    - generic [ref=e126]: 23 июля 2023
+                    - generic [ref=e127]:
+                      - generic [ref=e128]:
+                        - img [ref=e129]
+                        - generic [ref=e131]: 589,5 тыс
+                      - generic [ref=e132]:
+                        - img [ref=e133]
+                        - generic [ref=e135]: 3 мин
+                - generic [ref=e136]:
+                  - generic [ref=e137]:
+                    - generic [ref=e138]: Оглавление
+                    - list [ref=e139]:
+                      - listitem [ref=e140] [cursor=pointer]:
+                        - link "Участок возле дома" [ref=e141]:
+                          - /url: "#ychastok_vozle_doma"
+                          - generic [ref=e142]: Участок возле дома
+                      - listitem [ref=e143] [cursor=pointer]:
+                        - link "Интерьер особняка" [ref=e144]:
+                          - /url: "#interer_osobnyaka"
+                          - generic [ref=e145]: Интерьер особняка
+                      - listitem [ref=e146] [cursor=pointer]:
+                        - link "Сколько стоит ремонт в 2023 году?" [ref=e147]:
+                          - /url: "#skolko_stoit_remont_v_2023_gody"
+                          - generic [ref=e148]: Сколько стоит ремонт в 2023 году?
+                    - button "Показать ещё" [ref=e149] [cursor=pointer]
+                  - generic [ref=e150]:
+                    - paragraph [ref=e161]: Елена Ваенга — настоящая жительница Петербурга, которая не готова расставаться с родными местами ни за какие деньги. Даже свой загородный дом она не стала строить в более тёплом климате, а решила жить недалеко от северной столицы, в посёлке Кузьмолово. Это очень уютное и жизнерадостное место, на которое я предлагаю вам посмотреть в этом обзоре.
+                    - figure [ref=e167] [cursor=pointer]
+                    - figure [ref=e173] [cursor=pointer]:
+                      - img "-2" [ref=e174]
+                    - blockquote [ref=e175]:
+                      - text: "Хотите сделать ремонт, но не разориться на этом? Можно сделать преображение бюджетно, рассчитайте цену ремонта, перейдя по ссылке: 👉"
+                      - link "рассчитать" [ref=e176] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi1R
+                      - text: 👈. Это бесплатно, и займёт всего полминуты!
+                    - heading "Участок возле дома" [level=2]
+                    - paragraph [ref=e177]: Пространство рядом с особняком не простаивает без дела, как у многих других знаменитостей. Несмотря на солидные доходы, Елена Ваенга собственноручно занимается выращиванием овощей и фруктов, и даже держит кур!
+                    - paragraph [ref=e178]: Для выращивания помидоров недалеко от дома даже возвели большую теплицу высотой больше человеческого роста. В ней томатам удаётся расти даже в неблагоприятном питерском климате.
+                    - figure [ref=e184] [cursor=pointer]:
+                      - img "-3" [ref=e185]
+                    - paragraph [ref=e186]: Также на территории усадьбы есть курятник и целый загон для выгула птиц. Он расположен прямо в небольшой роще, которая находилась на участке ещё до его покупки. Кормит кур и собирает яйца Елена Ваенга сама, поскольку делает это для личного удовольствия. Кто бы мог подумать, что роскошная певица занимается таким хобби!
+                    - figure [ref=e192] [cursor=pointer]:
+                      - img "-4" [ref=e193]
+                    - paragraph [ref=e194]: Елена Ваенга настолько увлечена сельским хозяйством, что даже выкладывает в социальные сети фотографии своих рекордов. Посмотрите, какой урожай тыкв ей удалось однажды собрать!
+                    - figure [ref=e200] [cursor=pointer]:
+                      - img "-5" [ref=e201]
+                    - paragraph [ref=e202]: Но, разумеется, в загородном доме есть место не только для труда, но и для отдыха. На улице таким местом служит терраса. Здесь стоит небольшой столик для перекусов, несколько лавочек и диван, выглядящий как гигантская покрышка.
+                    - figure [ref=e208] [cursor=pointer]:
+                      - img "-6" [ref=e209]
+                    - paragraph
+                    - heading "Интерьер особняка" [level=2]
+                    - paragraph [ref=e210]: Центральное место внутри дома занимает столовая, совмещённая с гостиной. Здесь стоит длинный обеденный стол, рассчитанный на 10 человек. На полу лежит ламинат, но не он, а текстиль является главным украшением интерьера. Елена Ваенга лично подбирала шторы, скатерти и другие тканные украшения для оформления особняка.
+                    - figure [ref=e216] [cursor=pointer]:
+                      - img "-7" [ref=e217]
+                    - paragraph
+                    - heading "Сколько стоит ремонт в 2023 году?" [level=2]
+                    - generic [ref=e230]:
+                      - generic:
+                        - generic:
+                          - generic "Активное изображение" [ref=e231] [cursor=pointer]:
+                            - figure [ref=e234]:
+                              - img "-8" [ref=e235]
+                          - figure [ref=e239] [cursor=pointer]:
+                            - img "-8-2" [ref=e240]
+                          - figure [ref=e244] [cursor=pointer]:
+                            - img "-8-3" [ref=e245]
+                    - paragraph
+                    - heading "✅РАССЧИТАЙТЕ ЗДЕСЬ✅" [level=2]:
+                      - text: ✅
+                      - link "РАССЧИТАЙТЕ ЗДЕСЬ" [ref=e246] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi2R%23mc_0
+                      - text: ✅
+                    - paragraph
+                    - paragraph [ref=e247]: Ещё одна немаловажная деталь интерьера гостиной — большой камин напротив стола. Он выложен из натурального крупного камня. В осеннее и зимнее время камин никогда не простаивает без дела — погода Ленобласти накладывает свой отпечаток на быт.
+                    - figure [ref=e253] [cursor=pointer]:
+                      - img "-9" [ref=e254]
+                    - paragraph [ref=e255]: Рядом со столовой расположилась кухня. Как ни странно, то помещение оформлено в соответствии с современными минималистичными трендами. Фасады снабжены системами «Push-to-Open», и имеют абсолютно гладкую тёмно-серую поверхность. Вся техника на кухне тоже встроена. Елена Ваенга исходила из соображений практичности, поэтому большая часть техники имеет белый цвет.
+                    - figure [ref=e261] [cursor=pointer]:
+                      - img "-10" [ref=e262]
+                    - paragraph [ref=e263]: Тут же, в гостиной, находится лестница на второй этаж, которая будто бы висит в воздухе. Малозаметные соединения ступеней и прозрачные ограждения из закалённого стекла создают очень необычный эффект, который завораживает внимание.
+                    - figure [ref=e269] [cursor=pointer]:
+                      - img "-11" [ref=e270]
+                    - paragraph [ref=e271]: В холле второго этажа расположилась небольшая библиотека и музыкальный зал. Здесь Елена Ваенга всё внимание акцентировала на рояль — на фоне чёрных стен инструмент сильно выделяется, и притягивает к себе взгляд.
+                    - figure [ref=e277] [cursor=pointer]:
+                      - img "-12" [ref=e278]
+                    - paragraph [ref=e279]: "Поблизости находятся жилые комнаты и ванная, которую тоже певица отделала по своему вкусу. В интерьере ванной использованы красно-белые оттенки: три стены отделаны глянцевой красной плиткой, а пол и четвёртая стена белые."
+                    - figure [ref=e285] [cursor=pointer]:
+                      - img "-13" [ref=e286]
+                    - paragraph [ref=e287]: А вам нравится оформление загородного дома Елены Ваенги? Поделитесь мнением в комментариях 👇.
+                    - heading "С чего начать ремонт?" [level=2]
+                    - figure [ref=e293] [cursor=pointer]:
+                      - img "-14" [ref=e294]
+                    - paragraph [ref=e295]: "Domeo советует начать свой ремонт с 2х простых шагов:"
+                    - blockquote [ref=e296]:
+                      - text: "1. Рассчитать стоимость ремонта в 3-х вариантах и сравнить. Бесплатно получите расчет тут: ✅"
+                      - link "https://clck.ru/34YbSB" [ref=e297] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-remont.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi3R
+                    - blockquote [ref=e298]:
+                      - text: "2. Выбрать подходящего дизайнера для визуализации своих идей! Бесплатно выберите своего дизайнера здесь: ✅"
+                      - link "https://clck.ru/34YbPg" [ref=e299] [cursor=pointer]:
+                        - /url: /away?to=https%3A%2F%2Fdomeo-design.ru%2F%3Futm_source%3Ddzen%26utm_medium%3Dnkt%26utm_campaign%3Dnkt-dzen-chanel%26utm_content%3Dfelles28%26utm_term%3D2307-dom_vaengi3D
+                    - figure [ref=e305] [cursor=pointer]:
+                      - img "-15" [ref=e306]
+                    - paragraph [ref=e307]: "Также рекомендую прочитать:"
+                    - generic [ref=e316] [cursor=pointer]:
+                      - generic [ref=e317]: "Питерская квартира Елены Ваенги: рассказываю об особенностях дизайна"
+                      - generic [ref=e318]:
+                        - generic [ref=e319]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                        - img [ref=e322]
+                        - generic [ref=e323]: · 21 февраля 2023
+                    - link "Посмотрите, в каком поместье жил Валентин Юдашкин! Обзор загородного дома кутюрье DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ · 22 июля 2023" [ref=e326] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ZLtfidqNKT5_pzCZ
+                      - img [ref=e547]
+                      - generic [ref=e332]:
+                        - generic [ref=e333]: Посмотрите, в каком поместье жил Валентин Юдашкин! Обзор загородного дома кутюрье
+                        - generic [ref=e334]:
+                          - generic [ref=e335]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e338]
+                          - generic [ref=e339]: · 22 июля 2023
+                    - generic [ref=e342] [cursor=pointer]:
+                      - img [ref=e548]
+                      - generic [ref=e348]:
+                        - generic [ref=e349]: "Показываю «пацанскую» квартиру Димы Билана в Москве: обзор интерьера"
+                        - generic [ref=e350]:
+                          - generic [ref=e351]: DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ
+                          - img [ref=e354]
+                          - generic [ref=e355]: · 21 июля 2023
+                    - figure [ref=e361] [cursor=pointer]:
+                      - img "-16" [ref=e362]
+                    - paragraph [ref=e363]:
+                      - generic [ref=e364]: Информация, приведенная в статье, взята из открытых источников
+              - generic [ref=e365]:
+                - generic "Плашка подписки на канал" [ref=e366]:
+                  - generic [ref=e367]:
+                    - generic [ref=e368]: Подпишитесь на канал,
+                    - generic [ref=e369]: чтобы не пропустить новые публикации
+                  - button "Подписаться" [ref=e370] [cursor=pointer]:
+                    - generic [ref=e371]: Подписаться
+                - generic "Социальный блок" [ref=e372]:
+                  - generic [ref=e373]:
+                    - button [ref=e376] [cursor=pointer]:
+                      - generic:
+                        - generic:
+                          - img
+                    - button "Нравится" [ref=e377] [cursor=pointer]:
+                      - generic [ref=e378]:
+                        - img [ref=e380]
+                        - generic "Подпись к кнопке" [ref=e381]: "2849"
+                    - button "Комментировать" [ref=e383] [cursor=pointer]:
+                      - generic [ref=e384]:
+                        - img [ref=e386]
+                        - generic "Подпись к кнопке" [ref=e387]: "330"
+                  - generic [ref=e388]:
+                    - button "Не нравится" [ref=e389] [cursor=pointer]:
+                      - img [ref=e392]
+                    - button [ref=e394] [cursor=pointer]:
+                      - img [ref=e397]
+              - generic [ref=e553]:
+                - generic [ref=e555]:
+                  - generic [ref=e556]: Комментарии330
+                  - button "Сначала популярные" [ref=e557] [cursor=pointer]:
+                    - generic [ref=e558]: Сначала популярные
+                    - img [ref=e560]
+                - generic [ref=e562]:
+                  - generic [ref=e563]:
+                    - textbox "Поле ввода комментария" [ref=e564]:
+                      - /placeholder: Написать комментарий
+                    - generic:
+                      - generic: 0 / 2500
+                      - generic [ref=e565]:
+                        - button "Смайлики и эмоции" [disabled] [ref=e566]:
+                          - img [ref=e568]
+                        - button "Добавить картинку" [disabled] [ref=e570]:
+                          - img [ref=e572]
+                        - button "Отправить комментарий" [disabled] [ref=e574]:
+                          - img [ref=e576]
+                  - generic [ref=e578]: Войти, чтобы комментировать
+                - generic [ref=e584]:
+                  - generic [ref=e585]:
+                    - generic [ref=e586]:
+                      - generic [ref=e587]:
+                        - link "Ольга Созонова" [ref=e588] [cursor=pointer]:
+                          - /url: /id/6516ce875af573666a850751
+                          - generic [ref=e589]: Ольга Созонова
+                        - generic [ref=e590]: 23 июл 2023
+                      - button "Меню комментария" [ref=e592] [cursor=pointer]:
+                        - img [ref=e593]
+                    - generic "Кликабельный текст поста" [ref=e596]:
+                      - generic [ref=e598]: Крайне чудесная женщина!!!! Здоровья,счастья, успехов Вам Елена во всех Ваших делах, начинаниях.
+                    - generic [ref=e600]:
+                      - button "Ответить" [ref=e601] [cursor=pointer]
+                      - generic [ref=e603]:
+                        - checkbox "835"
+                        - generic [ref=e604] [cursor=pointer]:
+                          - img [ref=e605]
+                          - generic [ref=e606]: "835"
+                      - generic [ref=e607]:
+                        - generic [ref=e609]:
+                          - checkbox "32"
+                          - generic [ref=e610] [cursor=pointer]:
+                            - img [ref=e611]
+                            - generic [ref=e612]: "32"
+                        - button [ref=e614]:
+                          - generic [ref=e617] [cursor=pointer]:
+                            - img [ref=e619]
+                            - img [ref=e622]
+                            - img [ref=e624]
+                            - img [ref=e626]
+                            - img [ref=e628]
+                            - img [ref=e630]
+                            - img [ref=e632]
+                  - button "Показать ответы на комментарий" [ref=e635] [cursor=pointer]:
+                    - generic [ref=e637]: 5 ответов
+                - generic [ref=e644]:
+                  - generic [ref=e645]:
+                    - generic [ref=e646]:
+                      - generic [ref=e647]:
+                        - link "Галина Завойкина" [ref=e648] [cursor=pointer]:
+                          - /url: /user/a85iwvweeztalfsbdz-mbxhbeyw
+                          - generic [ref=e649]: Галина Завойкина
+                        - generic [ref=e650]: 23 июл 2023
+                      - button "Меню комментария" [ref=e652] [cursor=pointer]:
+                        - img [ref=e653]
+                    - generic "Кликабельный текст поста" [ref=e656]:
+                      - generic [ref=e658]: Умница. Образованный человек из хорошей семьи. Большой талант. Очень глубокий человек. Философский склад ума.
+                    - generic [ref=e660]:
+                      - button "Ответить" [ref=e661] [cursor=pointer]
+                      - generic [ref=e663]:
+                        - checkbox "683"
+                        - generic [ref=e664] [cursor=pointer]:
+                          - img [ref=e665]
+                          - generic [ref=e666]: "683"
+                      - generic [ref=e667]:
+                        - generic [ref=e669]:
+                          - checkbox "29"
+                          - generic [ref=e670] [cursor=pointer]:
+                            - img [ref=e671]
+                            - generic [ref=e672]: "29"
+                        - button [ref=e674]:
+                          - img [ref=e676] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e679] [cursor=pointer]:
+                    - generic [ref=e681]: 7 ответов
+                - generic [ref=e688]:
+                  - generic [ref=e689]:
+                    - generic [ref=e690]:
+                      - generic [ref=e691]:
+                        - link "Анастасия Чернышова" [ref=e692] [cursor=pointer]:
+                          - /url: /user/tz4fykk70vrf98ztg6239nm08c
+                          - generic [ref=e693]: Анастасия Чернышова
+                        - generic [ref=e694]: 23 июл 2023
+                      - button "Меню комментария" [ref=e696] [cursor=pointer]:
+                        - img [ref=e697]
+                    - generic "Кликабельный текст поста" [ref=e700]:
+                      - generic [ref=e702]: умница
+                    - generic [ref=e704]:
+                      - button "Ответить" [ref=e705] [cursor=pointer]
+                      - generic [ref=e707]:
+                        - checkbox "529"
+                        - generic [ref=e708] [cursor=pointer]:
+                          - img [ref=e709]
+                          - generic [ref=e710]: "529"
+                      - generic [ref=e711]:
+                        - generic [ref=e713]:
+                          - checkbox "25"
+                          - generic [ref=e714] [cursor=pointer]:
+                            - img [ref=e715]
+                            - generic [ref=e716]: "25"
+                        - button [ref=e718]:
+                          - img [ref=e720] [cursor=pointer]
+                  - button "Показать ответы на комментарий" [ref=e723] [cursor=pointer]:
+                    - generic [ref=e725]: 2 ответа
+                - button "Показать ещё" [ref=e728] [cursor=pointer]:
+                  - generic [ref=e729]: Ещё 50 комментариев
+              - generic "Блок рекомендаций" [ref=e401]:
+                - text: Рекомендуем почитать
+                - generic [ref=e402]:
+                  - article [ref=e403]:
+                    - link [ref=e404] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/aiqnGYO-Zyx4i7di?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIy2oLjrMyBsUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                    - generic [ref=e405]:
+                      - generic [ref=e407]:
+                        - img [ref=e409]
+                        - generic [ref=e412]: 6 минут
+                      - img [ref=e730]
+                    - generic [ref=e416]:
+                      - generic [ref=e417]:
+                        - generic [ref=e418]:
+                          - link "Аватар канала" [ref=e420] [cursor=pointer]:
+                            - /url: /id/5a5f38fe8651654b9a6886c8
+                          - generic [ref=e423]:
+                            - link "Название канала" [ref=e425] [cursor=pointer]:
+                              - /url: /id/5a5f38fe8651654b9a6886c8
+                              - generic "МК" [ref=e426]:
+                                - generic [ref=e427]: МК
+                                - img [ref=e428]
+                            - generic [ref=e432]: 339 тыс читали · 1 неделю назад
+                        - button "Три точки" [ref=e433] [cursor=pointer]:
+                          - img [ref=e434]
+                      - generic [ref=e436]:
+                        - 'link "«Я не хочу жить»: последние слова Людмилы Чурсиной, которые потрясли её близкую подругу" [ref=e437] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/aiqnGYO-Zyx4i7di?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIy2oLjrMyBsUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                          - generic [ref=e438]: "«Я не хочу жить»: последние слова Людмилы Чурсиной, которые потрясли её близкую подругу"
+                        - generic [ref=e439]: Со вчерашнего дня, как стало известно о смерти народной артистки СССР, невероятной красавицы Людмилы Чурсиной, сохранившей красоту почти до конца жизни, о ней продолжают говорить. Вспоминают в основном коллеги – снимались вместе, выходили на сцену. И в этих воспоминаниях зачастую больше себя, чем ее. Но мы нашли человека, не связанного с миром искусства, но которую 25 лет дружбы связывают со знаменитой актрисой. Это Юлия Пенкина, завуч самой обычной школы в Калининском районе Санкт-Петербурга. Открылась другая Людмила Чурсина...
+                  - article [ref=e440]:
+                    - link [ref=e441] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ai5VeKbUc2hODlU-?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIrTk6nsMyBrUI4JagQBayxsiAH3v830xZSOuwmQAQA%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                    - generic [ref=e442]:
+                      - generic [ref=e444]:
+                        - img [ref=e446]
+                        - generic [ref=e449]: 6 минут
+                      - img [ref=e731]
+                    - generic [ref=e453]:
+                      - generic [ref=e454]:
+                        - generic [ref=e455]:
+                          - link "Аватар канала" [ref=e457] [cursor=pointer]:
+                            - /url: /id/5b62f1a7320be700acd67f9a
+                          - generic [ref=e460]:
+                            - link "Название канала" [ref=e462] [cursor=pointer]:
+                              - /url: /id/5b62f1a7320be700acd67f9a
+                              - generic "Этобаза" [ref=e463]:
+                                - generic [ref=e464]: Этобаза
+                            - generic [ref=e467]: 51,5 тыс читали · 5 дней назад
+                        - button "Три точки" [ref=e468] [cursor=pointer]:
+                          - img [ref=e469]
+                      - generic [ref=e471]:
+                        - 'link "Нищета, питается с огорода, дочь забыла, Галкин высмеивает: как сейчас доживает жизнь 81-летний литовский отец Кристины Орбакайте Миколас" [ref=e472] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ai5VeKbUc2hODlU-?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CIrTk6nsMyBrUI4JagQBayxsiAH3v830xZSOuwmQAQA%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                          - generic [ref=e473]: "Нищета, питается с огорода, дочь забыла, Галкин высмеивает: как сейчас доживает жизнь 81-летний литовский отец Кристины Орбакайте Миколас"
+                        - generic [ref=e474]: Читатель, присядь поудобнее. Я хочу рассказать тебе историю о человеке, чье имя часто теряется в тени великой Примадонны, но чья жизнь полна света, труда и тихой, неугасающей любви. Это история отца единственной дочери Аллы Пугачевой Кристины Орбакайте. Миколаса Эдмундаса Орбакаса. — Она всем сразу нравилась, — вспоминал он позже, сидя в своем стареньком домике на берегу Балтики. — И как певица, и как человек. Но у нас не было любви с первого взгляда. Миколас родился 16 апреля 1945 года в литовском городке Шяуляй...
+                  - article [ref=e475]:
+                    - link [ref=e476] [cursor=pointer]:
+                      - /url: https://dzen.ru/a/ag8x5hUdvlFXpPMG?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CNr09drkMyBrUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                    - generic [ref=e477]:
+                      - generic [ref=e479]:
+                        - img [ref=e481]
+                        - generic [ref=e484]: 4 минуты
+                      - img [ref=e732]
+                    - generic [ref=e488]:
+                      - generic [ref=e489]:
+                        - generic [ref=e490]:
+                          - link "Аватар канала" [ref=e492] [cursor=pointer]:
+                            - /url: /id/5a6596498651654b300a5eb7
+                          - generic [ref=e495]:
+                            - link "Название канала" [ref=e497] [cursor=pointer]:
+                              - /url: /id/5a6596498651654b300a5eb7
+                              - generic "Радио 1" [ref=e498]:
+                                - generic [ref=e499]: Радио 1
+                                - img [ref=e500]
+                            - generic [ref=e504]: 205,3 тыс читали · 4 недели назад
+                        - button "Три точки" [ref=e505] [cursor=pointer]:
+                          - img [ref=e506]
+                      - generic [ref=e508]:
+                        - 'link "Цыган-барон и пожизненные отчисления: за что на самом деле Ваенга расплачивается с экс-супругом спустя 16 лет после развода" [ref=e509] [cursor=pointer]':
+                          - /url: https://dzen.ru/a/ag8x5hUdvlFXpPMG?from=feed&utm_referrer=https%3A%2F%2Fzen.yandex.com&integration=site_desktop&place=article_related&secdata=CNr09drkMyBrUI4JagYBlwFrLGyIAfe%2FzfTFlI67CZABAA%3D%3D&clid=1400&rid=3403818743.956.1781874299286.41888&referrer_clid=1400&
+                          - generic [ref=e510]: "Цыган-барон и пожизненные отчисления: за что на самом деле Ваенга расплачивается с экс-супругом спустя 16 лет после развода"
+                        - generic [ref=e511]: Их свела случайность, которую иначе как вмешательством судьбы не назовёшь. Спустя годы на пике славы брак распался, однако Елена Ваенга по сей день исправно отдаёт бывшему мужу половину заработанного — без судов, скандалов и принуждения. Что движет певицей — чувство вины, бесконечная признательность или осознанная плата за талант, который когда-то разглядел в ней «цыганский барон», расскажет «Радио 1». Страна могла никогда не услышать этот узнаваемый хрипловатый голос и пронзительные, похожие на прожитую жизнь песни...
+          - generic "Статья 2" [ref=e735]:
+            - generic [ref=e738]:
+              - generic [ref=e741]:
+                - generic [ref=e742]:
+                  - generic [ref=e744]:
+                    - link "Аватар канала" [ref=e745] [cursor=pointer]:
+                      - /url: /id/5f37c718fd2ffb4eb97d4217
+                    - generic [ref=e747]:
+                      - link "Название канала" [ref=e748] [cursor=pointer]:
+                        - /url: /id/5f37c718fd2ffb4eb97d4217
+                        - generic [ref=e749]: Чёрный редактор
+                      - generic [ref=e750]: 125,6 тыс подписчиков
+                    - button "Подписаться" [ref=e752] [cursor=pointer]
+                  - 'heading "«Остался ради неё»: тайная любовь 28-летнего красавца Дени Байсарова, из-за которой он бросил маму и Пугачёву" [level=1] [ref=e753]'
+                  - generic [ref=e755]:
+                    - generic [ref=e757]: 15 июня
+                    - generic [ref=e758]:
+                      - generic [ref=e759]:
+                        - img [ref=e760]
+                        - generic [ref=e762]: 42,4 тыс
+                      - generic [ref=e763]:
+                        - img [ref=e764]
+                        - generic [ref=e766]: 8 мин
+                - generic [ref=e768]:
+                  - generic "Кликабельный текст поста" [ref=e770] [cursor=pointer]:
+                    - generic [ref=e774]:
+                      - text: Есть собственный бизнес, связанный с рекламой и консалтингом. Владеет студией дизайна и периодически проводит арт-терапию — в этом направлении он развивается наравне с запутанной личной
+                      - generic [ref=e775]:
+                        - text: ...
+                        - generic [ref=e776]:
+                          - text: Читать далее
+                          - img [ref=e777]
+                  - img [ref=e784]
+              - generic "Социальный блок" [ref=e786]:
+                - generic [ref=e787]:
+                  - button [ref=e790] [cursor=pointer]:
+                    - generic:
+                      - generic:
+                        - img
+                  - button "Нравится" [ref=e791] [cursor=pointer]:
+                    - generic [ref=e792]:
+                      - img [ref=e794]
+                      - generic "Подпись к кнопке" [ref=e795]: "314"
+                  - button "Комментировать" [ref=e797] [cursor=pointer]:
+                    - generic [ref=e798]:
+                      - img [ref=e800]
+                      - generic "Подпись к кнопке" [ref=e801]: "85"
+                  - button "Поделиться" [ref=e804] [cursor=pointer]:
+                    - img [ref=e807]
+                - button "Не нравится" [ref=e809] [cursor=pointer]:
+                  - img [ref=e812]
+          - button "Что это значит":
+            - generic:
+              - img
+              - generic: Что это значит
+  - generic [ref=e536] [cursor=pointer]:
+    - button [ref=e538]:
+      - img [ref=e539]
+    - generic [ref=e541]:
+      - heading "Дзен без рекламы" [level=3] [ref=e542]
+      - paragraph [ref=e543]: Подписка Дзен Про за 159 ₽ в месяц
+    - button "Подключить" [ref=e544]:
+      - generic [ref=e545]: Подключить
+    - generic:
+      - img
+    - button [ref=e546]
+  - iframe
+  - generic:
+    - generic:
+      - generic:
+        - generic: Это — Стеллы, новый способ поддержать автора
