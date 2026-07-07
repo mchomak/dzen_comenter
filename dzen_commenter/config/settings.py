@@ -27,3 +27,27 @@ class Settings(BaseSettings):
     KEEPALIVE_INTERVAL: int
     AUTO_PUBLISH: bool = False
     MAX_REPLIES_PER_CYCLE: int
+
+    # Telegram (авторизация/уведомления)
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+    TELEGRAM_PROXY_URL: str = ""
+
+    # Email-фоллбэк
+    EMAIL_FALLBACK_LIST: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+
+    # Отсечки
+    MAX_COMMENT_AGE_DAYS: int = 30
+    MAX_REPLY_LENGTH: int = 1000
+
+    # Промпт
+    PROMPT_CONFIG_PATH: str = ""
+
+    # VNC
+    VNC_PORT: int = 5900
+    VNC_PASSWORD: str = ""
