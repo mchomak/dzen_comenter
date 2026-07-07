@@ -24,3 +24,9 @@ cp .env.example .env   # then fill in values
 # Linux/macOS
 .venv/bin/python -m pytest -q
 ```
+
+## Remote Access (VNC)
+
+The Docker container starts a virtual display on `DISPLAY=:99` and exposes it
+through VNC. Set `VNC_PORT` and `VNC_PASSWORD` in `.env`, then connect with any
+VNC client to `localhost:${VNC_PORT}` using `VNC_PASSWORD`.
