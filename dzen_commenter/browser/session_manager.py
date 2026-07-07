@@ -21,6 +21,10 @@ class PlaywrightSessionManager:
         self._context = None
         self._page = None
 
+    @property
+    def page(self):
+        return self._page
+
     def start(self) -> None:
         self._playwright = self._playwright_factory().start()
         self._context = self._playwright.chromium.launch_persistent_context(

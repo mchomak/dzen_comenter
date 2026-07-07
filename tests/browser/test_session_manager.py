@@ -201,6 +201,19 @@ def test_is_logged_in_false_before_start():
     assert mgr.is_logged_in() is False
 
 
+# Acceptance 2 (4A) — property page: None до start(), тот же объект после start().
+def test_page_property_none_before_start_then_playwright_page():
+    settings = make_settings()
+    page = FakePage()
+    mgr = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(FakeContext(page))
+    )
+    assert mgr.page is None
+
+    mgr.start()
+    assert mgr.page is page
+
+
 # Acceptance 7 — keep_alive() — ровно один reload, ничего не публикует.
 def test_keep_alive_reloads_once():
     settings = make_settings()

@@ -18,4 +18,4 @@ RUN chmod +x docker/entrypoint.sh
 
 ENTRYPOINT ["docker/entrypoint.sh"]
 
-# Final application CMD is defined in Wave 4A.
+CMD ["python", "main.py"]

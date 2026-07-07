@@ -12,7 +12,7 @@ services:
       - "${VNC_PORT:-5900}:${VNC_PORT:-5900}"
     depends_on:
       - postgres
-    # Финальный command задаётся в Волне 2.
+    restart: unless-stopped
 
   postgres:
     image: postgres:16

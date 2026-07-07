@@ -13,4 +13,6 @@ else
   x11vnc -display "$DISPLAY" -forever -rfbport "$VNC_PORT" -nopw &
 fi
 
+alembic upgrade head
+
 exec "$@"
