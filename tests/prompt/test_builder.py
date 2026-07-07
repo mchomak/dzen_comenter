@@ -5,11 +5,18 @@ import pytest
 
 import dzen_commenter.prompt
 from dzen_commenter.contracts.interfaces import PromptContext
-from dzen_commenter.prompt import DameoPromptBuilder
-from dzen_commenter.prompt.builder import CTA_MARKER
+from dzen_commenter.prompt import DameoPromptBuilder, PromptBrandConfig, load_brand_config
+from dzen_commenter.prompt.config_loader import (
+    DEFAULT_ANTI_RULES,
+    DEFAULT_CTA_MARKER,
+    DEFAULT_ROLE,
+    DEFAULT_TASK_ENGAGE,
+    DEFAULT_TASK_LEAD,
+    DEFAULT_TONE_OF_VOICE,
+)
 
-PUB_TITLE = "Как недорого обновить ванную комнату"
-THREAD_TEXT = "Подскажите, с чего начать и сколько примерно закладывать бюджета?"
+PUB_TITLE = "publication title"
+THREAD_TEXT = "thread text"
 
 
 def make_context(reply_type):
@@ -20,7 +27,22 @@ def make_context(reply_type):
     )
 
 
-# Acceptance 1: экспорт и реализация контракта.
+def _expected_default_prompt(task: str) -> str:
+    return "\n\n".join(
+        [
+            DEFAULT_ROLE,
+            DEFAULT_TONE_OF_VOICE,
+            DEFAULT_ANTI_RULES,
+            (
+                "РљРѕРЅС‚РµРєСЃС‚:\n"
+                f"РўРµРјР° РїСѓР±Р»РёРєР°С†РёРё: {PUB_TITLE}\n"
+                f"Р’РµС‚РєР° РѕР±СЃСѓР¶РґРµРЅРёСЏ: {THREAD_TEXT}"
+            ),
+            task,
+        ]
+    )
+
+
 @pytest.mark.parametrize("reply_type", ["lead", "engage"])
 def test_build_returns_nonempty_str(reply_type):
     builder = DameoPromptBuilder()
@@ -30,16 +52,25 @@ def test_build_returns_nonempty_str(reply_type):
     assert len(result.strip()) > 0
 
 
-# Acceptance 3: CTA только в lead.
+def test_default_prompt_matches_frozen_default_blocks():
+    builder = DameoPromptBuilder()
+
+    assert builder.build(make_context("lead")) == _expected_default_prompt(
+        DEFAULT_TASK_LEAD
+    )
+    assert builder.build(make_context("engage")) == _expected_default_prompt(
+        DEFAULT_TASK_ENGAGE
+    )
+
+
 def test_cta_only_in_lead():
     builder = DameoPromptBuilder()
     lead = builder.build(make_context("lead"))
     engage = builder.build(make_context("engage"))
-    assert CTA_MARKER in lead
-    assert CTA_MARKER not in engage
+    assert DEFAULT_CTA_MARKER in lead
+    assert DEFAULT_CTA_MARKER not in engage
 
 
-# Acceptance 4: контекст инжектится дословно.
 @pytest.mark.parametrize("reply_type", ["lead", "engage"])
 def test_context_injected_verbatim(reply_type):
     result = DameoPromptBuilder().build(make_context(reply_type))
@@ -47,24 +78,72 @@ def test_context_injected_verbatim(reply_type):
     assert THREAD_TEXT in result
 
 
-# Acceptance 5: анти-правила присутствуют в промпте.
 @pytest.mark.parametrize("reply_type", ["lead", "engage"])
 def test_anti_rules_present(reply_type):
-    result = DameoPromptBuilder().build(make_context(reply_type)).lower()
-    assert "без точной стоимости" in result
-    assert "не отвечай токсично" in result
-    assert "не спамь" in result
+    result = DameoPromptBuilder().build(make_context(reply_type))
+    assert DEFAULT_ANTI_RULES in result
 
 
-# Acceptance 7: язык по умолчанию — русский.
 def test_default_language_is_russian():
-    result = DameoPromptBuilder().build(make_context("lead"))
-    assert "Dameo" in result
-    assert any("а" <= ch.lower() <= "я" or ch == "ё" for ch in result)
+    builder = DameoPromptBuilder()
+    result = builder.build(make_context("lead"))
+    assert builder.language == "ru"
+    assert DEFAULT_ROLE in result
 
 
-# Acceptance 6: чистота слоя — AST-скан импортов prompt/.
-FORBIDDEN_TOP = {"httpx", "psycopg", "sqlalchemy", "playwright", "pydantic"}
+def test_prompt_config_exports_available():
+    assert PromptBrandConfig is not None
+    assert callable(load_brand_config)
+
+
+def test_builder_missing_config_path_matches_default(tmp_path):
+    context = make_context("lead")
+    default = DameoPromptBuilder().build(context)
+    missing = DameoPromptBuilder(config_path=str(tmp_path / "missing.json")).build(
+        context
+    )
+    assert missing == default
+
+
+def test_builder_uses_config_override(tmp_path):
+    config_path = tmp_path / "prompt.json"
+    config_path.write_text(
+        """
+        {
+          "role": "custom role",
+          "tone_of_voice": "custom tone",
+          "anti_rules": "custom anti rules",
+          "task_lead": "custom lead task with custom CTA",
+          "task_engage": "custom engage task",
+          "cta_marker": "custom CTA",
+          "language": "en"
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    builder = DameoPromptBuilder(config_path=str(config_path))
+
+    lead = builder.build(make_context("lead"))
+    engage = builder.build(make_context("engage"))
+    assert builder.language == "en"
+    assert "custom role" in lead
+    assert "custom tone" in lead
+    assert "custom anti rules" in lead
+    assert "custom lead task" in lead
+    assert "custom CTA" in lead
+    assert "custom engage task" in engage
+    assert "custom CTA" not in engage
+
+
+FORBIDDEN_TOP = {
+    "httpx",
+    "psycopg",
+    "sqlalchemy",
+    "playwright",
+    "pydantic",
+    "yaml",
+}
 FORBIDDEN_SUBPKG = {
     "config",
     "db",

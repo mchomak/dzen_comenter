@@ -1,59 +1,32 @@
 from dzen_commenter.contracts.interfaces import PromptContext
-
-BRAND_NAME = "Dameo"
-BRAND_NICHE = "ремонт квартир"
-
-# CTA-маркер: детерминированная константа, встраивается ТОЛЬКО в ветку lead.
-CTA_MARKER = "рассчитать стоимость ремонта"
-
-ROLE = (
-    f"Ты — комьюнити-менеджер канала {BRAND_NAME} ({BRAND_NICHE}) в Яндекс.Дзен. "
-    "Ты отвечаешь на комментарии читателей под публикациями канала."
-)
-
-TONE_OF_VOICE = (
-    "Тон общения: по-человечески, дружелюбно и экспертно. "
-    "Без агрессии, без канцелярита, без сухого официоза."
-)
-
-# Анти-правила (см. «Антиошибки» в основной заметке) — явными запретами.
-ANTI_RULES = (
-    "Чего делать нельзя:\n"
-    "- Не отвечай токсично и не вступай в конфликт, даже на провокацию.\n"
-    "- Не спамь и не выгляди грубой рекламой; не повторяй один и тот же CTA.\n"
-    "- Не называй точную стоимость и не давай юридических, финансовых или "
-    "технических обещаний без расчёта (отвечай без точной стоимости).\n"
-    "- Если контекст непонятен — честно отметь это, а не выдумывай факты."
-)
-
-TASK_LEAD = (
-    "Задача: ответь по сути комментария и добавь мягкий релевантный CTA "
-    f"{BRAND_NAME} — например, предложи {CTA_MARKER} или упомяни сайт. "
-    "Без грубой рекламы и без конкретной цены."
-)
-
-TASK_ENGAGE = (
-    "Задача: поддержи диалог — ответь по сути и по-человечески. "
-    "Без продажи и без какого-либо CTA."
-)
+from dzen_commenter.prompt.config_loader import load_brand_config
 
 
 class DameoPromptBuilder:
-    """Сборщик текстового промпта для AI-модели в тоне бренда Dameo."""
+    """РЎР±РѕСЂС‰РёРє С‚РµРєСЃС‚РѕРІРѕРіРѕ РїСЂРѕРјРїС‚Р° РґР»СЏ AI-РјРѕРґРµР»Рё РІ С‚РѕРЅРµ Р±СЂРµРЅРґР° Dameo."""
 
-    def __init__(self, language: str = "ru") -> None:
-        self.language = language
+    def __init__(
+        self,
+        language: str | None = None,
+        config_path: str | None = None,
+    ) -> None:
+        self._config = load_brand_config(config_path)
+        self.language = language if language is not None else self._config.language
 
     def build(self, context: PromptContext) -> str:
-        task = TASK_LEAD if context.reply_type == "lead" else TASK_ENGAGE
+        task = (
+            self._config.task_lead
+            if context.reply_type == "lead"
+            else self._config.task_engage
+        )
         blocks = [
-            ROLE,
-            TONE_OF_VOICE,
-            ANTI_RULES,
+            self._config.role,
+            self._config.tone_of_voice,
+            self._config.anti_rules,
             (
-                "Контекст:\n"
-                f"Тема публикации: {context.publication_title}\n"
-                f"Ветка обсуждения: {context.thread_text}"
+                "РљРѕРЅС‚РµРєСЃС‚:\n"
+                f"РўРµРјР° РїСѓР±Р»РёРєР°С†РёРё: {context.publication_title}\n"
+                f"Р’РµС‚РєР° РѕР±СЃСѓР¶РґРµРЅРёСЏ: {context.thread_text}"
             ),
             task,
         ]
