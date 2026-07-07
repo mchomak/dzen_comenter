@@ -1,0 +1,148 @@
+import ast
+import inspect
+from pathlib import Path
+
+import httpx
+import pytest
+
+from dzen_commenter.auth import TelegramAuthAssistant
+
+TOKEN = "TOKEN"
+CHAT_ID = "12345"
+PROXY_URL = "socks5://proxy.example.test:1080"
+
+
+def _json_response(payload):
+    return httpx.Response(200, json=payload)
+
+
+class RequestRecorder:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.requests = []
+
+    def __call__(self, request):
+        self.requests.append(request)
+        if self.responses:
+            response = self.responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+        return _json_response({"ok": True, "result": []})
+
+
+def _assistant(recorder, **overrides):
+    sleep_calls = []
+    values = {
+        "bot_token": TOKEN,
+        "chat_id": CHAT_ID,
+        "proxy_url": PROXY_URL,
+        "poll_timeout": 0,
+        "poll_interval": 0.1,
+        "client": httpx.Client(transport=httpx.MockTransport(recorder)),
+        "sleep_fn": sleep_calls.append,
+    }
+    values.update(overrides)
+    return TelegramAuthAssistant(**values), sleep_calls
+
+
+def test_import_and_contract_signatures():
+    ready_sig = inspect.signature(TelegramAuthAssistant.ask_ready)
+    assert list(ready_sig.parameters) == ["self"]
+    assert ready_sig.return_annotation in ("bool", bool)
+
+    code_sig = inspect.signature(TelegramAuthAssistant.relay_code_prompt)
+    assert list(code_sig.parameters) == ["self", "prompt_text"]
+    assert code_sig.return_annotation in ("str", str)
+
+
+def test_ask_ready_sends_inline_button_and_returns_true_on_callback():
+    callback_update = {
+        "update_id": 10,
+        "callback_query": {
+            "id": "cb-1",
+            "message": {"chat": {"id": int(CHAT_ID)}},
+            "data": "ready",
+        },
+    }
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": [callback_update]}),
+        ]
+    )
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.ask_ready() is True
+
+    send_request = recorder.requests[0]
+    assert send_request.url.path.endswith(f"/bot{TOKEN}/sendMessage")
+    send_payload = send_request.read()
+    assert b'"chat_id":"12345"' in send_payload
+    assert b'"reply_markup"' in send_payload
+    assert "Готов".encode("utf-8") in send_payload
+
+
+def test_ask_ready_returns_false_on_timeout_without_real_wait():
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": []}),
+        ]
+    )
+    assistant, sleep_calls = _assistant(recorder)
+
+    assert assistant.ask_ready() is False
+    assert sleep_calls == []
+
+
+def test_relay_code_prompt_returns_next_text_message():
+    message_update = {
+        "update_id": 11,
+        "message": {"chat": {"id": int(CHAT_ID)}, "text": "482913"},
+    }
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": [message_update]}),
+        ]
+    )
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.relay_code_prompt("Enter code") == "482913"
+    assert b'"text":"Enter code"' in recorder.requests[0].read()
+
+
+def test_relay_code_prompt_raises_timeout_without_text_message():
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": []}),
+        ]
+    )
+    assistant, _ = _assistant(recorder)
+
+    with pytest.raises(TimeoutError):
+        assistant.relay_code_prompt("Enter code")
+
+
+def test_auth_layer_dependency_imports_are_clean():
+    pkg_dir = Path("dzen_commenter/auth")
+    forbidden = {
+        "dzen_commenter.config",
+        "requests",
+        "yaml",
+        "pydantic",
+        "sqlalchemy",
+        "playwright",
+    }
+
+    for py_file in pkg_dir.glob("*.py"):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        modules = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules.append(node.module)
+        assert forbidden.isdisjoint(modules)
