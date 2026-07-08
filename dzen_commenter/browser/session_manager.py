@@ -2,6 +2,7 @@ import os
 
 from playwright.sync_api import sync_playwright
 
+from dzen_commenter.auth import DzenLoginAuthenticator
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.dzen import selectors
 
@@ -39,6 +40,28 @@ class PlaywrightSessionManager:
         if self._page is None:
             return False
         return self._page.query_selector(selectors.LOGIN_FORM) is None
+
+    def login(self) -> bool:
+        if self._page is None:
+            return False
+
+        authenticator = DzenLoginAuthenticator(
+            self._page,
+            comments_url=self._settings.COMMENTS_URL,
+            phone=self._settings.DZEN_LOGIN_PHONE,
+            password=self._settings.DZEN_LOGIN_PASSWORD,
+            timeout_ms=self._settings.DZEN_LOGIN_TIMEOUT_MS,
+        )
+        attempted = authenticator.login()
+        if not attempted:
+            return False
+
+        self._page.goto(self._settings.COMMENTS_URL)
+        if not self.is_logged_in():
+            return False
+
+        self.save_state()
+        return True
 
     def save_state(self) -> None:
         self._context.storage_state(path=self._settings.STORAGE_STATE_PATH)

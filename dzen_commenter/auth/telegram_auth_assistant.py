@@ -23,7 +23,9 @@ class TelegramAuthAssistant:
         self.poll_timeout = poll_timeout
         self.poll_interval = poll_interval
         self.sleep_fn = sleep_fn
-        self._client = client or self._make_client(proxy_url)
+        self._client = client or self._make_client(
+            proxy_url.strip() if proxy_url else ""
+        )
 
     def ask_ready(self) -> bool:
         self._post(

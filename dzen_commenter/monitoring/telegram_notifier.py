@@ -17,7 +17,7 @@ class TelegramNotifier:
     ) -> None:
         self.bot_token = bot_token
         self.chat_id = chat_id
-        self.proxy_url = proxy_url
+        self.proxy_url = proxy_url.strip() if proxy_url else ""
         self.fallback = fallback
         self._httpx = import_module("httpx")
         self._client = client or self._make_client()

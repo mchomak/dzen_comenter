@@ -1,0 +1,13 @@
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.playwright-mcp/
+
+.env
+user_data/
+storage_state.json
+
+artifacts/dzen-html/

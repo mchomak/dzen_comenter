@@ -124,12 +124,15 @@ class FakeSessionManager:
         *,
         logged_in: bool = True,
         restore_results: list[bool] | None = None,
+        login_results: list[bool | Exception] | None = None,
     ) -> None:
         self.logged_in = logged_in
         self.restore_results = list(restore_results or [])
+        self.login_results = list(login_results or [])
         self.start_calls = 0
         self.is_logged_in_calls = 0
         self.restore_calls = 0
+        self.login_calls = 0
         self.save_state_calls = 0
 
     def start(self) -> None:
@@ -141,6 +144,17 @@ class FakeSessionManager:
 
     def save_state(self) -> None:
         self.save_state_calls += 1
+
+    def login(self) -> bool:
+        self.login_calls += 1
+        if self.login_results:
+            result = self.login_results.pop(0)
+            if isinstance(result, Exception):
+                raise result
+        else:
+            result = self.logged_in
+        self.logged_in = result
+        return result
 
     def restore(self) -> bool:
         self.restore_calls += 1

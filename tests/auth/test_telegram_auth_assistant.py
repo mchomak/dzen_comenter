@@ -83,6 +83,27 @@ def test_ask_ready_sends_inline_button_and_returns_true_on_callback():
     assert "Готов".encode("utf-8") in send_payload
 
 
+def test_default_client_is_constructed_without_proxy_when_empty(monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "dzen_commenter.auth.telegram_auth_assistant.httpx.Client",
+        FakeClient,
+    )
+
+    TelegramAuthAssistant(
+        bot_token=TOKEN,
+        chat_id=CHAT_ID,
+        proxy_url="   ",
+    )
+
+    assert captured == {}
+
+
 def test_ask_ready_returns_false_on_timeout_without_real_wait():
     recorder = RequestRecorder(
         [

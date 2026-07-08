@@ -95,6 +95,12 @@ class OrchestratorLoop:
             return True
 
         restored = self.session.restore()
+        if not restored:
+            try:
+                restored = self.session.login()
+            except Exception as exc:
+                self.notifier.notify_error("Dzen automated login failed", exc)
+
         if not restored and self.auth_assistant.ask_ready():
             restored = self.session.restore()
 

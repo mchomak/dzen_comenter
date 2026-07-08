@@ -87,6 +87,33 @@ def test_default_client_is_constructed_with_proxy(monkeypatch):
     assert captured == {"proxy": PROXY_URL}
 
 
+def test_default_client_is_constructed_without_proxy_when_empty(monkeypatch):
+    captured = {}
+
+    class FakeHTTPX:
+        HTTPError = httpx.HTTPError
+
+        class Client:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def post(self, *args, **kwargs):
+                return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr(
+        "dzen_commenter.monitoring.telegram_notifier.import_module",
+        lambda name: FakeHTTPX,
+    )
+
+    TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id=CHAT_ID,
+        proxy_url="   ",
+    )
+
+    assert captured == {}
+
+
 def test_notify_uses_fallback_on_httpx_error():
     fallback = FallbackSpy()
 

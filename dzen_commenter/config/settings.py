@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     STORAGE_STATE_PATH: str
     HEADLESS: bool
     COMMENTS_URL: str
+    DZEN_LOGIN_PHONE: str = ""
+    DZEN_LOGIN_PASSWORD: str = ""
+    DZEN_LOGIN_TIMEOUT_MS: int = 30000
 
     # Цикл
     POLL_INTERVAL: int

@@ -91,7 +91,7 @@ def make_factory(context: FakeContext):
 
 # Acceptance 2 — структурное соответствие контракту SessionManager.
 def test_implements_session_manager_contract():
-    for name in ("start", "is_logged_in", "save_state", "restore"):
+    for name in ("start", "is_logged_in", "login", "save_state", "restore"):
         proto_sig = inspect.signature(getattr(SessionManager, name))
         impl_sig = inspect.signature(getattr(PlaywrightSessionManager, name))
         assert list(proto_sig.parameters) == list(impl_sig.parameters)
@@ -122,6 +122,74 @@ def test_save_state_writes_to_storage_state_path():
     mgr.save_state()
 
     assert context.storage_state_calls == [settings.STORAGE_STATE_PATH]
+
+
+def test_login_delegates_to_dzen_authenticator_and_saves_state(monkeypatch):
+    settings = make_settings(
+        COMMENTS_URL="https://dzen.ru/profile/comments",
+        DZEN_LOGIN_PHONE="+79269549196",
+        DZEN_LOGIN_PASSWORD="secret",
+        DZEN_LOGIN_TIMEOUT_MS=12345,
+    )
+    page = FakePage(login_form_present=False)
+    context = FakeContext(page)
+    captured = {}
+
+    class FakeAuthenticator:
+        def __init__(self, page_arg, **kwargs):
+            captured["page"] = page_arg
+            captured["kwargs"] = kwargs
+
+        def login(self):
+            captured["login_called"] = True
+            return True
+
+    monkeypatch.setattr(
+        "dzen_commenter.browser.session_manager.DzenLoginAuthenticator",
+        FakeAuthenticator,
+    )
+
+    mgr = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    mgr.start()
+    page.goto_calls.clear()
+
+    assert mgr.login() is True
+    assert captured == {
+        "page": page,
+        "kwargs": {
+            "comments_url": settings.COMMENTS_URL,
+            "phone": settings.DZEN_LOGIN_PHONE,
+            "password": settings.DZEN_LOGIN_PASSWORD,
+            "timeout_ms": settings.DZEN_LOGIN_TIMEOUT_MS,
+        },
+        "login_called": True,
+    }
+    assert page.goto_calls == [settings.COMMENTS_URL]
+    assert context.storage_state_calls == [settings.STORAGE_STATE_PATH]
+
+
+def test_login_returns_false_when_authenticator_skips(monkeypatch):
+    settings = make_settings()
+    page = FakePage(login_form_present=True)
+    context = FakeContext(page)
+
+    class FakeAuthenticator:
+        def __init__(self, page_arg, **kwargs):
+            pass
+
+        def login(self):
+            return False
+
+    monkeypatch.setattr(
+        "dzen_commenter.browser.session_manager.DzenLoginAuthenticator",
+        FakeAuthenticator,
+    )
+
+    mgr = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    mgr.start()
+
+    assert mgr.login() is False
+    assert context.storage_state_calls == []
 
 
 # Acceptance 4 (файл) — реальная запись в tmp-путь создаёт файл.

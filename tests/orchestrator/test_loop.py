@@ -245,11 +245,66 @@ def test_run_cycle_asks_auth_assistant_and_exits_when_session_is_not_restored(
     harness.loop.run_cycle()
 
     assert harness.session.restore_calls == 2
+    assert harness.session.login_calls == 1
     assert harness.auth_assistant.ask_ready_calls == 1
     assert len(harness.notifier.errors) == 1
     assert harness.page.fetch_calls == 0
     assert harness.repository.upsert_publication_calls == []
     assert harness.repository.upsert_comment_calls == []
+
+
+def test_run_cycle_uses_automated_login_before_manual_auth(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(
+        logged_in=False,
+        restore_results=[False],
+        login_results=[True],
+    )
+    auth_assistant = FakeAuthAssistant(ask_ready_result=True)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.session.restore_calls == 1
+    assert harness.session.login_calls == 1
+    assert harness.auth_assistant.ask_ready_calls == 0
+    assert harness.page.fetch_calls == 1
+    assert harness.notifier.errors == []
+
+
+def test_run_cycle_falls_back_to_manual_auth_when_automated_login_fails(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(
+        logged_in=False,
+        restore_results=[False, True],
+        login_results=[RuntimeError("captcha")],
+    )
+    auth_assistant = FakeAuthAssistant(ask_ready_result=True)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.session.restore_calls == 2
+    assert harness.session.login_calls == 1
+    assert harness.auth_assistant.ask_ready_calls == 1
+    assert harness.notifier.errors[0][0] == "Dzen automated login failed"
+    assert harness.page.fetch_calls == 1
 
 
 def test_run_forever_uses_max_cycles_and_injected_sleep(
