@@ -105,6 +105,10 @@ class DzenLoginAuthenticator:
         return True
 
     def _fill_yandex_login_if_visible(self) -> bool:
+        if self._is_yandex_phone_login_visible() is False:
+            if self._first_visible(selectors.AUTH_CODE_INPUT, 500) is not None:
+                return False
+
         login_input = self._first_visible(
             selectors.YANDEX_ID_LOGIN_INPUT,
             self._timeout_ms,
@@ -130,6 +134,7 @@ class DzenLoginAuthenticator:
             self._timeout_ms,
         )
         self._wait_after_transition()
+        self._wait_for_yandex_phone_login_to_advance()
         self._ensure_no_captcha()
         return True
 
@@ -181,6 +186,9 @@ class DzenLoginAuthenticator:
             raise RuntimeError("Dzen login requires captcha or additional verification")
 
     def _handle_manual_code_if_visible(self) -> bool:
+        if self._is_yandex_phone_login_visible():
+            return False
+
         code_input = self._first_visible(
             selectors.AUTH_CODE_INPUT,
             self._short_timeout_ms,
@@ -231,6 +239,16 @@ class DzenLoginAuthenticator:
                 return
 
         self._call(first_code_input.fill, code, timeout_ms=self._short_timeout_ms)
+
+    def _is_yandex_phone_login_visible(self) -> bool:
+        return self._first_visible(selectors.YANDEX_ID_PHONE_TAB, 500) is not None
+
+    def _wait_for_yandex_phone_login_to_advance(self) -> None:
+        deadline = time.monotonic() + self._short_timeout_ms / 1000
+        while time.monotonic() < deadline:
+            if not self._is_yandex_phone_login_visible():
+                return
+            time.sleep(0.1)
 
     def _wait_after_transition(self) -> None:
         try:

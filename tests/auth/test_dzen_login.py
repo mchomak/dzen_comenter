@@ -34,14 +34,26 @@ class FakeLocator:
         elif self.selector == selectors.YANDEX_ID_CONTINUE:
             if self.page.visible[selectors.AUTH_CODE_INPUT] and self.page.code_entered:
                 self.page.visible[selectors.AUTH_CODE_INPUT] = False
+                self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = False
+                self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = False
                 if self.page.account_choice_visible:
                     self.page.visible[selectors.YANDEX_ID_ACCOUNT_CARD] = True
                 else:
                     self.page.visible[selectors.VK_PASSWORD_INPUT] = True
             elif self.page.code_visible:
+                if self.page.phone_form_retries_before_code > 0:
+                    self.page.phone_form_retries_before_code -= 1
+                    self.page.visible[selectors.AUTH_CODE_INPUT] = True
+                    self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = True
+                    self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = True
+                    return
                 self.page.visible[selectors.AUTH_CODE_INPUT] = True
+                self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = False
+                self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = False
             else:
                 self.page.visible[selectors.VK_PASSWORD_INPUT] = True
+                self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = False
+                self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = False
         elif self.selector == selectors.YANDEX_ID_ACCOUNT_CARD:
             self.page.visible[selectors.YANDEX_ID_ACCOUNT_CARD] = False
             self.page.url = "https://dzen.ru/profile/comments"
@@ -57,10 +69,12 @@ class FakePage:
         yandex_visible=True,
         code_visible=False,
         account_choice_visible=False,
+        phone_form_retries_before_code=0,
     ):
         self.yandex_visible = yandex_visible
         self.code_visible = code_visible
         self.account_choice_visible = account_choice_visible
+        self.phone_form_retries_before_code = phone_form_retries_before_code
         self.visible = {
             selectors.LOGIN_BUTTON: True,
             selectors.LOGIN_PHONE_INPUT: False,
@@ -209,6 +223,34 @@ def test_dzen_login_relays_manual_code_through_auth_assistant():
     assert (selectors.AUTH_CODE_INPUT, "482913") in page.fills
     assert page.fills[-1] == (selectors.VK_PASSWORD_INPUT, "secret")
     assert page.clicks.count(selectors.YANDEX_ID_CONTINUE) == 2
+
+
+def test_dzen_login_does_not_request_code_on_phone_login_form():
+    page = FakePage(code_visible=True, phone_form_retries_before_code=1)
+
+    class FakeAuthAssistant:
+        def __init__(self):
+            self.prompts = []
+
+        def relay_code_prompt(self, prompt_text):
+            self.prompts.append(prompt_text)
+            return "482913"
+
+    auth_assistant = FakeAuthAssistant()
+    authenticator = DzenLoginAuthenticator(
+        page,
+        comments_url="https://dzen.ru/profile/comments",
+        phone="9269549196",
+        password="secret",
+        auth_assistant=auth_assistant,
+        timeout_ms=1000,
+    )
+
+    assert authenticator.login() is True
+
+    assert len(auth_assistant.prompts) == 1
+    assert page.clicks.count(selectors.YANDEX_ID_CONTINUE) == 3
+    assert (selectors.AUTH_CODE_INPUT, "482913") in page.fills
 
 
 def test_dzen_login_selects_account_after_manual_code():
