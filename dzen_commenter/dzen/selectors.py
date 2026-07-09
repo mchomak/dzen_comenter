@@ -78,8 +78,6 @@ AUTH_CODE_INPUT = (
     'input[name*="code" i], '
     'input[id*="code" i], '
     'input[data-t*="code" i], '
-    'input[type="text"][maxlength="6"], '
-    'input[type="tel"][maxlength="6"], '
     'input[maxlength="1"]'
 )
 YANDEX_ID_ACCOUNT_CARD = (

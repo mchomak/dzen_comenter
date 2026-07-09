@@ -66,12 +66,25 @@ class DzenLoginAuthenticator:
             if (handled_code or selected_account) and self._is_on_dzen():
                 self._wait_for_dzen_redirect()
                 return True
+            if self._fill_yandex_login_if_visible():
+                handled_code = self._handle_manual_code_if_visible()
+                selected_account = self._select_yandex_account_if_visible()
+                password_input = self._first_visible(
+                    selectors.VK_PASSWORD_INPUT,
+                    self._short_timeout_ms,
+                )
+                if password_input is None and (
+                    handled_code or selected_account
+                ) and self._is_on_dzen():
+                    self._wait_for_dzen_redirect()
+                    return True
             self._click_optional(selectors.VK_PASSWORD_METHOD, self._short_timeout_ms)
-            password_input = self._require_visible(
-                selectors.VK_PASSWORD_INPUT,
-                "VK ID password input",
-                self._timeout_ms,
-            )
+            if password_input is None:
+                password_input = self._require_visible(
+                    selectors.VK_PASSWORD_INPUT,
+                    "VK ID password input",
+                    self._timeout_ms,
+                )
 
         self._call(password_input.fill, self._password, timeout_ms=self._short_timeout_ms)
         self._ensure_no_captcha()
@@ -91,13 +104,13 @@ class DzenLoginAuthenticator:
         self._wait_for_dzen_redirect()
         return True
 
-    def _fill_yandex_login_if_visible(self) -> None:
+    def _fill_yandex_login_if_visible(self) -> bool:
         login_input = self._first_visible(
             selectors.YANDEX_ID_LOGIN_INPUT,
             self._timeout_ms,
         )
         if login_input is None:
-            return
+            return False
 
         self._click_optional(selectors.YANDEX_ID_PHONE_TAB, self._short_timeout_ms)
         login_input = self._require_visible(
@@ -118,6 +131,7 @@ class DzenLoginAuthenticator:
         )
         self._wait_after_transition()
         self._ensure_no_captcha()
+        return True
 
     def _first_visible(self, selector: str, timeout_ms: int) -> Any | None:
         locator_group = self._page.locator(selector)
@@ -167,7 +181,10 @@ class DzenLoginAuthenticator:
             raise RuntimeError("Dzen login requires captcha or additional verification")
 
     def _handle_manual_code_if_visible(self) -> bool:
-        code_input = self._first_visible(selectors.AUTH_CODE_INPUT, 1000)
+        code_input = self._first_visible(
+            selectors.AUTH_CODE_INPUT,
+            self._short_timeout_ms,
+        )
         if code_input is None:
             return False
         if self._auth_assistant is None:

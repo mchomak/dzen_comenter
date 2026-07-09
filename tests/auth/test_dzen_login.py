@@ -236,6 +236,8 @@ def test_dzen_login_selects_account_after_manual_code():
 
 def test_auth_code_selector_does_not_match_generic_numeric_phone_input():
     assert 'input[inputmode="numeric"]' not in selectors.AUTH_CODE_INPUT
+    assert 'input[type="tel"][maxlength="6"]' not in selectors.AUTH_CODE_INPUT
+    assert 'input[type="text"][maxlength="6"]' not in selectors.AUTH_CODE_INPUT
 
 
 @pytest.mark.parametrize(
