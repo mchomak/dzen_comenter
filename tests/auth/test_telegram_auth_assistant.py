@@ -80,7 +80,32 @@ def test_ask_ready_sends_inline_button_and_returns_true_on_callback():
     send_payload = send_request.read()
     assert b'"chat_id":"12345"' in send_payload
     assert b'"reply_markup"' in send_payload
+    assert (
+        "Дзену нужна авторизация. Готов сейчас войти?".encode("utf-8")
+        in send_payload
+    )
     assert "Готов".encode("utf-8") in send_payload
+    assert b"????" not in send_payload
+
+
+def test_ask_ready_ignores_non_ready_callback():
+    callback_update = {
+        "update_id": 10,
+        "callback_query": {
+            "id": "cb-1",
+            "message": {"chat": {"id": int(CHAT_ID)}},
+            "data": "other",
+        },
+    }
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": [callback_update]}),
+        ]
+    )
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.ask_ready() is False
 
 
 def test_default_client_is_constructed_without_proxy_when_empty(monkeypatch):
@@ -129,9 +154,12 @@ def test_relay_code_prompt_returns_next_text_message():
         ]
     )
     assistant, _ = _assistant(recorder)
+    prompt = "Дзен запросил код подтверждения. Пришли код ответом в этот чат."
 
-    assert assistant.relay_code_prompt("Enter code") == "482913"
-    assert b'"text":"Enter code"' in recorder.requests[0].read()
+    assert assistant.relay_code_prompt(prompt) == "482913"
+    send_payload = recorder.requests[0].read()
+    assert prompt.encode("utf-8") in send_payload
+    assert b"????" not in send_payload
 
 
 def test_relay_code_prompt_raises_timeout_without_text_message():

@@ -60,6 +60,28 @@ def test_notify_posts_send_message_payload():
     assert request.read() == b'{"chat_id":"12345","text":"hello"}'
 
 
+def test_notify_posts_cyrillic_as_utf8_payload():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifier = TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id=CHAT_ID,
+        proxy_url=PROXY_URL,
+        client=client,
+    )
+
+    notifier.notify("Live test send-only: Telegram кириллица работает.")
+
+    payload = requests[0].read()
+    assert "Telegram кириллица работает.".encode("utf-8") in payload
+    assert b"????" not in payload
+
+
 def test_default_client_is_constructed_with_proxy(monkeypatch):
     captured = {}
 

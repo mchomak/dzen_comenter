@@ -32,6 +32,11 @@ class Recorder:
 def install_di_fakes(monkeypatch):
     rec = Recorder()
 
+    def fake_create_engine(url):
+        engine = SimpleNamespace(_kind="engine", url=url)
+        rec.events.append(("create_engine", url, engine))
+        return engine
+
     class FakeRepository:
         def __init__(self, engine):
             self.engine = engine
@@ -49,8 +54,9 @@ def install_di_fakes(monkeypatch):
             rec.events.append(("prompt_builder", self))
 
     class FakeSession:
-        def __init__(self, settings):
+        def __init__(self, settings, **kwargs):
             self.settings = settings
+            self.kwargs = kwargs
             self.page = SimpleNamespace(_kind="playwright_page")
             self.start_calls = 0
             rec.events.append(("session_init", self))
@@ -84,6 +90,7 @@ def install_di_fakes(monkeypatch):
             self.kwargs = kwargs
             rec.events.append(("loop", self))
 
+    monkeypatch.setattr(main.sqlalchemy, "create_engine", fake_create_engine)
     monkeypatch.setattr(main, "PostgresCommentRepository", FakeRepository)
     monkeypatch.setattr(main, "create_provider", fake_create_provider)
     monkeypatch.setattr(main, "DameoPromptBuilder", FakePromptBuilder)
@@ -141,6 +148,8 @@ def test_build_app_wires_layers(monkeypatch):
     assert all(ev[0] != "email_fallback" for ev in rec.events)
     tg = _first(rec, "telegram_notifier")[1]
     assert tg.kwargs["fallback"] is None
+    auth_assistant = _first(rec, "auth_assistant")[1]
+    assert session.kwargs["auth_assistant"] is auth_assistant
 
     # OrchestratorLoop — ровно 9 keyword-аргументов, каждый идентичен фейку.
     loop_kwargs = loop.kwargs
@@ -162,7 +171,7 @@ def test_build_app_wires_layers(monkeypatch):
     assert loop_kwargs["session"] is session
     assert loop_kwargs["page"] is dzen_ev[1]
     assert loop_kwargs["notifier"] is tg
-    assert loop_kwargs["auth_assistant"] is _first(rec, "auth_assistant")[1]
+    assert loop_kwargs["auth_assistant"] is auth_assistant
     assert loop_kwargs["classify_reply_type"] is main.classify_reply_type
 
     # Возврат — те же объекты.

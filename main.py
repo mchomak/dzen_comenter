@@ -32,7 +32,13 @@ def build_app(
         config_path=settings.PROMPT_CONFIG_PATH or None,
     )
 
-    session = PlaywrightSessionManager(settings)
+    auth_assistant = TelegramAuthAssistant(
+        bot_token=settings.TELEGRAM_BOT_TOKEN,
+        chat_id=settings.TELEGRAM_CHAT_ID,
+        proxy_url=settings.TELEGRAM_PROXY_URL,
+    )
+
+    session = PlaywrightSessionManager(settings, auth_assistant=auth_assistant)
     session.start()
     page = DzenStudioPage(session.page)
 
@@ -57,12 +63,6 @@ def build_app(
         chat_id=settings.TELEGRAM_CHAT_ID,
         proxy_url=settings.TELEGRAM_PROXY_URL,
         fallback=email_fallback,
-    )
-
-    auth_assistant = TelegramAuthAssistant(
-        bot_token=settings.TELEGRAM_BOT_TOKEN,
-        chat_id=settings.TELEGRAM_CHAT_ID,
-        proxy_url=settings.TELEGRAM_PROXY_URL,
     )
 
     loop = OrchestratorLoop(

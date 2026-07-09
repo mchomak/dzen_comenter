@@ -30,6 +30,36 @@ LOGIN_PHONE_CONTINUE = (
     '[data-testid="login-by-phone-vk-id"] button[aria-label="Продолжить"], '
     '[data-testid="login-by-phone-vk-id"] button:has-text("Продолжить")'
 )
+YANDEX_ID_LOGIN = (
+    'a[aria-label="Войти через Яндекс ID"], '
+    'button[aria-label="Войти через Яндекс ID"], '
+    'a[href*="login-yandex-id"], '
+    'button:has-text("Войти через Яндекс ID"), '
+    '[role="button"]:has-text("Войти через Яндекс ID")'
+)
+YANDEX_ID_LOGIN_INPUT = (
+    '#passp-field-login, '
+    'input[name="login"], '
+    'input[type="tel"], '
+    'input[autocomplete="tel"], '
+    'input[inputmode="tel"], '
+    'input[inputmode="numeric"], '
+    'input[autocomplete="username"], '
+    'input[data-t="field:input-login"]'
+)
+YANDEX_ID_PHONE_TAB = (
+    'xpath=//*[self::button or self::span or self::div or @role="button" or @role="tab"]'
+    '[normalize-space()="Phone number" or normalize-space()="Телефон"]'
+)
+YANDEX_ID_CONTINUE = (
+    'button[type="submit"], '
+    'button:has-text("Next"), '
+    '[role="button"]:has-text("Next"), '
+    'button:has-text("Продолжить"), '
+    '[role="button"]:has-text("Продолжить"), '
+    'button:has-text("Войти"), '
+    '[role="button"]:has-text("Войти")'
+)
 VK_PASSWORD_METHOD = (
     'button:has-text("Ввести пароль"), '
     '[role="button"]:has-text("Ввести пароль"), '
@@ -39,7 +69,39 @@ VK_PASSWORD_METHOD = (
 VK_PASSWORD_INPUT = (
     'input[type="password"], '
     'input[name="password"], '
+    'input[name="passwd"], '
+    '#passp-field-passwd, '
     'input[autocomplete="current-password"]'
+)
+AUTH_CODE_INPUT = (
+    'input[autocomplete="one-time-code"], '
+    'input[inputmode="numeric"], '
+    'input[name*="code" i], '
+    'input[type="text"][maxlength="6"], '
+    'input[type="tel"][maxlength="6"], '
+    'input[maxlength="1"]'
+)
+YANDEX_ID_ACCOUNT_CARD = (
+    '[data-t="account-card"], '
+    '[data-t="user-account"], '
+    '[data-t="account"], '
+    '[data-testid*="account" i][role="button"], '
+    '[role="button"]:has-text("Plus"), '
+    '[role="button"]:has-text("Cards"), '
+    'button:has-text("Plus"), '
+    'button:has-text("Cards")'
+)
+YANDEX_ID_ACCOUNT_CARD_XPATH = (
+    'xpath=//*[contains(normalize-space(), "Select an account") '
+    'or contains(normalize-space(), "Выберите аккаунт")]'
+    '/following::*[(self::button or self::a or @role="button" or @data-t '
+    'or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "account")) '
+    'and not(contains(normalize-space(), "missing")) '
+    'and not(contains(normalize-space(), "не найден"))][1]'
+)
+YANDEX_ID_ACCOUNT_SELECTORS = (
+    YANDEX_ID_ACCOUNT_CARD,
+    YANDEX_ID_ACCOUNT_CARD_XPATH,
 )
 VK_PASSWORD_SUBMIT = (
     'button[type="submit"], '

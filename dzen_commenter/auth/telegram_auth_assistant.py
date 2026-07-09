@@ -32,7 +32,10 @@ class TelegramAuthAssistant:
             "sendMessage",
             {
                 "chat_id": self.chat_id,
-                "text": "Authorization help is needed. Tap Ready after logging in.",
+                "text": (
+                    "Дзену нужна авторизация. Готов сейчас войти? "
+                    "Нажми «Готов», и я открою страницу входа."
+                ),
                 "reply_markup": {
                     "inline_keyboard": [
                         [{"text": "Готов", "callback_data": "ready"}],
@@ -41,12 +44,7 @@ class TelegramAuthAssistant:
             },
         )
 
-        return (
-            self._poll_until(
-                lambda update: self._matching_callback(update) is not None
-            )
-            is not None
-        )
+        return self._poll_until(self._matching_callback) is not None
 
     def relay_code_prompt(self, prompt_text: str) -> str:
         self._post("sendMessage", {"chat_id": self.chat_id, "text": prompt_text})
@@ -110,6 +108,9 @@ class TelegramAuthAssistant:
 
         chat = message.get("chat")
         if not isinstance(chat, dict) or str(chat.get("id")) != self.chat_id:
+            return None
+
+        if callback.get("data") != "ready":
             return None
 
         return callback

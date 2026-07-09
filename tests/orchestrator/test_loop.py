@@ -253,7 +253,7 @@ def test_run_cycle_asks_auth_assistant_and_exits_when_session_is_not_restored(
     assert harness.repository.upsert_comment_calls == []
 
 
-def test_run_cycle_uses_automated_login_before_manual_auth(
+def test_run_cycle_asks_ready_before_automated_login(
     loop_factory,
     comment_factory,
 ):
@@ -275,9 +275,32 @@ def test_run_cycle_uses_automated_login_before_manual_auth(
 
     assert harness.session.restore_calls == 1
     assert harness.session.login_calls == 1
-    assert harness.auth_assistant.ask_ready_calls == 0
+    assert harness.auth_assistant.ask_ready_calls == 1
     assert harness.page.fetch_calls == 1
     assert harness.notifier.errors == []
+
+
+def test_run_cycle_stops_when_authorization_is_not_confirmed(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(logged_in=False, restore_results=[False])
+    auth_assistant = FakeAuthAssistant(ask_ready_result=False)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.session.restore_calls == 1
+    assert harness.session.login_calls == 0
+    assert harness.auth_assistant.ask_ready_calls == 1
+    assert harness.notifier.errors == [("Dzen authorization was not confirmed", None)]
+    assert harness.page.fetch_calls == 0
 
 
 def test_run_cycle_falls_back_to_manual_auth_when_automated_login_fails(

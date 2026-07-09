@@ -4,6 +4,7 @@ from playwright.sync_api import sync_playwright
 
 from dzen_commenter.auth import DzenLoginAuthenticator
 from dzen_commenter.config.settings import Settings
+from dzen_commenter.contracts.interfaces import AuthAssistant
 from dzen_commenter.dzen import selectors
 
 
@@ -15,8 +16,15 @@ class PlaywrightSessionManager:
     в тестах не поднимается.
     """
 
-    def __init__(self, settings: Settings, *, playwright_factory=sync_playwright) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        auth_assistant: AuthAssistant | None = None,
+        playwright_factory=sync_playwright,
+    ) -> None:
         self._settings = settings
+        self._auth_assistant = auth_assistant
         self._playwright_factory = playwright_factory
         self._playwright = None
         self._context = None
@@ -50,6 +58,7 @@ class PlaywrightSessionManager:
             comments_url=self._settings.COMMENTS_URL,
             phone=self._settings.DZEN_LOGIN_PHONE,
             password=self._settings.DZEN_LOGIN_PASSWORD,
+            auth_assistant=self._auth_assistant,
             timeout_ms=self._settings.DZEN_LOGIN_TIMEOUT_MS,
         )
         attempted = authenticator.login()

@@ -131,6 +131,7 @@ def test_login_delegates_to_dzen_authenticator_and_saves_state(monkeypatch):
         DZEN_LOGIN_PASSWORD="secret",
         DZEN_LOGIN_TIMEOUT_MS=12345,
     )
+    auth_assistant = object()
     page = FakePage(login_form_present=False)
     context = FakeContext(page)
     captured = {}
@@ -149,7 +150,11 @@ def test_login_delegates_to_dzen_authenticator_and_saves_state(monkeypatch):
         FakeAuthenticator,
     )
 
-    mgr = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    mgr = PlaywrightSessionManager(
+        settings,
+        auth_assistant=auth_assistant,
+        playwright_factory=make_factory(context),
+    )
     mgr.start()
     page.goto_calls.clear()
 
@@ -160,6 +165,7 @@ def test_login_delegates_to_dzen_authenticator_and_saves_state(monkeypatch):
             "comments_url": settings.COMMENTS_URL,
             "phone": settings.DZEN_LOGIN_PHONE,
             "password": settings.DZEN_LOGIN_PASSWORD,
+            "auth_assistant": auth_assistant,
             "timeout_ms": settings.DZEN_LOGIN_TIMEOUT_MS,
         },
         "login_called": True,
