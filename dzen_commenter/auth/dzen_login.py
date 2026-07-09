@@ -94,7 +94,7 @@ class DzenLoginAuthenticator:
     def _fill_yandex_login_if_visible(self) -> None:
         login_input = self._first_visible(
             selectors.YANDEX_ID_LOGIN_INPUT,
-            self._short_timeout_ms,
+            self._timeout_ms,
         )
         if login_input is None:
             return
