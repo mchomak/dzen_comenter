@@ -87,6 +87,14 @@ def test_ask_ready_sends_inline_button_and_returns_true_on_callback():
     assert "Готов".encode("utf-8") in send_payload
     assert b"????" not in send_payload
 
+    status_payload = recorder.requests[2].read()
+    assert (
+        "Авторизация начата. Открываю страницу входа, подожди немного.".encode(
+            "utf-8"
+        )
+        in status_payload
+    )
+
 
 def test_ask_ready_ignores_non_ready_callback():
     callback_update = {
@@ -160,6 +168,9 @@ def test_relay_code_prompt_returns_next_text_message():
     send_payload = recorder.requests[0].read()
     assert prompt.encode("utf-8") in send_payload
     assert b"????" not in send_payload
+
+    status_payload = recorder.requests[2].read()
+    assert "Код принят. Продолжаю авторизацию.".encode("utf-8") in status_payload
 
 
 def test_relay_code_prompt_raises_timeout_without_text_message():

@@ -44,7 +44,18 @@ class TelegramAuthAssistant:
             },
         )
 
-        return self._poll_until(self._matching_callback) is not None
+        update = self._poll_until(self._matching_callback)
+        if update is None:
+            return False
+
+        self._post(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": "Авторизация начата. Открываю страницу входа, подожди немного.",
+            },
+        )
+        return True
 
     def relay_code_prompt(self, prompt_text: str) -> str:
         self._post("sendMessage", {"chat_id": self.chat_id, "text": prompt_text})
@@ -56,6 +67,14 @@ class TelegramAuthAssistant:
         text = self._matching_text_message(update)
         if text is None:
             raise TimeoutError("Telegram auth code was not received in time")
+
+        self._post(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": "Код принят. Продолжаю авторизацию.",
+            },
+        )
         return text
 
     def _make_client(self, proxy_url: str) -> httpx.Client:
