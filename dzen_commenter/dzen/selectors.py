@@ -80,27 +80,60 @@ AUTH_CODE_INPUT = (
     'input[data-t*="code" i], '
     'input[maxlength="1"]'
 )
-YANDEX_ID_ACCOUNT_CARD = (
-    '[data-t="account-card"], '
-    '[data-t="user-account"], '
-    '[data-t="account"], '
-    '[data-testid*="account" i][role="button"], '
-    '[role="button"]:has-text("Plus"), '
-    '[role="button"]:has-text("Cards"), '
-    'button:has-text("Plus"), '
-    'button:has-text("Cards")'
+# Экран Яндекс ID «Выберите аккаунт» (pwl · компонент SplitAddUser/ChooseAddUser).
+# Реальная разметка страницы passport.yandex.ru/pwl-yandex/auth/suggest: русские подписи
+# («Плюс»/«Карты»/«Семья», «Нет нужного аккаунта»), интерактивные элементы помечены
+# data-react-aria-pressable; атрибутов data-t на странице НЕТ. На экране ввода телефона той
+# же страницы строка «Выберите аккаунт» встречается только внутри <script> (i18n-бандл), в
+# видимом DOM её нет — поэтому детектор привязан к заголовку (h1..h4/role=heading) и к
+# <button>, а НЕ к «//*», иначе он ложно срабатывал бы на экране ввода телефона.
+YANDEX_ID_ACCOUNT_CHOICE = (
+    'xpath=//*[self::h1 or self::h2 or self::h3 or self::h4 or @role="heading"]'
+    '[contains(normalize-space(), "Выберите аккаунт") '
+    'or contains(normalize-space(), "Select an account")] '
+    '| //button[contains(normalize-space(), "Нет нужного аккаунта") '
+    'or contains(normalize-space(), "No account")]'
 )
+YANDEX_ID_ACCOUNT_CARD = (
+    '[data-testid="account-list-item"], '
+    '[data-testid*="account-item" i], '
+    '[data-testid*="account" i][role="button"], '
+    '[role="button"]:has-text("Плюс"), '
+    'button:has-text("Плюс"), '
+    '[role="button"]:has-text("Карты"), '
+    'button:has-text("Карты")'
+)
+# Кликабельная карточка аккаунта: первый интерактивный элемент ПОСЛЕ заголовка
+# «Выберите аккаунт», не являющийся вторичными кнопками («Нет нужного аккаунта», «Ещё»,
+# «Добавить», QR, вход по лицу/отпечатку) и не содержащий <input> (иначе матчится
+# телефонное поле phone-input, из-за чего бот возвращался к вводу номера).
 YANDEX_ID_ACCOUNT_CARD_XPATH = (
-    'xpath=//*[contains(normalize-space(), "Select an account") '
-    'or contains(normalize-space(), "Выберите аккаунт")]'
-    '/following::*[(self::button or self::a or @role="button" or @data-t '
-    'or contains(translate(@class, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "account")) '
-    'and not(contains(normalize-space(), "missing")) '
-    'and not(contains(normalize-space(), "не найден"))][1]'
+    'xpath=//*[self::h1 or self::h2 or self::h3 or self::h4 or @role="heading"]'
+    '[contains(normalize-space(), "Выберите аккаунт") '
+    'or contains(normalize-space(), "Select an account")]'
+    '/following::*[(self::button or self::a or @role="button" '
+    'or @data-react-aria-pressable="true") '
+    'and not(.//input) '
+    'and not(contains(normalize-space(), "Нет нужного")) '
+    'and not(contains(normalize-space(), "No account")) '
+    'and not(contains(normalize-space(), "Ещё")) '
+    'and not(contains(normalize-space(), "More")) '
+    'and not(contains(normalize-space(), "Добавить")) '
+    'and not(contains(normalize-space(), "отпечат")) '
+    'and not(contains(normalize-space(), "лицу"))][1]'
 )
 YANDEX_ID_ACCOUNT_SELECTORS = (
     YANDEX_ID_ACCOUNT_CARD,
     YANDEX_ID_ACCOUNT_CARD_XPATH,
+)
+# Промо «Войти по лицу/отпечатку» после выбора аккаунта. Нужно закрыть кнопкой
+# «Напомнить позже» / «Remind me later», а не «Let's do it!» / «Войти» — иначе бот
+# подключит биометрию вместо обычного продолжения логина.
+YANDEX_WEBAUTHN_PROMO_DISMISS = (
+    'button:has-text("Remind me later"), '
+    '[role="button"]:has-text("Remind me later"), '
+    'button:has-text("Напомнить позже"), '
+    '[role="button"]:has-text("Напомнить позже")'
 )
 VK_PASSWORD_SUBMIT = (
     'button[type="submit"], '

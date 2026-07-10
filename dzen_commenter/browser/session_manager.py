@@ -1,4 +1,5 @@
-import os
+from pathlib import Path
+from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
@@ -35,6 +36,7 @@ class PlaywrightSessionManager:
         return self._page
 
     def start(self) -> None:
+        Path(self._settings.USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
         self._playwright = self._playwright_factory().start()
         self._context = self._playwright.chromium.launch_persistent_context(
             user_data_dir=self._settings.USER_DATA_DIR,
@@ -46,6 +48,8 @@ class PlaywrightSessionManager:
 
     def is_logged_in(self) -> bool:
         if self._page is None:
+            return False
+        if not self._is_on_comments_url():
             return False
         return self._page.query_selector(selectors.LOGIN_FORM) is None
 
@@ -73,10 +77,16 @@ class PlaywrightSessionManager:
         return True
 
     def save_state(self) -> None:
+        if self._context is None:
+            raise RuntimeError("Playwright context is not started")
+        Path(self._settings.STORAGE_STATE_PATH).parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
         self._context.storage_state(path=self._settings.STORAGE_STATE_PATH)
 
     def restore(self) -> bool:
-        if not os.path.exists(self._settings.STORAGE_STATE_PATH):
+        if not Path(self._settings.STORAGE_STATE_PATH).exists():
             return False
         self._page.goto(self._settings.COMMENTS_URL)
         return self.is_logged_in()
@@ -84,3 +94,18 @@ class PlaywrightSessionManager:
     def keep_alive(self) -> None:
         """Лёгкий reload, чтобы сессия не протухала. НЕ в Protocol."""
         self._page.reload()
+
+    def _is_on_comments_url(self) -> bool:
+        current_url = getattr(self._page, "url", "")
+        if not isinstance(current_url, str):
+            return False
+
+        current = urlparse(current_url)
+        expected = urlparse(self._settings.COMMENTS_URL)
+        if not current.netloc or current.netloc.lower() != expected.netloc.lower():
+            return False
+
+        expected_path = expected.path.rstrip("/")
+        if not expected_path:
+            return True
+        return current.path.rstrip("/") == expected_path

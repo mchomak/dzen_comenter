@@ -91,15 +91,18 @@ class OrchestratorLoop:
             cycles += 1
 
     def _ensure_session(self) -> bool:
-        if self.session.is_logged_in():
+        if self._save_current_session_if_logged_in():
             return True
 
-        if self.session.restore():
+        if self._restore_saved_session():
             return True
 
         if not self.auth_assistant.ask_ready():
             self.notifier.notify_error("Dzen authorization was not confirmed")
             return False
+
+        if self._save_current_session_if_logged_in():
+            return True
 
         try:
             if self.session.login():
@@ -107,11 +110,26 @@ class OrchestratorLoop:
         except Exception as exc:
             self.notifier.notify_error("Dzen automated login failed", exc)
 
-        if self.session.restore():
+        if self._save_current_session_if_logged_in():
+            return True
+
+        if self._restore_saved_session():
             return True
 
         self.notifier.notify_error("Dzen session is not restored")
         return False
+
+    def _save_current_session_if_logged_in(self) -> bool:
+        if not self.session.is_logged_in():
+            return False
+        self.session.save_state()
+        return True
+
+    def _restore_saved_session(self) -> bool:
+        if not self.session.restore():
+            return False
+        self.session.save_state()
+        return True
 
     def _is_too_old(self, posted_at: datetime | None) -> bool:
         if posted_at is None:

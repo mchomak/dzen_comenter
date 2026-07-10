@@ -37,9 +37,11 @@ class FakePage:
         self.login_form_present = login_form_present
         self.goto_calls: list[str] = []
         self.reload_count = 0
+        self.url = "about:blank"
 
     def goto(self, url: str) -> None:
         self.goto_calls.append(url)
+        self.url = url
 
     def reload(self) -> None:
         self.reload_count += 1
@@ -267,6 +269,30 @@ def test_is_logged_in_detects_login_form():
     )
     mgr_out.start()
     assert mgr_out.is_logged_in() is False
+
+
+def test_is_logged_in_false_when_redirected_off_comments_host():
+    settings = make_settings(COMMENTS_URL="https://dzen.ru/profile/comments")
+    page = FakePage(login_form_present=False)
+    mgr = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(FakeContext(page))
+    )
+    mgr.start()
+    page.url = "https://passport.yandex.ru/auth"
+
+    assert mgr.is_logged_in() is False
+
+
+def test_is_logged_in_false_when_redirected_off_comments_path():
+    settings = make_settings(COMMENTS_URL="https://dzen.ru/profile/comments")
+    page = FakePage(login_form_present=False)
+    mgr = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(FakeContext(page))
+    )
+    mgr.start()
+    page.url = "https://dzen.ru/"
+
+    assert mgr.is_logged_in() is False
 
 
 def test_is_logged_in_false_before_start():

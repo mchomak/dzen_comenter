@@ -57,6 +57,9 @@ class DzenLoginAuthenticator:
         self._ensure_no_captcha()
         handled_code = self._handle_manual_code_if_visible()
         selected_account = self._select_yandex_account_if_visible()
+        if self._dismiss_webauthn_promo_if_visible():
+            self._wait_for_dzen_redirect()
+            return True
 
         password_input = self._first_visible(
             selectors.VK_PASSWORD_INPUT,
@@ -105,6 +108,8 @@ class DzenLoginAuthenticator:
         return True
 
     def _fill_yandex_login_if_visible(self) -> bool:
+        if self._is_account_choice_visible():
+            return False
         if self._is_yandex_phone_login_visible() is False:
             if self._first_visible(selectors.AUTH_CODE_INPUT, 500) is not None:
                 return False
@@ -216,7 +221,20 @@ class DzenLoginAuthenticator:
                 self._wait_after_transition()
                 self._ensure_no_captcha()
                 return True
+        if self._is_account_choice_visible():
+            raise RuntimeError(
+                "Yandex ID account chooser is shown but the account card could not "
+                "be clicked; update YANDEX_ID_ACCOUNT_CARD selectors for the current DOM"
+            )
         return False
+
+    def _is_account_choice_visible(self) -> bool:
+        return self._first_visible(selectors.YANDEX_ID_ACCOUNT_CHOICE, 500) is not None
+
+    def _dismiss_webauthn_promo_if_visible(self) -> bool:
+        return self._click_optional(
+            selectors.YANDEX_WEBAUTHN_PROMO_DISMISS, self._short_timeout_ms
+        )
 
     def _fill_auth_code(self, first_code_input: Any, code: str) -> None:
         locator_group = self._page.locator(selectors.AUTH_CODE_INPUT)

@@ -37,7 +37,13 @@ class FakeLocator:
                 self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = False
                 self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = False
                 if self.page.account_choice_visible:
-                    self.page.visible[selectors.YANDEX_ID_ACCOUNT_CARD] = True
+                    self.page.visible[selectors.YANDEX_ID_ACCOUNT_CHOICE] = True
+                    if self.page.account_card_unclickable:
+                        # Экран «Выберите аккаунт» показан, но карточку кликнуть нельзя,
+                        # а телефонное поле остаётся в DOM (реальный баг pwl-страницы).
+                        self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = True
+                    else:
+                        self.page.visible[selectors.YANDEX_ID_ACCOUNT_CARD] = True
                 else:
                     self.page.visible[selectors.VK_PASSWORD_INPUT] = True
             elif self.page.code_visible:
@@ -56,6 +62,12 @@ class FakeLocator:
                 self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = False
         elif self.selector == selectors.YANDEX_ID_ACCOUNT_CARD:
             self.page.visible[selectors.YANDEX_ID_ACCOUNT_CARD] = False
+            if self.page.webauthn_promo_visible:
+                self.page.visible[selectors.YANDEX_WEBAUTHN_PROMO_DISMISS] = True
+            else:
+                self.page.url = "https://dzen.ru/profile/comments"
+        elif self.selector == selectors.YANDEX_WEBAUTHN_PROMO_DISMISS:
+            self.page.visible[selectors.YANDEX_WEBAUTHN_PROMO_DISMISS] = False
             self.page.url = "https://dzen.ru/profile/comments"
         elif self.selector == selectors.VK_PASSWORD_METHOD:
             self.page.visible[selectors.VK_PASSWORD_INPUT] = True
@@ -69,11 +81,15 @@ class FakePage:
         yandex_visible=True,
         code_visible=False,
         account_choice_visible=False,
+        account_card_unclickable=False,
+        webauthn_promo_visible=False,
         phone_form_retries_before_code=0,
     ):
         self.yandex_visible = yandex_visible
         self.code_visible = code_visible
         self.account_choice_visible = account_choice_visible
+        self.account_card_unclickable = account_card_unclickable
+        self.webauthn_promo_visible = webauthn_promo_visible
         self.phone_form_retries_before_code = phone_form_retries_before_code
         self.visible = {
             selectors.LOGIN_BUTTON: True,
@@ -90,6 +106,7 @@ class FakePage:
             selectors.AUTH_CAPTCHA: captcha_visible,
             selectors.AUTH_CODE_INPUT: False,
             selectors.YANDEX_ID_ACCOUNT_CARD: False,
+            selectors.YANDEX_WEBAUTHN_PROMO_DISMISS: False,
         }
         self.url = ""
         self.goto_calls = []
@@ -274,6 +291,92 @@ def test_dzen_login_selects_account_after_manual_code():
     assert (selectors.AUTH_CODE_INPUT, "482913") in page.fills
     assert selectors.YANDEX_ID_ACCOUNT_CARD in page.clicks
     assert (selectors.VK_PASSWORD_INPUT, "secret") not in page.fills
+
+
+def test_dzen_login_dismisses_webauthn_promo_after_account_selection():
+    # После выбора аккаунта Яндекс может показать промо «Войти по лицу/отпечатку».
+    # Бот обязан нажать «Напомнить позже», а не «Let's do it!»/«Войти», и на этом
+    # завершить авторизацию без ввода пароля.
+    page = FakePage(
+        code_visible=True,
+        account_choice_visible=True,
+        webauthn_promo_visible=True,
+    )
+
+    class FakeAuthAssistant:
+        def relay_code_prompt(self, prompt_text):
+            return "482913"
+
+    authenticator = DzenLoginAuthenticator(
+        page,
+        comments_url="https://dzen.ru/profile/comments",
+        phone="9269549196",
+        password="secret",
+        auth_assistant=FakeAuthAssistant(),
+        timeout_ms=1000,
+    )
+
+    assert authenticator.login() is True
+
+    assert selectors.YANDEX_ID_ACCOUNT_CARD in page.clicks
+    assert selectors.YANDEX_WEBAUTHN_PROMO_DISMISS in page.clicks
+    assert (selectors.VK_PASSWORD_INPUT, "secret") not in page.fills
+
+
+def test_webauthn_promo_selector_targets_dismiss_not_enable():
+    assert "Напомнить позже" in selectors.YANDEX_WEBAUTHN_PROMO_DISMISS
+    assert "Remind me later" in selectors.YANDEX_WEBAUTHN_PROMO_DISMISS
+    assert "Let's do it" not in selectors.YANDEX_WEBAUTHN_PROMO_DISMISS
+    assert "Войти" not in selectors.YANDEX_WEBAUTHN_PROMO_DISMISS
+
+
+def test_dzen_login_does_not_reenter_phone_when_account_card_unclickable():
+    # Регрессия: на экране «Выберите аккаунт» карточку не удалось кликнуть.
+    # Бот НЕ должен снова заполнять телефон (что уводило его назад на ввод номера);
+    # он обязан остановиться с понятной ошибкой.
+    page = FakePage(
+        code_visible=True,
+        account_choice_visible=True,
+        account_card_unclickable=True,
+    )
+
+    class FakeAuthAssistant:
+        def relay_code_prompt(self, prompt_text):
+            return "482913"
+
+    authenticator = DzenLoginAuthenticator(
+        page,
+        comments_url="https://dzen.ru/profile/comments",
+        phone="9269549196",
+        password="secret",
+        auth_assistant=FakeAuthAssistant(),
+        timeout_ms=1000,
+    )
+
+    with pytest.raises(RuntimeError, match="account chooser"):
+        authenticator.login()
+
+    # Телефон в поле Яндекс ID был введён ровно один раз (до кода) и НЕ повторно.
+    phone_fills = [f for f in page.fills if f[0] == selectors.YANDEX_ID_LOGIN_INPUT]
+    assert len(phone_fills) == 1
+    assert (selectors.VK_PASSWORD_INPUT, "secret") not in page.fills
+
+
+def test_account_choice_detector_is_scoped_to_headings_not_scripts():
+    # На экране ввода телефона строка «Выберите аккаунт» присутствует только в <script>,
+    # поэтому детектор обязан быть привязан к заголовку/кнопке, а не к «//*».
+    assert selectors.YANDEX_ID_ACCOUNT_CHOICE.startswith("xpath=//*[self::h1")
+    assert "Выберите аккаунт" in selectors.YANDEX_ID_ACCOUNT_CHOICE
+    assert "//*[contains" not in selectors.YANDEX_ID_ACCOUNT_CHOICE
+
+
+def test_account_card_selectors_match_real_yandex_dom():
+    # Мёртвые селекторы старой разметки убраны, добавлены реальные признаки страницы.
+    assert 'data-t="account-card"' not in selectors.YANDEX_ID_ACCOUNT_CARD
+    assert "Плюс" in selectors.YANDEX_ID_ACCOUNT_CARD
+    # Карточка ищется среди элементов ПОСЛЕ заголовка и не должна содержать <input>.
+    assert "not(.//input)" in selectors.YANDEX_ID_ACCOUNT_CARD_XPATH
+    assert "Нет нужного" in selectors.YANDEX_ID_ACCOUNT_CARD_XPATH
 
 
 def test_auth_code_selector_does_not_match_generic_numeric_phone_input():

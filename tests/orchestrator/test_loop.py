@@ -253,6 +253,79 @@ def test_run_cycle_asks_auth_assistant_and_exits_when_session_is_not_restored(
     assert harness.repository.upsert_comment_calls == []
 
 
+def test_run_cycle_saves_state_when_session_is_already_logged_in(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeSessionManager
+
+    session = FakeSessionManager(logged_in=True)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.session.save_state_calls == 1
+    assert harness.session.restore_calls == 0
+    assert harness.session.login_calls == 0
+    assert harness.page.fetch_calls == 1
+
+
+def test_run_cycle_saves_state_after_restore(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(logged_in=False, restore_results=[True])
+    auth_assistant = FakeAuthAssistant(ask_ready_result=True)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.session.restore_calls == 1
+    assert harness.session.save_state_calls == 1
+    assert harness.session.login_calls == 0
+    assert harness.auth_assistant.ask_ready_calls == 0
+    assert harness.page.fetch_calls == 1
+
+
+def test_run_cycle_saves_manual_session_after_ready_confirmation(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(logged_in=False, restore_results=[False])
+
+    class ManualAuthAssistant(FakeAuthAssistant):
+        def ask_ready(self) -> bool:
+            result = super().ask_ready()
+            session.logged_in = True
+            return result
+
+    auth_assistant = ManualAuthAssistant(ask_ready_result=True)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.session.restore_calls == 1
+    assert harness.session.save_state_calls == 1
+    assert harness.session.login_calls == 0
+    assert harness.auth_assistant.ask_ready_calls == 1
+    assert harness.page.fetch_calls == 1
+
+
 def test_run_cycle_asks_ready_before_automated_login(
     loop_factory,
     comment_factory,
