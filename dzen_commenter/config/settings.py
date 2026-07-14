@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     AI_MAX_TOKENS: int
     AI_PROMPT_LANGUAGE: str
 
+    # GigaChat
+    GIGACHAT_AUTH_KEY: str = ""
+    GIGACHAT_SCOPE: str = "GIGACHAT_API_B2B"
+    GIGACHAT_OAUTH_URL: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    GIGACHAT_BASE_URL: str = "https://gigachat.devices.sberbank.ru/api"
+    GIGACHAT_MODEL: str = "GigaChat-Pro"
+    GIGACHAT_VERIFY_SSL_CERTS: bool = True
+
     # Браузер / Дзен
     USER_DATA_DIR: str
     STORAGE_STATE_PATH: str

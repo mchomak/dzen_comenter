@@ -151,8 +151,96 @@ def test_http_error_propagates():
 
 
 # 8
-def test_stubs_raise_not_implemented():
-    with pytest.raises(NotImplementedError):
-        GigaChatProvider().generate("x", temperature=0.1, max_tokens=8)
+def test_yandex_stub_still_raises_not_implemented():
     with pytest.raises(NotImplementedError):
         YandexGPTProvider().generate("x", temperature=0.1, max_tokens=8)
+
+
+# 9
+def test_gigachat_reuses_access_token():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.path.endswith("/oauth"):
+            return httpx.Response(200, json={"access_token": "token-1", "expires_at": 4102444800})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}}]}
+        )
+
+    provider = GigaChatProvider(
+        api_key="authorization-key",
+        base_url="https://gigachat.example/api",
+        model="GigaChat-Pro",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert provider.generate("one", temperature=0.1, max_tokens=8) == "ok"
+    assert provider.generate("two", temperature=0.1, max_tokens=8) == "ok"
+    assert sum(request.url.path.endswith("/oauth") for request in calls) == 1
+    assert all(
+        request.headers.get("Authorization") == "Bearer token-1"
+        for request in calls
+        if request.url.path.endswith("/chat/completions")
+    )
+
+
+# 10
+def test_gigachat_refreshes_token_near_expiry(monkeypatch):
+    now = 0.0
+    token_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal token_calls
+        if request.url.path.endswith("/oauth"):
+            token_calls += 1
+            return httpx.Response(
+                200, json={"access_token": f"token-{token_calls}", "expires_at": 100}
+            )
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}}]}
+        )
+
+    monkeypatch.setattr("dzen_commenter.ai.gigachat.time.time", lambda: now)
+    provider = GigaChatProvider(
+        api_key="authorization-key",
+        base_url="https://gigachat.example/api",
+        model="GigaChat-Pro",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    provider.generate("one", temperature=0.1, max_tokens=8)
+    now = 20.0
+    provider.generate("two", temperature=0.1, max_tokens=8)
+    now = 41.0
+    provider.generate("three", temperature=0.1, max_tokens=8)
+    assert token_calls == 2
+
+
+# 11
+def test_gigachat_refreshes_token_after_401():
+    token_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal token_calls
+        if request.url.path.endswith("/oauth"):
+            token_calls += 1
+            return httpx.Response(
+                200,
+                json={"access_token": f"token-{token_calls}", "expires_at": 4102444800},
+            )
+        if request.headers.get("Authorization") == "Bearer token-1":
+            return httpx.Response(401, json={"error": "expired token"})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "recovered"}}]}
+        )
+
+    provider = GigaChatProvider(
+        api_key="authorization-key",
+        base_url="https://gigachat.example/api",
+        model="GigaChat-Pro",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert provider.generate("prompt", temperature=0.1, max_tokens=8) == "recovered"
+    assert token_calls == 2

@@ -18,9 +18,12 @@ def create_provider(settings: Settings) -> AIProvider:
         )
     if name == "gigachat":
         return GigaChatProvider(
-            api_key=settings.AI_API_KEY,
-            base_url=settings.AI_BASE_URL,
-            model=settings.AI_MODEL,
+            api_key=settings.GIGACHAT_AUTH_KEY or settings.AI_API_KEY,
+            base_url=settings.GIGACHAT_BASE_URL or settings.AI_BASE_URL,
+            model=settings.GIGACHAT_MODEL or settings.AI_MODEL,
+            scope=settings.GIGACHAT_SCOPE,
+            oauth_url=settings.GIGACHAT_OAUTH_URL,
+            verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL_CERTS,
         )
     if name == "yandexgpt":
         return YandexGPTProvider(
