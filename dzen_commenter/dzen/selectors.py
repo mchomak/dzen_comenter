@@ -88,6 +88,8 @@ YANDEX_ID_CONTINUE = (
     'button[type="submit"], '
     'button:has-text("Next"), '
     '[role="button"]:has-text("Next"), '
+    'button:has-text("Log in"), '
+    '[role="button"]:has-text("Log in"), '
     'button:has-text("Продолжить"), '
     '[role="button"]:has-text("Продолжить"), '
     'button:has-text("Войти"), '

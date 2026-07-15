@@ -249,6 +249,11 @@ def test_yandex_username_selector_supports_menu_items_and_pressable_containers()
     )
 
 
+def test_yandex_continue_selector_supports_english_log_in_button():
+    assert 'button:has-text("Log in")' in selectors.YANDEX_ID_CONTINUE
+    assert '[role="button"]:has-text("Log in")' in selectors.YANDEX_ID_CONTINUE
+
+
 def test_dzen_login_stops_when_manual_code_is_visible():
     page = FakePage(code_visible=True)
     authenticator = DzenLoginAuthenticator(
