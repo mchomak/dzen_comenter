@@ -8,6 +8,10 @@ from dzen_commenter.contracts.interfaces import AuthAssistant
 from dzen_commenter.dzen import selectors
 
 
+class DzenSmsRestartRequested(RuntimeError):
+    """Restart the login once so Yandex sends a fresh verification code."""
+
+
 class DzenLoginAuthenticator:
     def __init__(
         self,
@@ -18,12 +22,14 @@ class DzenLoginAuthenticator:
         password: str,
         auth_assistant: AuthAssistant | None = None,
         timeout_ms: int = 30000,
+        restart_on_sms: bool = False,
     ) -> None:
         self._page = page
         self._comments_url = comments_url
         self._phone = phone
         self._password = password
         self._auth_assistant = auth_assistant
+        self._restart_on_sms = restart_on_sms
         self._timeout_ms = max(1, timeout_ms)
         self._short_timeout_ms = min(5000, self._timeout_ms)
 
@@ -253,6 +259,10 @@ class DzenLoginAuthenticator:
             return False
         if self._auth_assistant is None:
             raise RuntimeError("Dzen login requires manual code input")
+
+        if self._restart_on_sms:
+            self._auth_assistant.notify_sms_restart()
+            raise DzenSmsRestartRequested()
 
         code = self._auth_assistant.relay_code_prompt(
             "Дзен запросил код подтверждения. Пришли код из SMS или приложения ответом в этот чат."

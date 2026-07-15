@@ -206,10 +206,14 @@ class FakeAuthAssistant:
         self.ask_ready_result = ask_ready_result
         self.ask_ready_calls = 0
         self.relay_code_prompt_calls: list[str] = []
+        self.sms_restart_notifications = 0
 
     def ask_ready(self) -> bool:
         self.ask_ready_calls += 1
         return self.ask_ready_result
+
+    def notify_sms_restart(self) -> None:
+        self.sms_restart_notifications += 1
 
     def relay_code_prompt(self, prompt_text: str) -> str:
         self.relay_code_prompt_calls.append(prompt_text)

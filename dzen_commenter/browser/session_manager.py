@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
-from dzen_commenter.auth import DzenLoginAuthenticator
+from dzen_commenter.auth import DzenLoginAuthenticator, DzenSmsRestartRequested
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import AuthAssistant
 from dzen_commenter.dzen import selectors
@@ -58,15 +58,22 @@ class PlaywrightSessionManager:
         if self._page is None:
             return False
 
-        authenticator = DzenLoginAuthenticator(
-            self._page,
-            comments_url=self._settings.COMMENTS_URL,
-            phone=self._settings.DZEN_LOGIN_PHONE,
-            password=self._settings.DZEN_LOGIN_PASSWORD,
-            auth_assistant=self._auth_assistant,
-            timeout_ms=self._settings.DZEN_LOGIN_TIMEOUT_MS,
-        )
-        attempted = authenticator.login()
+        attempted = False
+        for restart_on_sms in (True, False):
+            authenticator = DzenLoginAuthenticator(
+                self._page,
+                comments_url=self._settings.COMMENTS_URL,
+                phone=self._settings.DZEN_LOGIN_PHONE,
+                password=self._settings.DZEN_LOGIN_PASSWORD,
+                auth_assistant=self._auth_assistant,
+                timeout_ms=self._settings.DZEN_LOGIN_TIMEOUT_MS,
+                restart_on_sms=restart_on_sms,
+            )
+            try:
+                attempted = authenticator.login()
+            except DzenSmsRestartRequested:
+                continue
+            break
         if not attempted:
             return False
 

@@ -1,6 +1,6 @@
 import pytest
 
-from dzen_commenter.auth import DzenLoginAuthenticator
+from dzen_commenter.auth import DzenLoginAuthenticator, DzenSmsRestartRequested
 from dzen_commenter.dzen import selectors
 
 
@@ -280,6 +280,36 @@ def test_dzen_login_relays_manual_code_through_auth_assistant():
     assert (selectors.AUTH_CODE_INPUT, "482913") in page.fills
     assert page.fills[-1] == (selectors.VK_PASSWORD_INPUT, "secret")
     assert page.clicks.count(selectors.YANDEX_ID_CONTINUE) == 2
+
+
+def test_dzen_login_restarts_once_when_sms_code_is_shown():
+    page = FakePage(code_visible=True)
+
+    class FakeAuthAssistant:
+        def __init__(self):
+            self.restart_notifications = 0
+
+        def notify_sms_restart(self):
+            self.restart_notifications += 1
+
+        def relay_code_prompt(self, prompt_text):
+            raise AssertionError("the first code must not be requested")
+
+    auth_assistant = FakeAuthAssistant()
+    authenticator = DzenLoginAuthenticator(
+        page,
+        comments_url="https://dzen.ru/profile/comments",
+        phone="9269549196",
+        password="secret",
+        auth_assistant=auth_assistant,
+        restart_on_sms=True,
+        timeout_ms=1000,
+    )
+
+    with pytest.raises(DzenSmsRestartRequested):
+        authenticator.login()
+
+    assert auth_assistant.restart_notifications == 1
 
 
 def test_dzen_login_does_not_request_code_on_phone_login_form():

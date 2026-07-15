@@ -77,6 +77,18 @@ class TelegramAuthAssistant:
         )
         return text
 
+    def notify_sms_restart(self) -> None:
+        self._post(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": (
+                    "\u0414\u0437\u0435\u043d \u0437\u0430\u043f\u0440\u043e\u0441\u0438\u043b \u043a\u043e\u0434 \u0438\u0437 SMS. "
+                    "\u041f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u043a\u0430\u044e \u0432\u0445\u043e\u0434, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u0432\u0435\u0436\u0438\u0439 \u043a\u043e\u0434."
+                ),
+            },
+        )
+
     def _make_client(self, proxy_url: str) -> httpx.Client:
         if proxy_url:
             return httpx.Client(proxy=proxy_url)

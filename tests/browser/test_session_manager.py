@@ -173,11 +173,45 @@ def test_login_delegates_to_dzen_authenticator_and_saves_state(monkeypatch):
             "password": settings.DZEN_LOGIN_PASSWORD,
             "auth_assistant": auth_assistant,
             "timeout_ms": settings.DZEN_LOGIN_TIMEOUT_MS,
+            "restart_on_sms": True,
         },
         "login_called": True,
     }
     assert page.goto_calls == [settings.COMMENTS_URL]
     assert context.storage_state_calls == [settings.STORAGE_STATE_PATH]
+
+
+def test_login_restarts_after_sms_before_requesting_a_code(monkeypatch):
+    settings = make_settings(
+        DZEN_LOGIN_PHONE="user@example.com",
+        DZEN_LOGIN_PASSWORD="secret",
+    )
+    page = FakePage(login_form_present=False)
+    context = FakeContext(page)
+    attempts = []
+
+    class FakeAuthenticator:
+        def __init__(self, page_arg, **kwargs):
+            attempts.append(kwargs["restart_on_sms"])
+
+        def login(self):
+            if len(attempts) == 1:
+                from dzen_commenter.auth import DzenSmsRestartRequested
+
+                raise DzenSmsRestartRequested()
+            return True
+
+    monkeypatch.setattr(
+        "dzen_commenter.browser.session_manager.DzenLoginAuthenticator",
+        FakeAuthenticator,
+    )
+
+    mgr = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    mgr.start()
+    page.goto_calls.clear()
+
+    assert mgr.login() is True
+    assert attempts == [True, False]
 
 
 def test_login_returns_false_when_authenticator_skips(monkeypatch):
