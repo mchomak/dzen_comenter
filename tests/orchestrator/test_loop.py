@@ -423,6 +423,26 @@ def test_run_cycle_stops_when_authorization_is_not_confirmed(
     assert harness.page.fetch_calls == 0
 
 
+def test_run_forever_notifies_authorization_denied_only_once(
+    loop_factory,
+    comment_factory,
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(logged_in=False, restore_results=[False, False, False])
+    auth_assistant = FakeAuthAssistant(ask_ready_result=False)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_forever(max_cycles=3)
+
+    assert auth_assistant.ask_ready_calls == 3
+    assert harness.notifier.errors == [("Dzen authorization was not confirmed", None)]
+
+
 def test_run_cycle_falls_back_to_manual_auth_when_automated_login_fails(
     loop_factory,
     comment_factory,

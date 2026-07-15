@@ -45,6 +45,7 @@ class OrchestratorLoop:
         self.auth_assistant = auth_assistant
         self.classify_reply_type = classify_reply_type
         self.sleep_fn = sleep_fn
+        self._authorization_not_confirmed_notified = False
 
     def run_cycle(self) -> None:
         if not self._ensure_session():
@@ -92,32 +93,38 @@ class OrchestratorLoop:
 
     def _ensure_session(self) -> bool:
         if self._save_current_session_if_logged_in():
-            return True
+            return self._session_ready()
 
         if self._restore_saved_session():
-            return True
+            return self._session_ready()
 
         if not self.auth_assistant.ask_ready():
-            self.notifier.notify_error("Dzen authorization was not confirmed")
+            if not self._authorization_not_confirmed_notified:
+                self.notifier.notify_error("Dzen authorization was not confirmed")
+                self._authorization_not_confirmed_notified = True
             return False
 
         if self._save_current_session_if_logged_in():
-            return True
+            return self._session_ready()
 
         try:
             if self.session.login():
-                return True
+                return self._session_ready()
         except Exception as exc:
             self.notifier.notify_error("Dzen automated login failed", exc)
 
         if self._save_current_session_if_logged_in():
-            return True
+            return self._session_ready()
 
         if self._restore_saved_session():
-            return True
+            return self._session_ready()
 
         self.notifier.notify_error("Dzen session is not restored")
         return False
+
+    def _session_ready(self) -> bool:
+        self._authorization_not_confirmed_notified = False
+        return True
 
     def _save_current_session_if_logged_in(self) -> bool:
         if not self.session.is_logged_in():
