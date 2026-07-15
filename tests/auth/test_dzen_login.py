@@ -40,6 +40,9 @@ class FakeLocator:
         elif self.selector == selectors.YANDEX_ID_USERNAME_LOGIN:
             self.page.visible[selectors.YANDEX_ID_USERNAME_LOGIN] = False
             self.page.visible[selectors.YANDEX_ID_USERNAME_INPUT] = True
+        elif self.selector == selectors.YANDEX_ID_CONFIRM:
+            self.page.visible[selectors.YANDEX_ID_SECURE_LOGIN] = False
+            self.page.visible[selectors.AUTH_CODE_INPUT] = True
         elif self.selector == selectors.YANDEX_ID_CONTINUE:
             if self.page.visible[selectors.AUTH_CODE_INPUT] and self.page.code_entered:
                 self.page.visible[selectors.AUTH_CODE_INPUT] = False
@@ -65,6 +68,9 @@ class FakeLocator:
                 self.page.visible[selectors.AUTH_CODE_INPUT] = True
                 self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = False
                 self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = False
+            elif self.page.secure_login_visible:
+                self.page.visible[selectors.YANDEX_ID_SECURE_LOGIN] = True
+                self.page.visible[selectors.YANDEX_ID_CONFIRM] = True
             else:
                 self.page.visible[selectors.VK_PASSWORD_INPUT] = True
                 self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = False
@@ -94,6 +100,7 @@ class FakePage:
         webauthn_promo_visible=False,
         phone_form_retries_before_code=0,
         yandex_more_visible=False,
+        secure_login_visible=False,
     ):
         self.yandex_visible = yandex_visible
         self.code_visible = code_visible
@@ -102,6 +109,7 @@ class FakePage:
         self.webauthn_promo_visible = webauthn_promo_visible
         self.phone_form_retries_before_code = phone_form_retries_before_code
         self.yandex_more_visible = yandex_more_visible
+        self.secure_login_visible = secure_login_visible
         self.visible = {
             selectors.LOGIN_BUTTON: True,
             selectors.LOGIN_PHONE_INPUT: False,
@@ -113,6 +121,8 @@ class FakePage:
             selectors.YANDEX_ID_MORE_BUTTON: False,
             selectors.YANDEX_ID_USERNAME_LOGIN: False,
             selectors.YANDEX_ID_CONTINUE: True,
+            selectors.YANDEX_ID_SECURE_LOGIN: False,
+            selectors.YANDEX_ID_CONFIRM: False,
             selectors.VK_PASSWORD_METHOD: False,
             selectors.VK_PASSWORD_INPUT: False,
             selectors.VK_PASSWORD_SUBMIT: True,
@@ -252,6 +262,38 @@ def test_yandex_username_selector_supports_menu_items_and_pressable_containers()
 def test_yandex_continue_selector_supports_english_log_in_button():
     assert 'button:has-text("Log in")' in selectors.YANDEX_ID_CONTINUE
     assert '[role="button"]:has-text("Log in")' in selectors.YANDEX_ID_CONTINUE
+
+
+def test_dzen_login_confirms_secure_login_then_relays_sms_code():
+    page = FakePage(yandex_more_visible=True, secure_login_visible=True)
+
+    class FakeAuthAssistant:
+        def __init__(self):
+            self.pending_notifications = 0
+            self.prompts = []
+
+        def notify_sms_pending(self):
+            self.pending_notifications += 1
+
+        def relay_code_prompt(self, prompt_text):
+            self.prompts.append(prompt_text)
+            return "482913"
+
+    auth_assistant = FakeAuthAssistant()
+    authenticator = DzenLoginAuthenticator(
+        page,
+        comments_url="https://dzen.ru/profile/comments",
+        phone="user@example.com",
+        password="secret",
+        auth_assistant=auth_assistant,
+        timeout_ms=1000,
+    )
+
+    assert authenticator.login() is True
+    assert auth_assistant.pending_notifications == 1
+    assert len(auth_assistant.prompts) == 1
+    assert selectors.YANDEX_ID_CONFIRM in page.clicks
+    assert (selectors.AUTH_CODE_INPUT, "482913") in page.fills
 
 
 def test_password_submit_selector_supports_english_next_button():

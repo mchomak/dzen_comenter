@@ -26,6 +26,13 @@ def test_notify_sms_restart_signature():
     assert sig.return_annotation is None
 
 
+def test_notify_sms_pending_signature():
+    sig = inspect.signature(AuthAssistant.notify_sms_pending)
+    params = [p for p in sig.parameters if p != "self"]
+    assert params == []
+    assert sig.return_annotation is None
+
+
 def test_relay_code_prompt_signature():
     sig = inspect.signature(AuthAssistant.relay_code_prompt)
     params = [p for p in sig.parameters if p != "self"]

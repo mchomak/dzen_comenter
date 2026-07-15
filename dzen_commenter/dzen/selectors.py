@@ -95,6 +95,20 @@ YANDEX_ID_CONTINUE = (
     'button:has-text("Войти"), '
     '[role="button"]:has-text("Войти")'
 )
+YANDEX_ID_SECURE_LOGIN = (
+    'h1:has-text("Secure login"), '
+    'h2:has-text("Secure login"), '
+    '[role="heading"]:has-text("Secure login"), '
+    'h1:has-text("Безопасный вход"), '
+    'h2:has-text("Безопасный вход"), '
+    '[role="heading"]:has-text("Безопасный вход")'
+)
+YANDEX_ID_CONFIRM = (
+    'button:has-text("Confirm"), '
+    '[role="button"]:has-text("Confirm"), '
+    'button:has-text("Подтвердить"), '
+    '[role="button"]:has-text("Подтвердить")'
+)
 VK_PASSWORD_METHOD = (
     'button:has-text("Ввести пароль"), '
     '[role="button"]:has-text("Ввести пароль"), '

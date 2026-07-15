@@ -89,6 +89,18 @@ class TelegramAuthAssistant:
             },
         )
 
+    def notify_sms_pending(self) -> None:
+        self._post(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": (
+                    "\u042f\u043d\u0434\u0435\u043a\u0441 \u043f\u0440\u043e\u0441\u0438\u0442 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0435 \u0432\u0445\u043e\u0434\u0430. "
+                    "\u0421\u043a\u043e\u0440\u043e \u043f\u0440\u0438\u0434\u0451\u0442 SMS-\u043a\u043e\u0434, \u043f\u043e\u0434\u043e\u0436\u0434\u0438 \u043d\u0435\u043c\u043d\u043e\u0433\u043e."
+                ),
+            },
+        )
+
     def _make_client(self, proxy_url: str) -> httpx.Client:
         if proxy_url:
             return httpx.Client(proxy=proxy_url)

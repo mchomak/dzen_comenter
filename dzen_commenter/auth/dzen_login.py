@@ -256,6 +256,7 @@ class DzenLoginAuthenticator:
             raise RuntimeError("Dzen login requires captcha or additional verification")
 
     def _handle_manual_code_if_visible(self) -> bool:
+        self._confirm_secure_login_if_visible()
         if self._is_yandex_phone_login_visible():
             return False
 
@@ -280,6 +281,21 @@ class DzenLoginAuthenticator:
 
         self._fill_auth_code(code_input, code)
         self._click_optional(selectors.YANDEX_ID_CONTINUE, self._short_timeout_ms)
+        self._wait_after_transition()
+        self._ensure_no_captcha()
+        return True
+
+    def _confirm_secure_login_if_visible(self) -> bool:
+        if self._first_visible(selectors.YANDEX_ID_SECURE_LOGIN, 500) is None:
+            return False
+        if self._auth_assistant is None:
+            raise RuntimeError("Dzen secure login requires SMS confirmation")
+        self._auth_assistant.notify_sms_pending()
+        self._click_required(
+            selectors.YANDEX_ID_CONFIRM,
+            "Yandex ID Confirm button",
+            self._timeout_ms,
+        )
         self._wait_after_transition()
         self._ensure_no_captcha()
         return True

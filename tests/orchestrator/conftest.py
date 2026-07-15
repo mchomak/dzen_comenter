@@ -215,6 +215,9 @@ class FakeAuthAssistant:
     def notify_sms_restart(self) -> None:
         self.sms_restart_notifications += 1
 
+    def notify_sms_pending(self) -> None:
+        pass
+
     def relay_code_prompt(self, prompt_text: str) -> str:
         self.relay_code_prompt_calls.append(prompt_text)
         return "000000"

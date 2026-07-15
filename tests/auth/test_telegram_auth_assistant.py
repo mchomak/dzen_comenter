@@ -59,6 +59,10 @@ def test_import_and_contract_signatures():
     assert list(restart_sig.parameters) == ["self"]
     assert restart_sig.return_annotation in ("None", None)
 
+    pending_sig = inspect.signature(TelegramAuthAssistant.notify_sms_pending)
+    assert list(pending_sig.parameters) == ["self"]
+    assert pending_sig.return_annotation in ("None", None)
+
 
 def test_ask_ready_sends_inline_button_and_returns_true_on_callback():
     callback_update = {
@@ -195,6 +199,16 @@ def test_notify_sms_restart_sends_message():
     assistant, _ = _assistant(recorder)
 
     assistant.notify_sms_restart()
+
+    assert recorder.requests[0].url.path.endswith(f"/bot{TOKEN}/sendMessage")
+    assert "SMS".encode("utf-8") in recorder.requests[0].read()
+
+
+def test_notify_sms_pending_sends_message():
+    recorder = RequestRecorder([_json_response({"ok": True, "result": {}})])
+    assistant, _ = _assistant(recorder)
+
+    assistant.notify_sms_pending()
 
     assert recorder.requests[0].url.path.endswith(f"/bot{TOKEN}/sendMessage")
     assert "SMS".encode("utf-8") in recorder.requests[0].read()
