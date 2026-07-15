@@ -34,24 +34,34 @@ class DzenLoginAuthenticator:
         self._page.goto(self._comments_url)
         self._click_optional(selectors.LOGIN_BUTTON, self._short_timeout_ms)
 
-        phone_input = self._require_visible(
-            selectors.LOGIN_PHONE_INPUT,
-            "Dzen phone input",
-            self._timeout_ms,
-        )
-        self._call(phone_input.fill, self._phone, timeout_ms=self._short_timeout_ms)
-        self._ensure_no_captcha()
-
-        if self._click_optional(selectors.YANDEX_ID_LOGIN, self._short_timeout_ms):
+        if self._is_email_login():
+            self._click_required(
+                selectors.YANDEX_ID_LOGIN,
+                "Dzen Yandex ID login button",
+                self._timeout_ms,
+            )
             self._wait_after_transition()
             self._ensure_no_captcha()
             self._fill_yandex_login_if_visible()
         else:
-            self._click_required(
-                selectors.LOGIN_PHONE_CONTINUE,
-                "Dzen phone continue button",
+            phone_input = self._require_visible(
+                selectors.LOGIN_PHONE_INPUT,
+                "Dzen phone input",
                 self._timeout_ms,
             )
+            self._call(phone_input.fill, self._phone, timeout_ms=self._short_timeout_ms)
+            self._ensure_no_captcha()
+
+            if self._click_optional(selectors.YANDEX_ID_LOGIN, self._short_timeout_ms):
+                self._wait_after_transition()
+                self._ensure_no_captcha()
+                self._fill_yandex_login_if_visible()
+            else:
+                self._click_required(
+                    selectors.LOGIN_PHONE_CONTINUE,
+                    "Dzen phone continue button",
+                    self._timeout_ms,
+                )
 
         self._wait_after_transition()
         self._ensure_no_captcha()
@@ -110,6 +120,8 @@ class DzenLoginAuthenticator:
     def _fill_yandex_login_if_visible(self) -> bool:
         if self._is_account_choice_visible():
             return False
+        if self._is_email_login():
+            return self._fill_yandex_email_login()
         if self._is_yandex_phone_login_visible() is False:
             if self._first_visible(selectors.AUTH_CODE_INPUT, 500) is not None:
                 return False
@@ -140,6 +152,45 @@ class DzenLoginAuthenticator:
         )
         self._wait_after_transition()
         self._wait_for_yandex_phone_login_to_advance()
+        self._ensure_no_captcha()
+        return True
+
+    def _fill_yandex_email_login(self) -> bool:
+        username_input = self._first_visible(
+            selectors.YANDEX_ID_USERNAME_INPUT,
+            500,
+        )
+        if username_input is None:
+            self._click_required(
+                selectors.YANDEX_ID_MORE_BUTTON,
+                "Yandex ID More button",
+                self._timeout_ms,
+            )
+            self._wait_after_transition()
+            self._click_required(
+                selectors.YANDEX_ID_USERNAME_LOGIN,
+                "Yandex ID username login button",
+                self._timeout_ms,
+            )
+            self._wait_after_transition()
+            username_input = self._require_visible(
+                selectors.YANDEX_ID_USERNAME_INPUT,
+                "Yandex ID username input",
+                self._timeout_ms,
+            )
+
+        self._call(
+            username_input.fill,
+            self._phone.strip(),
+            timeout_ms=self._short_timeout_ms,
+        )
+        self._ensure_no_captcha()
+        self._click_required(
+            selectors.YANDEX_ID_CONTINUE,
+            "Yandex ID continue button",
+            self._timeout_ms,
+        )
+        self._wait_after_transition()
         self._ensure_no_captcha()
         return True
 
@@ -304,6 +355,9 @@ class DzenLoginAuthenticator:
         if len(digits) == 11 and digits.startswith("8"):
             return f"+7{digits[1:]}"
         return phone
+
+    def _is_email_login(self) -> bool:
+        return "@" in self._phone.strip()
 
     @staticmethod
     def _first_locator(locator: Any) -> Any:

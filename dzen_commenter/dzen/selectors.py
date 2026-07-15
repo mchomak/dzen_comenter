@@ -47,9 +47,28 @@ YANDEX_ID_LOGIN_INPUT = (
     'input[autocomplete="username"], '
     'input[data-t="field:input-login"]'
 )
+YANDEX_ID_USERNAME_INPUT = (
+    '#passp-field-login, '
+    'input[name="login"], '
+    'input[autocomplete="username"], '
+    'input[data-t="field:input-login"]'
+)
 YANDEX_ID_PHONE_TAB = (
     'xpath=//*[self::button or self::span or self::div or @role="button" or @role="tab"]'
     '[normalize-space()="Phone number" or normalize-space()="Телефон"]'
+)
+YANDEX_ID_MORE_BUTTON = (
+    'button:has-text("More"), '
+    '[role="button"]:has-text("More"), '
+    'button:has-text("\u0415\u0449\u0451"), '
+    '[role="button"]:has-text("\u0415\u0449\u0451")'
+)
+YANDEX_ID_USERNAME_LOGIN = (
+    'button:has-text("Log in with username"), '
+    '[role="button"]:has-text("Log in with username"), '
+    'a:has-text("Log in with username"), '
+    'button:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443"), '
+    '[role="button"]:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443")'
 )
 YANDEX_ID_CONTINUE = (
     'button[type="submit"], '

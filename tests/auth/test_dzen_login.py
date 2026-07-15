@@ -29,8 +29,17 @@ class FakeLocator:
         elif self.selector == selectors.LOGIN_PHONE_CONTINUE:
             self.page.visible[selectors.VK_PASSWORD_METHOD] = True
         elif self.selector == selectors.YANDEX_ID_LOGIN:
-            self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = True
-            self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = True
+            if self.page.yandex_more_visible:
+                self.page.visible[selectors.YANDEX_ID_MORE_BUTTON] = True
+            else:
+                self.page.visible[selectors.YANDEX_ID_LOGIN_INPUT] = True
+                self.page.visible[selectors.YANDEX_ID_PHONE_TAB] = True
+        elif self.selector == selectors.YANDEX_ID_MORE_BUTTON:
+            self.page.visible[selectors.YANDEX_ID_MORE_BUTTON] = False
+            self.page.visible[selectors.YANDEX_ID_USERNAME_LOGIN] = True
+        elif self.selector == selectors.YANDEX_ID_USERNAME_LOGIN:
+            self.page.visible[selectors.YANDEX_ID_USERNAME_LOGIN] = False
+            self.page.visible[selectors.YANDEX_ID_USERNAME_INPUT] = True
         elif self.selector == selectors.YANDEX_ID_CONTINUE:
             if self.page.visible[selectors.AUTH_CODE_INPUT] and self.page.code_entered:
                 self.page.visible[selectors.AUTH_CODE_INPUT] = False
@@ -84,6 +93,7 @@ class FakePage:
         account_card_unclickable=False,
         webauthn_promo_visible=False,
         phone_form_retries_before_code=0,
+        yandex_more_visible=False,
     ):
         self.yandex_visible = yandex_visible
         self.code_visible = code_visible
@@ -91,13 +101,17 @@ class FakePage:
         self.account_card_unclickable = account_card_unclickable
         self.webauthn_promo_visible = webauthn_promo_visible
         self.phone_form_retries_before_code = phone_form_retries_before_code
+        self.yandex_more_visible = yandex_more_visible
         self.visible = {
             selectors.LOGIN_BUTTON: True,
             selectors.LOGIN_PHONE_INPUT: False,
             selectors.LOGIN_PHONE_CONTINUE: True,
             selectors.YANDEX_ID_LOGIN: False,
             selectors.YANDEX_ID_LOGIN_INPUT: False,
+            selectors.YANDEX_ID_USERNAME_INPUT: False,
             selectors.YANDEX_ID_PHONE_TAB: False,
+            selectors.YANDEX_ID_MORE_BUTTON: False,
+            selectors.YANDEX_ID_USERNAME_LOGIN: False,
             selectors.YANDEX_ID_CONTINUE: True,
             selectors.VK_PASSWORD_METHOD: False,
             selectors.VK_PASSWORD_INPUT: False,
@@ -194,6 +208,32 @@ def test_dzen_login_adds_country_code_for_yandex_phone_input():
         (selectors.LOGIN_PHONE_INPUT, "9269549196"),
         (selectors.YANDEX_ID_LOGIN_INPUT, "+79269549196"),
         (selectors.VK_PASSWORD_INPUT, "secret"),
+    ]
+
+
+def test_dzen_login_uses_more_then_username_for_email():
+    page = FakePage(yandex_more_visible=True)
+    authenticator = DzenLoginAuthenticator(
+        page,
+        comments_url="https://dzen.ru/profile/comments",
+        phone="user@example.com",
+        password="secret",
+        timeout_ms=1000,
+    )
+
+    assert authenticator.login() is True
+
+    assert page.fills == [
+        (selectors.YANDEX_ID_USERNAME_INPUT, "user@example.com"),
+        (selectors.VK_PASSWORD_INPUT, "secret"),
+    ]
+    assert page.clicks == [
+        selectors.LOGIN_BUTTON,
+        selectors.YANDEX_ID_LOGIN,
+        selectors.YANDEX_ID_MORE_BUTTON,
+        selectors.YANDEX_ID_USERNAME_LOGIN,
+        selectors.YANDEX_ID_CONTINUE,
+        selectors.VK_PASSWORD_SUBMIT,
     ]
 
 
