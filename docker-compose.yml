@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://dzen:dzen@postgres:5432/dzen_commenter
+      DATABASE_URL: postgresql+psycopg://dzen:dzen@postgres:5432/dzen_commenter
       USER_DATA_DIR: /app/user_data
       STORAGE_STATE_PATH: /app/session_state/storage_state.json
       GIGACHAT_VERIFY_SSL_CERTS: "true"

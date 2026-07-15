@@ -9,6 +9,13 @@ NOVNC_WEB_ROOT="${NOVNC_WEB_ROOT:-/usr/share/novnc}"
 
 Xvfb "$DISPLAY" -screen 0 1280x800x24 &
 
+for _ in $(seq 1 50); do
+  if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+
 if [ -n "$VNC_PASSWORD" ]; then
   x11vnc -display "$DISPLAY" -forever -rfbport "$VNC_PORT" -passwd "$VNC_PASSWORD" &
 else
