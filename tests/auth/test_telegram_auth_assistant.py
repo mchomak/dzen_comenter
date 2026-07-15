@@ -158,6 +158,25 @@ def test_ask_ready_returns_false_on_timeout_without_real_wait():
     assert sleep_calls == []
 
 
+def test_ask_ready_does_not_send_duplicate_prompts_before_confirmation():
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": []}),
+            _json_response({"ok": True, "result": []}),
+        ]
+    )
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.ask_ready() is False
+    assert assistant.ask_ready() is False
+    assert [request.url.path.split("/")[-1] for request in recorder.requests] == [
+        "sendMessage",
+        "getUpdates",
+        "getUpdates",
+    ]
+
+
 def test_relay_code_prompt_returns_next_text_message():
     message_update = {
         "update_id": 11,

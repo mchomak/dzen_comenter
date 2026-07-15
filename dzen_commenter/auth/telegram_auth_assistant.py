@@ -26,8 +26,12 @@ class TelegramAuthAssistant:
         self._client = client or self._make_client(
             proxy_url.strip() if proxy_url else ""
         )
+        self._ready_prompt_sent = False
 
     def ask_ready(self) -> bool:
+        if self._ready_prompt_sent:
+            return self._poll_ready_without_sending()
+        self._ready_prompt_sent = True
         self._post(
             "sendMessage",
             {
@@ -53,6 +57,19 @@ class TelegramAuthAssistant:
             {
                 "chat_id": self.chat_id,
                 "text": "Авторизация начата. Открываю страницу входа, подожди немного.",
+            },
+        )
+        return True
+
+    def _poll_ready_without_sending(self) -> bool:
+        update = self._poll_until(self._matching_callback)
+        if update is None:
+            return False
+        self._post(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": "РђРІС‚РѕСЂРёР·Р°С†РёСЏ РЅР°С‡Р°С‚Р°. РћС‚РєСЂС‹РІР°СЋ СЃС‚СЂР°РЅРёС†Сѓ РІС…РѕРґР°, РїРѕРґРѕР¶РґРё РЅРµРјРЅРѕРіРѕ.",
             },
         )
         return True
