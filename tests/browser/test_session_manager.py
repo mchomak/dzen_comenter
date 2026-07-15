@@ -57,6 +57,7 @@ class FakeContext:
         self.pages = [page]
         self.launch_kwargs = None
         self.storage_state_calls: list[str] = []
+        self.add_cookies_calls: list[list[dict]] = []
 
     def new_page(self) -> FakePage:  # pragma: no cover - pages непустой в тестах
         page = FakePage()
@@ -65,6 +66,9 @@ class FakeContext:
 
     def storage_state(self, *, path: str) -> None:
         self.storage_state_calls.append(path)
+
+    def add_cookies(self, cookies: list[dict]) -> None:
+        self.add_cookies_calls.append(cookies)
 
 
 class FakeChromium:
@@ -235,6 +239,24 @@ def test_restore_true_when_state_file_exists(tmp_path):
     assert mgr.restore() is True
     # переход на COMMENTS_URL произошёл (start + restore).
     assert settings.COMMENTS_URL in page.goto_calls
+
+
+def test_restore_loads_saved_cookies_before_opening_comments(tmp_path):
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        '{"cookies": [{"name": "session", "value": "token", "domain": ".dzen.ru", "path": "/"}]}',
+        encoding="utf-8",
+    )
+    settings = make_settings(STORAGE_STATE_PATH=str(state_path))
+    page = FakePage(login_form_present=False)
+    context = FakeContext(page)
+    mgr = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    mgr.start()
+
+    assert mgr.restore() is True
+    assert context.add_cookies_calls == [
+        [{"name": "session", "value": "token", "domain": ".dzen.ru", "path": "/"}]
+    ]
 
 
 # Acceptance 5 — restore() False при отсутствии файла, на страницу не ходим.

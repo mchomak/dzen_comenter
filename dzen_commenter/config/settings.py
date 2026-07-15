@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     GIGACHAT_BASE_URL: str = "https://gigachat.devices.sberbank.ru/api"
     GIGACHAT_MODEL: str = "GigaChat-Pro"
     GIGACHAT_VERIFY_SSL_CERTS: bool = True
+    GIGACHAT_CA_BUNDLE: str = ""
 
     # Браузер / Дзен
     USER_DATA_DIR: str

@@ -34,6 +34,20 @@ def _expected_default_prompt(task: str) -> str:
             DEFAULT_TONE_OF_VOICE,
             DEFAULT_ANTI_RULES,
             (
+                "Контекст:\n"
+                f"Тема публикации: {PUB_TITLE}\n"
+                f"Ветка обсуждения: {THREAD_TEXT}"
+            ),
+            task,
+        ]
+    )
+
+    return "\n\n".join(
+        [
+            DEFAULT_ROLE,
+            DEFAULT_TONE_OF_VOICE,
+            DEFAULT_ANTI_RULES,
+            (
                 "РљРѕРЅС‚РµРєСЃС‚:\n"
                 f"РўРµРјР° РїСѓР±Р»РёРєР°С†РёРё: {PUB_TITLE}\n"
                 f"Р’РµС‚РєР° РѕР±СЃСѓР¶РґРµРЅРёСЏ: {THREAD_TEXT}"
@@ -76,6 +90,21 @@ def test_context_injected_verbatim(reply_type):
     result = DameoPromptBuilder().build(make_context(reply_type))
     assert PUB_TITLE in result
     assert THREAD_TEXT in result
+
+
+def test_explicit_comment_context_has_separate_input_fields():
+    result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title="article",
+            thread_text="previous message",
+            comment_text="target comment",
+            reply_type="engage",
+        )
+    )
+    assert "ВХОДНЫЕ ДАННЫЕ:" in result
+    assert "Тема статьи: article" in result
+    assert "Ветка комментариев (предыдущие сообщения): previous message" in result
+    assert "Комментарий, на который нужно ответить: target comment" in result
 
 
 @pytest.mark.parametrize("reply_type", ["lead", "engage"])

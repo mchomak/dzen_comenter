@@ -12,6 +12,7 @@ class PromptContext:
     publication_title: str
     thread_text: str
     reply_type: ReplyType
+    comment_text: str = ""
 
 
 class CommentRepository(Protocol):
@@ -22,6 +23,7 @@ class CommentRepository(Protocol):
     def set_reply_status(
         self, reply_id: int, status: ReplyStatus, error_reason: str | None = None
     ) -> None: ...
+    def has_generated_reply(self, comment_id: int) -> bool: ...
     def has_published_reply(self, comment_id: int) -> bool: ...
 
 

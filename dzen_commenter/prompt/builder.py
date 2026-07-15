@@ -3,7 +3,7 @@ from dzen_commenter.prompt.config_loader import load_brand_config
 
 
 class DameoPromptBuilder:
-    """РЎР±РѕСЂС‰РёРє С‚РµРєСЃС‚РѕРІРѕРіРѕ РїСЂРѕРјРїС‚Р° РґР»СЏ AI-РјРѕРґРµР»Рё РІ С‚РѕРЅРµ Р±СЂРµРЅРґР° Dameo."""
+    """Build a complete Russian-language prompt for a Dzen comment reply."""
 
     def __init__(
         self,
@@ -19,15 +19,24 @@ class DameoPromptBuilder:
             if context.reply_type == "lead"
             else self._config.task_engage
         )
+        if context.comment_text:
+            context_block = (
+                "ВХОДНЫЕ ДАННЫЕ:\n"
+                f"Тема статьи: {context.publication_title}\n"
+                f"Ветка комментариев (предыдущие сообщения): {context.thread_text or 'нет предыдущих сообщений'}\n"
+                f"Комментарий, на который нужно ответить: {context.comment_text}"
+            )
+        else:
+            context_block = (
+                "Контекст:\n"
+                f"Тема публикации: {context.publication_title}\n"
+                f"Ветка обсуждения: {context.thread_text}"
+            )
         blocks = [
             self._config.role,
             self._config.tone_of_voice,
             self._config.anti_rules,
-            (
-                "РљРѕРЅС‚РµРєСЃС‚:\n"
-                f"РўРµРјР° РїСѓР±Р»РёРєР°С†РёРё: {context.publication_title}\n"
-                f"Р’РµС‚РєР° РѕР±СЃСѓР¶РґРµРЅРёСЏ: {context.thread_text}"
-            ),
+            context_block,
             task,
         ]
         return "\n\n".join(blocks)

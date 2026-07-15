@@ -17,13 +17,16 @@ def create_provider(settings: Settings) -> AIProvider:
             model=settings.AI_MODEL,
         )
     if name == "gigachat":
+        verify_ssl_certs = (
+            settings.GIGACHAT_CA_BUNDLE or settings.GIGACHAT_VERIFY_SSL_CERTS
+        )
         return GigaChatProvider(
             api_key=settings.GIGACHAT_AUTH_KEY or settings.AI_API_KEY,
             base_url=settings.GIGACHAT_BASE_URL or settings.AI_BASE_URL,
             model=settings.GIGACHAT_MODEL or settings.AI_MODEL,
             scope=settings.GIGACHAT_SCOPE,
             oauth_url=settings.GIGACHAT_OAUTH_URL,
-            verify_ssl_certs=settings.GIGACHAT_VERIFY_SSL_CERTS,
+            verify_ssl_certs=verify_ssl_certs,
         )
     if name == "yandexgpt":
         return YandexGPTProvider(

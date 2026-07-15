@@ -72,7 +72,7 @@ class OrchestratorLoop:
             if generated_replies >= self.settings.MAX_REPLIES_PER_CYCLE:
                 break
 
-            if self.repository.has_published_reply(comment_id):
+            if self.repository.has_generated_reply(comment_id):
                 self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
                 continue
 
@@ -143,29 +143,45 @@ class OrchestratorLoop:
         return (now - posted_at).days > self.settings.MAX_COMMENT_AGE_DAYS
 
     def _generate_reply(self, comment_id: int, comment: Comment) -> None:
+        publication_title = comment.publication_title or self.settings.COMMENTS_URL
+        classifier_text = "\n".join(
+            part for part in (comment.thread_text, comment.text) if part
+        )
         reply_type = self.classify_reply_type(
-            publication_title=self.settings.COMMENTS_URL,
-            thread_text=comment.text,
+            publication_title=publication_title,
+            thread_text=classifier_text,
         )
         prompt = self.prompt_builder.build(
             PromptContext(
-                publication_title=self.settings.COMMENTS_URL,
-                thread_text=comment.text,
+                publication_title=publication_title,
+                thread_text=comment.thread_text,
                 reply_type=reply_type,
+                comment_text=comment.text,
             )
         )
-        text = self.ai_provider.generate(
-            prompt,
-            temperature=self.settings.AI_TEMPERATURE,
-            max_tokens=self.settings.AI_MAX_TOKENS,
-        )
-
-        if len(text) > self.settings.MAX_REPLY_LENGTH:
-            text = self.ai_provider.generate(
+        text = self._extract_reply_text(
+            self.ai_provider.generate(
                 prompt,
                 temperature=self.settings.AI_TEMPERATURE,
                 max_tokens=self.settings.AI_MAX_TOKENS,
             )
+        )
+        if not text:
+            self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
+            return
+
+        if len(text) > self.settings.MAX_REPLY_LENGTH:
+            text = self._extract_reply_text(
+                self.ai_provider.generate(
+                    prompt,
+                    temperature=self.settings.AI_TEMPERATURE,
+                    max_tokens=self.settings.AI_MAX_TOKENS,
+                )
+            )
+
+        if not text:
+            self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
+            return
 
         if len(text) > self.settings.MAX_REPLY_LENGTH:
             reason = "reply too long after regeneration"
@@ -192,8 +208,31 @@ class OrchestratorLoop:
         self.repository.set_comment_status(comment_id, CommentStatus.ANSWERED)
 
         if self.settings.AUTO_PUBLISH:
-            self.page.publish_reply(comment, text)
+            try:
+                self.page.publish_reply(comment, text)
+            except Exception as exc:
+                self.repository.set_reply_status(
+                    reply_id,
+                    ReplyStatus.ERROR,
+                    "Dzen reply publication failed",
+                )
+                self.repository.set_comment_status(comment_id, CommentStatus.ERROR)
+                self.notifier.notify_error("Dzen reply publication failed", exc)
+                return
             self.repository.set_reply_status(reply_id, ReplyStatus.PUBLISHED)
+
+    @staticmethod
+    def _extract_reply_text(raw_text: str) -> str:
+        """Extract the publishable answer from the model's typed response."""
+        raw_text = raw_text.strip()
+        for line in raw_text.splitlines():
+            normalized = line.strip().lower()
+            if normalized.startswith("тип:") and "пропуск" in normalized:
+                return ""
+        for line in raw_text.splitlines():
+            if line.strip().lower().startswith("ответ:"):
+                return line.split(":", 1)[1].strip()
+        return raw_text
 
     def _make_reply(
         self,

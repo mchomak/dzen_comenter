@@ -136,6 +136,7 @@ def test_repository_fulfils_contract(repo):
         "save_reply",
         "set_comment_status",
         "set_reply_status",
+        "has_generated_reply",
         "has_published_reply",
     ):
         assert callable(getattr(repo, method))
@@ -245,3 +246,26 @@ def test_has_published_reply_ignores_non_published(repo):
     rid = repo.save_reply(_make_reply(cid, status=ReplyStatus.GENERATED))
     repo.set_reply_status(rid, ReplyStatus.ERROR, error_reason="x")
     assert repo.has_published_reply(cid) is False
+
+
+def test_has_generated_reply_includes_generated_and_published(repo):
+    pub_id = repo.upsert_publication(_make_publication())
+    cid = repo.upsert_comment(_make_comment(pub_id))
+
+    assert repo.has_generated_reply(cid) is False
+
+    rid = repo.save_reply(_make_reply(cid, status=ReplyStatus.GENERATED))
+    assert repo.has_generated_reply(cid) is True
+
+    repo.set_reply_status(rid, ReplyStatus.PUBLISHED)
+    assert repo.has_generated_reply(cid) is True
+
+
+def test_has_generated_reply_ignores_errors(repo):
+    pub_id = repo.upsert_publication(_make_publication())
+    cid = repo.upsert_comment(_make_comment(pub_id))
+    rid = repo.save_reply(_make_reply(cid, status=ReplyStatus.GENERATED))
+
+    repo.set_reply_status(rid, ReplyStatus.ERROR, error_reason="x")
+
+    assert repo.has_generated_reply(cid) is False

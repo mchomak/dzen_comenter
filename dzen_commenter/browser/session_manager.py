@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -86,7 +87,15 @@ class PlaywrightSessionManager:
         self._context.storage_state(path=self._settings.STORAGE_STATE_PATH)
 
     def restore(self) -> bool:
-        if not Path(self._settings.STORAGE_STATE_PATH).exists():
+        state_path = Path(self._settings.STORAGE_STATE_PATH)
+        if not state_path.exists() or self._context is None:
+            return False
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            cookies = state.get("cookies", [])
+            if cookies:
+                self._context.add_cookies(cookies)
+        except (AttributeError, OSError, ValueError, TypeError):
             return False
         self._page.goto(self._settings.COMMENTS_URL)
         return self.is_logged_in()

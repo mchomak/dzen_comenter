@@ -63,6 +63,26 @@ def test_factory_unknown_provider_raises():
         create_provider(settings)
 
 
+def test_gigachat_factory_uses_custom_ca_bundle(monkeypatch):
+    captured = {}
+
+    class FakeGigaChatProvider:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "dzen_commenter.ai.factory.GigaChatProvider", FakeGigaChatProvider
+    )
+    settings = make_settings(
+        AI_PROVIDER="gigachat",
+        GIGACHAT_CA_BUNDLE="/certs/russian-root.crt",
+    )
+
+    create_provider(settings)
+
+    assert captured["verify_ssl_certs"] == "/certs/russian-root.crt"
+
+
 # 4
 @pytest.mark.parametrize("adapter", ADAPTERS)
 def test_generate_signature(adapter):

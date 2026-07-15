@@ -141,6 +141,17 @@ def test_run_cycle_skips_comment_with_published_reply(
     assert harness.repository.replies == {}
 
 
+def test_safe_mode_does_not_regenerate_an_existing_reply(loop_factory, comment_factory):
+    harness = loop_factory(comments=[comment_factory(1)])
+
+    harness.loop.run_cycle()
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert len(harness.repository.replies) == 1
+    assert harness.repository.comments[1].status == CommentStatus.SKIPPED
+
+
 def test_run_cycle_regenerates_once_when_reply_is_too_long(
     loop_factory,
     comment_factory,
@@ -205,6 +216,32 @@ def test_run_cycle_publishes_only_when_auto_publish_enabled(
     assert harness.repository.set_reply_status_calls == [
         (reply.id, ReplyStatus.PUBLISHED, None)
     ]
+
+
+def test_run_cycle_marks_reply_error_when_publishing_fails(
+    loop_factory,
+    comment_factory,
+):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+
+    def fail_publish(comment, text):
+        raise RuntimeError("Dzen form changed")
+
+    harness.page.publish_reply = fail_publish
+    harness.loop.run_cycle()
+
+    reply = next(iter(harness.repository.replies.values()))
+    assert reply.status == ReplyStatus.ERROR
+    assert reply.error_reason == "Dzen reply publication failed"
+    assert harness.repository.comments[1].status == CommentStatus.ERROR
+    assert len(harness.notifier.errors) == 1
+    message, error = harness.notifier.errors[0]
+    assert message == "Dzen reply publication failed"
+    assert isinstance(error, RuntimeError)
+    assert str(error) == "Dzen form changed"
 
 
 def test_run_cycle_respects_max_replies_per_cycle(
@@ -294,6 +331,16 @@ def test_run_cycle_saves_state_after_restore(
     assert harness.session.login_calls == 0
     assert harness.auth_assistant.ask_ready_calls == 0
     assert harness.page.fetch_calls == 1
+
+
+def test_extract_reply_text_removes_structured_type_line():
+    raw = "\u0442\u0438\u043f: \u0432\u043e\u0432\u043b\u0435\u043a\u0430\u044e\u0449\u0438\u0439\n\u043e\u0442\u0432\u0435\u0442: \u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442"
+    assert OrchestratorLoop._extract_reply_text(raw) == "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442"
+
+
+def test_extract_reply_text_skips_explicit_pass():
+    raw = "\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a\n\u043e\u0442\u0432\u0435\u0442:"
+    assert OrchestratorLoop._extract_reply_text(raw) == ""
 
 
 def test_run_cycle_saves_manual_session_after_ready_confirmation(

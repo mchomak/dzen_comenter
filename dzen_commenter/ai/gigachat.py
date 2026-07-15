@@ -15,7 +15,7 @@ class GigaChatProvider:
         model: str,
         scope: str = "GIGACHAT_API_B2B",
         oauth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
-        verify_ssl_certs: bool = True,
+        verify_ssl_certs: bool | str = True,
         token_refresh_margin: float = 60.0,
         client: httpx.Client | None = None,
     ) -> None:

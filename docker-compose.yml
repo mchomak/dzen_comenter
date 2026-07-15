@@ -6,12 +6,20 @@ services:
     env_file:
       - .env
     environment:
+      DATABASE_URL: postgresql://dzen:dzen@postgres:5432/dzen_commenter
+      USER_DATA_DIR: /app/user_data
+      STORAGE_STATE_PATH: /app/session_state/storage_state.json
+      GIGACHAT_VERIFY_SSL_CERTS: "true"
       VNC_PORT: ${VNC_PORT:-5900}
       VNC_PASSWORD: ${VNC_PASSWORD:-}
+    volumes:
+      - browser_data:/app/user_data
+      - session_state:/app/session_state
     ports:
       - "${VNC_PORT:-5900}:${VNC_PORT:-5900}"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   postgres:
@@ -24,6 +32,13 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dzen -d dzen_commenter"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
 volumes:
   pgdata:
+  browser_data:
+  session_state:

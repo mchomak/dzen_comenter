@@ -1,19 +1,17 @@
 from dzen_commenter.contracts.interfaces import ReplyType
 
-# Лид-ключевики (рус., нижний регистр). Матчинг регистронезависимый,
-# по подстроке в publication_title + thread_text. Корни слов, чтобы
-# покрыть словоформы ("ремонт", "ремонта", "ремонтируем").
+
 LEAD_KEYWORDS: tuple[str, ...] = (
     "ремонт",
     "квартир",
+    "дом",
     "дизайн",
     "смет",
     "отделк",
     "плитк",
     "ламинат",
     "стоимост",
-    "цена",
-    "цены",
+    "цен",
     "материал",
     "штукатур",
     "санузел",
@@ -22,16 +20,12 @@ LEAD_KEYWORDS: tuple[str, ...] = (
     "обои",
     "потолок",
     "стяжк",
+    "планировк",
 )
 
 
 def classify_reply_type(publication_title: str, thread_text: str) -> ReplyType:
-    """Эвристика лидген vs вовлечение.
-
-    Если тема (заголовок публикации + текст ветки) затрагивает ремонт/
-    квартиру/дизайн/смету/материалы/стоимость — это лидген (`"lead"`).
-    Иначе (общая дискуссия, спор, шутка, оффтоп) — вовлечение (`"engage"`).
-    """
+    """Classify a comment as lead-generating or conversational."""
     haystack = f"{publication_title}\n{thread_text}".lower()
     for keyword in LEAD_KEYWORDS:
         if keyword in haystack:

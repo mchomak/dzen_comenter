@@ -5,3 +5,5 @@ __pycache__/
 venv/
 user_data/
 storage_state.json
+gigachat_dry_run_*.json
+gigachat_dry_run_*.md

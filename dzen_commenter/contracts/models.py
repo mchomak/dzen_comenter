@@ -23,6 +23,8 @@ class Comment:
     posted_at: datetime | None
     fetched_at: datetime | None
     status: CommentStatus
+    publication_title: str = ""
+    thread_text: str = ""
 
 
 @dataclass

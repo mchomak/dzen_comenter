@@ -108,3 +108,17 @@ class PostgresCommentRepository:
         )
         with self._engine.begin() as conn:
             return bool(conn.execute(stmt).scalar_one())
+
+    def has_generated_reply(self, comment_id: int) -> bool:
+        stmt = select(
+            select(ReplyTable.id)
+            .where(
+                ReplyTable.comment_id == comment_id,
+                ReplyTable.status.in_(
+                    [ReplyStatus.GENERATED.value, ReplyStatus.PUBLISHED.value]
+                ),
+            )
+            .exists()
+        )
+        with self._engine.begin() as conn:
+            return bool(conn.execute(stmt).scalar_one())

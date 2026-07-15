@@ -32,6 +32,7 @@ class FakeCommentRepository:
         self.upsert_comment_calls: list[Comment] = []
         self.set_comment_status_calls: list[tuple[int, CommentStatus]] = []
         self.set_reply_status_calls: list[tuple[int, ReplyStatus, str | None]] = []
+        self.has_generated_reply_calls: list[int] = []
         self.has_published_reply_calls: list[int] = []
         self._next_publication_id = 1
         self._next_comment_id = 1
@@ -94,6 +95,14 @@ class FakeCommentRepository:
     def has_published_reply(self, comment_id: int) -> bool:
         self.has_published_reply_calls.append(comment_id)
         return comment_id in self.published_reply_comment_ids
+
+    def has_generated_reply(self, comment_id: int) -> bool:
+        self.has_generated_reply_calls.append(comment_id)
+        return comment_id in self.published_reply_comment_ids or any(
+            reply.comment_id == comment_id
+            and reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED)
+            for reply in self.replies.values()
+        )
 
 
 class FakeAIProvider:
