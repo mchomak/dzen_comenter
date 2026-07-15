@@ -254,6 +254,11 @@ def test_yandex_continue_selector_supports_english_log_in_button():
     assert '[role="button"]:has-text("Log in")' in selectors.YANDEX_ID_CONTINUE
 
 
+def test_password_submit_selector_supports_english_next_button():
+    assert 'button:has-text("Next")' in selectors.VK_PASSWORD_SUBMIT
+    assert '[role="button"]:has-text("Next")' in selectors.VK_PASSWORD_SUBMIT
+
+
 def test_dzen_login_stops_when_manual_code_is_visible():
     page = FakePage(code_visible=True)
     authenticator = DzenLoginAuthenticator(

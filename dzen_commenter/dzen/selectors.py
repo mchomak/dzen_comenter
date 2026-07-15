@@ -172,6 +172,8 @@ YANDEX_WEBAUTHN_PROMO_DISMISS = (
 )
 VK_PASSWORD_SUBMIT = (
     'button[type="submit"], '
+    'button:has-text("Next"), '
+    '[role="button"]:has-text("Next"), '
     'button:has-text("Продолжить"), '
     '[role="button"]:has-text("Продолжить"), '
     'button:has-text("Войти"), '
