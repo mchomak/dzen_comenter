@@ -6,7 +6,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl xvfb x11vnc \
+    && apt-get install -y --no-install-recommends ca-certificates curl novnc websockify xvfb x11vnc \
     && curl --fail --location --insecure \
         "https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt" \
         --output /usr/local/share/ca-certificates/russian_trusted_root_ca.crt \

@@ -12,11 +12,13 @@ services:
       GIGACHAT_VERIFY_SSL_CERTS: "true"
       VNC_PORT: ${VNC_PORT:-5900}
       VNC_PASSWORD: ${VNC_PASSWORD:-}
+      NOVNC_PORT: ${NOVNC_PORT:-6080}
     volumes:
       - browser_data:/app/user_data
       - session_state:/app/session_state
     ports:
       - "${VNC_PORT:-5900}:${VNC_PORT:-5900}"
+      - "${NOVNC_PORT:-6080}:${NOVNC_PORT:-6080}"
     depends_on:
       postgres:
         condition: service_healthy

@@ -63,3 +63,4 @@ class Settings(BaseSettings):
     # VNC
     VNC_PORT: int = 5900
     VNC_PASSWORD: str = ""
+    NOVNC_PORT: int = 6080

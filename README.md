@@ -25,8 +25,10 @@ cp .env.example .env   # then fill in values
 .venv/bin/python -m pytest -q
 ```
 
-## Remote Access (VNC)
+## Remote Access (noVNC)
 
-The Docker container starts a virtual display on `DISPLAY=:99` and exposes it
-through VNC. Set `VNC_PORT` and `VNC_PASSWORD` in `.env`, then connect with any
-VNC client to `localhost:${VNC_PORT}` using `VNC_PASSWORD`.
+The Docker container starts a virtual display on `DISPLAY=:99`, an x11vnc
+server, and a noVNC web gateway. Set `VNC_PASSWORD` and `NOVNC_PORT` in `.env`,
+then open `http://<server-ip>:${NOVNC_PORT}/vnc.html` in a browser. Enter the
+same `VNC_PASSWORD` in the noVNC connection dialog. Keep `AUTO_PUBLISH=false`
+while testing authentication and browser behavior.
