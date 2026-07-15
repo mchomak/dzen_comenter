@@ -173,8 +173,8 @@ class DzenLoginAuthenticator:
                 self._timeout_ms,
             )
             self._wait_after_transition()
-            self._click_required(
-                selectors.YANDEX_ID_USERNAME_LOGIN,
+            self._click_first_required(
+                selectors.YANDEX_ID_USERNAME_LOGIN_SELECTORS,
                 "Yandex ID username login button",
                 self._timeout_ms,
             )
@@ -242,6 +242,14 @@ class DzenLoginAuthenticator:
     def _click_required(self, selector: str, name: str, timeout_ms: int) -> None:
         locator = self._require_visible(selector, name, timeout_ms)
         self._call(locator.click, timeout_ms=timeout_ms)
+
+    def _click_first_required(
+        self, selectors_to_try: tuple[str, ...], name: str, timeout_ms: int
+    ) -> None:
+        for selector in selectors_to_try:
+            if self._click_optional(selector, timeout_ms):
+                return
+        raise RuntimeError(f"{name} was not found during Dzen login")
 
     def _ensure_no_captcha(self) -> None:
         if self._first_visible(selectors.AUTH_CAPTCHA, 1000) is not None:

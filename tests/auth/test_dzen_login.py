@@ -237,6 +237,18 @@ def test_dzen_login_uses_more_then_username_for_email():
     ]
 
 
+def test_yandex_username_selector_supports_menu_items_and_pressable_containers():
+    assert '[role="menuitem"]:has-text("Log in with username")' in (
+        selectors.YANDEX_ID_USERNAME_LOGIN
+    )
+    assert '[data-react-aria-pressable="true"]:has-text("Log in with username")' in (
+        selectors.YANDEX_ID_USERNAME_LOGIN
+    )
+    assert 'normalize-space(.)="Log in with username"' in (
+        selectors.YANDEX_ID_USERNAME_LOGIN_XPATH
+    )
+
+
 def test_dzen_login_stops_when_manual_code_is_visible():
     page = FakePage(code_visible=True)
     authenticator = DzenLoginAuthenticator(

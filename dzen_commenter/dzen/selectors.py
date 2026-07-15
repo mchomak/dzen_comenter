@@ -67,8 +67,22 @@ YANDEX_ID_USERNAME_LOGIN = (
     'button:has-text("Log in with username"), '
     '[role="button"]:has-text("Log in with username"), '
     'a:has-text("Log in with username"), '
+    '[role="menuitem"]:has-text("Log in with username"), '
+    '[data-react-aria-pressable="true"]:has-text("Log in with username"), '
     'button:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443"), '
-    '[role="button"]:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443")'
+    '[role="button"]:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443"), '
+    '[role="menuitem"]:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443"), '
+    '[data-react-aria-pressable="true"]:has-text("\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443")'
+)
+YANDEX_ID_USERNAME_LOGIN_XPATH = (
+    'xpath=//*[self::button or self::a or self::div or @role="button" '
+    'or @role="menuitem" or @data-react-aria-pressable="true"]'
+    '[normalize-space(.)="Log in with username" '
+    'or normalize-space(.)="\u0412\u043e\u0439\u0442\u0438 \u043f\u043e \u043b\u043e\u0433\u0438\u043d\u0443"]'
+)
+YANDEX_ID_USERNAME_LOGIN_SELECTORS = (
+    YANDEX_ID_USERNAME_LOGIN,
+    YANDEX_ID_USERNAME_LOGIN_XPATH,
 )
 YANDEX_ID_CONTINUE = (
     'button[type="submit"], '
