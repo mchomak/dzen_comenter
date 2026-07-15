@@ -1,6 +1,8 @@
 import inspect
 
 import dzen_commenter.browser  # noqa: F401
+import pytest
+from playwright.sync_api import Error as PlaywrightError
 from dzen_commenter.browser import PlaywrightSessionManager
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import SessionManager
@@ -38,6 +40,7 @@ class FakePage:
         self.goto_calls: list[str] = []
         self.reload_count = 0
         self.url = "about:blank"
+        self.reload_error: Exception | None = None
 
     def goto(self, url: str) -> None:
         self.goto_calls.append(url)
@@ -45,6 +48,8 @@ class FakePage:
 
     def reload(self) -> None:
         self.reload_count += 1
+        if self.reload_error is not None:
+            raise self.reload_error
 
     def query_selector(self, selector: str):
         if selector == selectors.LOGIN_FORM and self.login_form_present:
@@ -59,6 +64,7 @@ class FakeContext:
         self.storage_state_calls: list[str] = []
         self.add_cookies_calls: list[list[dict]] = []
         self.clear_cookies_calls = 0
+        self.close_calls = 0
 
     def new_page(self) -> FakePage:  # pragma: no cover - pages непустой в тестах
         page = FakePage()
@@ -73,6 +79,9 @@ class FakeContext:
 
     def clear_cookies(self) -> None:
         self.clear_cookies_calls += 1
+
+    def close(self) -> None:
+        self.close_calls += 1
 
 
 class FakeChromium:
@@ -91,10 +100,20 @@ class FakePlaywright:
     def start(self) -> "FakePlaywright":
         return self
 
+    def stop(self) -> None:
+        pass
+
 
 def make_factory(context: FakeContext):
     def factory():
         return FakePlaywright(context)
+
+    return factory
+
+
+def make_sequence_factory(contexts: list[FakeContext]):
+    def factory():
+        return FakePlaywright(contexts.pop(0))
 
     return factory
 
@@ -385,6 +404,40 @@ def test_keep_alive_reloads_once():
     mgr.keep_alive()
 
     assert page.reload_count == 1
+
+
+def test_keep_alive_restarts_session_after_page_crash():
+    settings = make_settings()
+    crashed_page = FakePage()
+    crashed_page.reload_error = PlaywrightError("Page.reload: Page crashed")
+    crashed_context = FakeContext(crashed_page)
+    recovered_page = FakePage()
+    recovered_context = FakeContext(recovered_page)
+    mgr = PlaywrightSessionManager(
+        settings,
+        playwright_factory=make_sequence_factory([crashed_context, recovered_context]),
+    )
+
+    mgr.start()
+    mgr.keep_alive()
+
+    assert crashed_context.close_calls == 1
+    assert recovered_page.goto_calls == [settings.COMMENTS_URL]
+    assert mgr.page is recovered_page
+
+
+def test_keep_alive_preserves_crash_error_when_recovery_fails():
+    settings = make_settings()
+    crashed_page = FakePage()
+    crashed_page.reload_error = PlaywrightError("Page.reload: Page crashed")
+    mgr = PlaywrightSessionManager(
+        settings,
+        playwright_factory=make_sequence_factory([FakeContext(crashed_page)]),
+    )
+    mgr.start()
+
+    with pytest.raises(PlaywrightError, match="Page crashed"):
+        mgr.keep_alive()
 
 
 def test_reset_authentication_clears_cookies_removes_state_and_opens_comments(tmp_path):

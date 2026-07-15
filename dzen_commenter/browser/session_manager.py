@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from dzen_commenter.auth import DzenLoginAuthenticator, DzenSmsRestartRequested
@@ -116,7 +117,47 @@ class PlaywrightSessionManager:
 
     def keep_alive(self) -> None:
         """Лёгкий reload, чтобы сессия не протухала. НЕ в Protocol."""
-        self._page.reload()
+        try:
+            self._page.reload()
+        except PlaywrightError as exc:
+            if not self._is_browser_crash_error(exc):
+                raise
+            try:
+                self._restart_browser_session()
+            except Exception:
+                raise exc
+
+    def _restart_browser_session(self) -> None:
+        old_context = self._context
+        old_playwright = self._playwright
+        self._page = None
+        self._context = None
+        self._playwright = None
+
+        if old_context is not None:
+            try:
+                old_context.close()
+            except Exception:
+                pass
+        if old_playwright is not None:
+            try:
+                old_playwright.stop()
+            except Exception:
+                pass
+
+        self.start()
+
+    @staticmethod
+    def _is_browser_crash_error(exc: PlaywrightError) -> bool:
+        message = str(exc).lower()
+        return any(
+            marker in message
+            for marker in (
+                "page crashed",
+                "browser has been closed",
+                "target page, context or browser has been closed",
+            )
+        )
 
     def _is_on_comments_url(self) -> bool:
         current_url = getattr(self._page, "url", "")
