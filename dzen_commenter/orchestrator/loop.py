@@ -48,6 +48,10 @@ class OrchestratorLoop:
         self._authorization_not_confirmed_notified = False
 
     def run_cycle(self) -> None:
+        if self.auth_assistant.poll_auth_command():
+            self.session.reset_authentication()
+            self.auth_assistant.reset_ready_prompt()
+
         if not self._ensure_session():
             return
 

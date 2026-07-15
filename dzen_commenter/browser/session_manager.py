@@ -107,6 +107,13 @@ class PlaywrightSessionManager:
         self._page.goto(self._settings.COMMENTS_URL)
         return self.is_logged_in()
 
+    def reset_authentication(self) -> None:
+        if self._context is not None:
+            self._context.clear_cookies()
+        Path(self._settings.STORAGE_STATE_PATH).unlink(missing_ok=True)
+        if self._page is not None:
+            self._page.goto(self._settings.COMMENTS_URL)
+
     def keep_alive(self) -> None:
         """Лёгкий reload, чтобы сессия не протухала. НЕ в Protocol."""
         self._page.reload()

@@ -143,6 +143,7 @@ class FakeSessionManager:
         self.restore_calls = 0
         self.login_calls = 0
         self.save_state_calls = 0
+        self.reset_authentication_calls = 0
 
     def start(self) -> None:
         self.start_calls += 1
@@ -174,6 +175,10 @@ class FakeSessionManager:
         self.logged_in = result
         return result
 
+    def reset_authentication(self) -> None:
+        self.reset_authentication_calls += 1
+        self.logged_in = False
+
 
 class FakeDzenPage:
     def __init__(self, comments: list[Comment] | None = None) -> None:
@@ -202,15 +207,30 @@ class FakeNotifier:
 
 
 class FakeAuthAssistant:
-    def __init__(self, *, ask_ready_result: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        ask_ready_result: bool = True,
+        auth_command_result: bool = False,
+    ) -> None:
         self.ask_ready_result = ask_ready_result
+        self.auth_command_result = auth_command_result
         self.ask_ready_calls = 0
+        self.poll_auth_command_calls = 0
+        self.reset_ready_prompt_calls = 0
         self.relay_code_prompt_calls: list[str] = []
         self.sms_restart_notifications = 0
 
     def ask_ready(self) -> bool:
         self.ask_ready_calls += 1
         return self.ask_ready_result
+
+    def poll_auth_command(self) -> bool:
+        self.poll_auth_command_calls += 1
+        return self.auth_command_result
+
+    def reset_ready_prompt(self) -> None:
+        self.reset_ready_prompt_calls += 1
 
     def notify_sms_restart(self) -> None:
         self.sms_restart_notifications += 1

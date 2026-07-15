@@ -19,6 +19,18 @@ def test_ask_ready_signature():
     assert sig.return_annotation is bool
 
 
+def test_poll_auth_command_signature():
+    sig = inspect.signature(AuthAssistant.poll_auth_command)
+    assert [p for p in sig.parameters if p != "self"] == []
+    assert sig.return_annotation is bool
+
+
+def test_reset_ready_prompt_signature():
+    sig = inspect.signature(AuthAssistant.reset_ready_prompt)
+    assert [p for p in sig.parameters if p != "self"] == []
+    assert sig.return_annotation is None
+
+
 def test_notify_sms_restart_signature():
     sig = inspect.signature(AuthAssistant.notify_sms_restart)
     params = [p for p in sig.parameters if p != "self"]

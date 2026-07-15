@@ -58,6 +58,7 @@ class FakeContext:
         self.launch_kwargs = None
         self.storage_state_calls: list[str] = []
         self.add_cookies_calls: list[list[dict]] = []
+        self.clear_cookies_calls = 0
 
     def new_page(self) -> FakePage:  # pragma: no cover - pages непустой в тестах
         page = FakePage()
@@ -69,6 +70,9 @@ class FakeContext:
 
     def add_cookies(self, cookies: list[dict]) -> None:
         self.add_cookies_calls.append(cookies)
+
+    def clear_cookies(self) -> None:
+        self.clear_cookies_calls += 1
 
 
 class FakeChromium:
@@ -381,3 +385,19 @@ def test_keep_alive_reloads_once():
     mgr.keep_alive()
 
     assert page.reload_count == 1
+
+
+def test_reset_authentication_clears_cookies_removes_state_and_opens_comments(tmp_path):
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{}", encoding="utf-8")
+    settings = make_settings(STORAGE_STATE_PATH=str(state_path))
+    page = FakePage()
+    context = FakeContext(page)
+    manager = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    manager.start()
+
+    manager.reset_authentication()
+
+    assert context.clear_cookies_calls == 1
+    assert not state_path.exists()
+    assert page.goto_calls[-1] == settings.COMMENTS_URL

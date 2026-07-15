@@ -177,6 +177,68 @@ def test_ask_ready_does_not_send_duplicate_prompts_before_confirmation():
     ]
 
 
+def test_poll_auth_command_returns_true_for_configured_chat():
+    update = {
+        "update_id": 10,
+        "message": {"chat": {"id": int(CHAT_ID)}, "text": "/auth"},
+    }
+    recorder = RequestRecorder([_json_response({"ok": True, "result": [update]})])
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.poll_auth_command() is True
+
+
+@pytest.mark.parametrize("text", ["/auth extra", "/auth@", "/auth@bot extra"])
+def test_poll_auth_command_rejects_extra_text(text):
+    update = {
+        "update_id": 10,
+        "message": {"chat": {"id": int(CHAT_ID)}, "text": text},
+    }
+    recorder = RequestRecorder([_json_response({"ok": True, "result": [update]})])
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.poll_auth_command() is False
+
+
+def test_poll_auth_command_ignores_other_chat_and_accepts_bot_suffix():
+    updates = [
+        {
+            "update_id": 10,
+            "message": {"chat": {"id": 999}, "text": "/auth"},
+        },
+        {
+            "update_id": 11,
+            "message": {"chat": {"id": int(CHAT_ID)}, "text": "/auth@my_bot"},
+        },
+    ]
+    recorder = RequestRecorder([_json_response({"ok": True, "result": updates})])
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.poll_auth_command() is True
+
+
+def test_reset_ready_prompt_allows_sending_prompt_again():
+    recorder = RequestRecorder(
+        [
+            _json_response({"ok": True, "result": {"message_id": 1}}),
+            _json_response({"ok": True, "result": []}),
+            _json_response({"ok": True, "result": {"message_id": 2}}),
+            _json_response({"ok": True, "result": []}),
+        ]
+    )
+    assistant, _ = _assistant(recorder)
+
+    assert assistant.ask_ready() is False
+    assistant.reset_ready_prompt()
+    assert assistant.ask_ready() is False
+    assert [request.url.path.split("/")[-1] for request in recorder.requests] == [
+        "sendMessage",
+        "getUpdates",
+        "sendMessage",
+        "getUpdates",
+    ]
+
+
 def test_relay_code_prompt_returns_next_text_message():
     message_update = {
         "update_id": 11,

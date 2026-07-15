@@ -290,6 +290,29 @@ def test_run_cycle_asks_auth_assistant_and_exits_when_session_is_not_restored(
     assert harness.repository.upsert_comment_calls == []
 
 
+def test_run_cycle_resets_session_and_restarts_authorization_on_auth_command(
+    loop_factory, comment_factory
+):
+    from tests.orchestrator.conftest import FakeAuthAssistant, FakeSessionManager
+
+    session = FakeSessionManager(logged_in=False, restore_results=[False])
+    auth_assistant = FakeAuthAssistant(
+        auth_command_result=True,
+        ask_ready_result=False,
+    )
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        session=session,
+        auth_assistant=auth_assistant,
+    )
+
+    harness.loop.run_cycle()
+
+    assert session.reset_authentication_calls == 1
+    assert auth_assistant.reset_ready_prompt_calls == 1
+    assert auth_assistant.ask_ready_calls == 1
+
+
 def test_run_cycle_saves_state_when_session_is_already_logged_in(
     loop_factory,
     comment_factory,

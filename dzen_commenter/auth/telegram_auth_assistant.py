@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+import re
 
 import httpx
 
@@ -26,6 +27,16 @@ class TelegramAuthAssistant:
         self._client = client or self._make_client(
             proxy_url.strip() if proxy_url else ""
         )
+        self._ready_prompt_sent = False
+        self._update_offset: int | None = None
+
+    def poll_auth_command(self) -> bool:
+        for update in self._get_updates(timeout=0):
+            if self._matching_auth_command(update):
+                return True
+        return False
+
+    def reset_ready_prompt(self) -> None:
         self._ready_prompt_sent = False
 
     def ask_ready(self) -> bool:
@@ -133,21 +144,20 @@ class TelegramAuthAssistant:
         matcher: Callable[[dict], object | None],
     ) -> dict | None:
         deadline = time.monotonic() + self.poll_timeout
-        offset: int | None = None
         first_attempt = True
 
         while first_attempt or time.monotonic() < deadline:
             first_attempt = False
             payload: dict[str, object] = {"timeout": self.poll_interval}
-            if offset is not None:
-                payload["offset"] = offset
+            if self._update_offset is not None:
+                payload["offset"] = self._update_offset
 
             response = self._post("getUpdates", payload)
             updates = response.json().get("result", [])
             for update in updates:
                 update_id = update.get("update_id")
                 if isinstance(update_id, int):
-                    offset = update_id + 1
+                    self._update_offset = update_id + 1
                 if matcher(update) is not None:
                     return update
 
@@ -156,6 +166,37 @@ class TelegramAuthAssistant:
             self.sleep_fn(self.poll_interval)
 
         return None
+
+    def _get_updates(self, *, timeout: float) -> list[dict]:
+        payload: dict[str, object] = {"timeout": timeout}
+        if self._update_offset is not None:
+            payload["offset"] = self._update_offset
+
+        response = self._post("getUpdates", payload)
+        updates = response.json().get("result", [])
+        if not isinstance(updates, list):
+            return []
+
+        for update in updates:
+            if isinstance(update, dict):
+                update_id = update.get("update_id")
+                if isinstance(update_id, int):
+                    self._update_offset = update_id + 1
+        return [update for update in updates if isinstance(update, dict)]
+
+    def _matching_auth_command(self, update: dict) -> bool:
+        message = update.get("message")
+        if not isinstance(message, dict):
+            return False
+
+        chat = message.get("chat")
+        if not isinstance(chat, dict) or str(chat.get("id")) != self.chat_id:
+            return False
+
+        text = message.get("text")
+        return isinstance(text, str) and re.fullmatch(
+            r"/auth(?:@[A-Za-z0-9_]+)?", text
+        ) is not None
 
     def _matching_callback(self, update: dict) -> dict | None:
         callback = update.get("callback_query")
