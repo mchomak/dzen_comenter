@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import main
+from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
 
 
 def make_fake_settings(**overrides):
@@ -16,6 +17,7 @@ def make_fake_settings(**overrides):
         SMTP_FROM="",
         TELEGRAM_BOT_TOKEN="tok",
         TELEGRAM_CHAT_ID="chat",
+        DEVELOPER_TELEGRAM_CHAT_ID="developer-chat",
         TELEGRAM_PROXY_URL="",
     )
     base.update(overrides)
@@ -170,14 +172,17 @@ def test_build_app_wires_layers(monkeypatch):
     assert loop_kwargs["prompt_builder"] is pb
     assert loop_kwargs["session"] is session
     assert loop_kwargs["page"] is dzen_ev[1]
-    assert loop_kwargs["notifier"] is tg
+    assert isinstance(loop_kwargs["notifier"], DeveloperNotifier)
+    assert loop_kwargs["notifier"].transport is tg
+    assert tg.kwargs["chat_id"] == "developer-chat"
+    assert auth_assistant.kwargs["chat_id"] == "chat"
     assert loop_kwargs["auth_assistant"] is auth_assistant
     assert loop_kwargs["classify_reply_type"] is main.classify_reply_type
 
     # Возврат — те же объекты.
     assert loop is _first(rec, "loop")[1]
     assert session is _first(rec, "session_init")[1]
-    assert notifier is tg
+    assert notifier.transport is tg
 
 
 # Acceptance 3 — email-фоллбэк собирается при непустом списке и SMTP_HOST.

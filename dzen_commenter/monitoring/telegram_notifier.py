@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from importlib import import_module
+import logging
 
 from dzen_commenter.contracts.interfaces import Notifier
 
@@ -25,17 +26,29 @@ class TelegramNotifier:
     def notify(self, message: str) -> None:
         try:
             self._send(message)
-        except self._httpx.HTTPError:
+        except Exception:
             if self.fallback is not None:
-                self.fallback.notify(message)
+                try:
+                    self.fallback.notify(message)
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "Telegram and email notification delivery failed",
+                        exc_info=True,
+                    )
 
     def notify_error(self, message: str, error: Exception | None = None) -> None:
         text = self._format_error(message, error)
         try:
             self._send(text)
-        except self._httpx.HTTPError:
+        except Exception:
             if self.fallback is not None:
-                self.fallback.notify_error(message, error)
+                try:
+                    self.fallback.notify_error(message, error)
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "Telegram and email error notification delivery failed",
+                        exc_info=True,
+                    )
 
     def _make_client(self) -> object:
         if self.proxy_url:

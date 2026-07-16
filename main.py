@@ -14,6 +14,7 @@ from dzen_commenter.dzen.page import DzenStudioPage
 from dzen_commenter.monitoring.email_fallback import EmailFallbackNotifier
 from dzen_commenter.monitoring.logging_config import configure_logging
 from dzen_commenter.monitoring.telegram_notifier import TelegramNotifier
+from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
 from dzen_commenter.orchestrator.loop import OrchestratorLoop
 from dzen_commenter.prompt.builder import DameoPromptBuilder
 from dzen_commenter.prompt.classifier import classify_reply_type
@@ -58,12 +59,12 @@ def build_app(
     else:
         email_fallback = None
 
-    notifier = TelegramNotifier(
+    notifier = DeveloperNotifier(TelegramNotifier(
         bot_token=settings.TELEGRAM_BOT_TOKEN,
-        chat_id=settings.TELEGRAM_CHAT_ID,
+        chat_id=settings.DEVELOPER_TELEGRAM_CHAT_ID,
         proxy_url=settings.TELEGRAM_PROXY_URL,
         fallback=email_fallback,
-    )
+    ))
 
     loop = OrchestratorLoop(
         settings=settings,
@@ -113,6 +114,7 @@ def main() -> None:
     configure_logging()
     settings = Settings()
     loop, session, notifier = build_app(settings)
+    configure_logging(notifier=notifier)
     run_supervised(
         loop,
         session,

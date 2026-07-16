@@ -190,6 +190,7 @@ def test_new_monitoring_dependency_imports_are_clean():
         "collections",
         "email",
         "importlib",
+        "logging",
         "smtplib",
         "dzen_commenter",
     }

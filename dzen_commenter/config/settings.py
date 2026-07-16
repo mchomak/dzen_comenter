@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     # Telegram (авторизация/уведомления)
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
+    DEVELOPER_TELEGRAM_CHAT_ID: str = ""
     TELEGRAM_PROXY_URL: str = ""
 
     # Email-фоллбэк

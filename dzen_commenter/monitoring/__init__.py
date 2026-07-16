@@ -1,4 +1,8 @@
 from dzen_commenter.monitoring.email_fallback import EmailFallbackNotifier
+from dzen_commenter.monitoring.developer_notifier import (
+    DeveloperNotificationHandler,
+    DeveloperNotifier,
+)
 from dzen_commenter.monitoring.logging_config import (
     StructuredFormatter,
     configure_logging,
@@ -12,4 +16,6 @@ __all__ = [
     "LoggingNotifier",
     "TelegramNotifier",
     "EmailFallbackNotifier",
+    "DeveloperNotifier",
+    "DeveloperNotificationHandler",
 ]
