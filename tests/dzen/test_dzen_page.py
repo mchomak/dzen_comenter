@@ -82,11 +82,15 @@ class FakeGroup:
 class FakePage:
     def __init__(self, groups: list[FakeGroup]) -> None:
         self._groups = groups
+        self.waited_ms: list[float] = []
 
     def query_selector_all(self, selector: str):
         if selector == selectors.POST_GROUP:
             return list(self._groups)
         return []
+
+    def wait_for_timeout(self, timeout_ms: float) -> None:
+        self.waited_ms.append(timeout_ms)
 
 
 def make_node(i: int, date: str | None = None) -> FakeCommentNode:
@@ -190,7 +194,7 @@ def test_publish_reply_targets_matching_node():
     page = DzenStudioPage(fake)
 
     target = page.fetch_comments()[1]  # соответствует node1
-    page.publish_reply(target, "мой ответ")
+    page.publish_reply(target, "мой ответ", auto_publish=True)
 
     assert node1.reply_button.clicks == 1
     assert node1.reply_input.filled == ["мой ответ"]
@@ -198,6 +202,20 @@ def test_publish_reply_targets_matching_node():
     assert node0.reply_button.clicks == 0
     assert node0.reply_input.filled == []
     assert node0.reply_submit.clicks == 0
+
+
+def test_publish_reply_fills_draft_and_waits_without_submitting():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "мой ответ", auto_publish=False)
+
+    assert node.reply_button.clicks == 1
+    assert node.reply_input.filled == ["мой ответ"]
+    assert node.reply_submit.clicks == 0
+    assert fake.waited_ms == [5_000]
 
 
 def test_publish_reply_unmatched_raises_lookup_error():
@@ -215,7 +233,7 @@ def test_publish_reply_unmatched_raises_lookup_error():
         status=CommentStatus.NEW,
     )
     with pytest.raises(LookupError):
-        page.publish_reply(comment, "ответ")
+        page.publish_reply(comment, "ответ", auto_publish=True)
 
 
 # Acceptance 8 — пустая страница.

@@ -184,14 +184,16 @@ class FakeDzenPage:
     def __init__(self, comments: list[Comment] | None = None) -> None:
         self.comments = list(comments or [])
         self.fetch_calls = 0
-        self.publish_calls: list[tuple[Comment, str]] = []
+        self.publish_calls: list[tuple[Comment, str, bool]] = []
 
     def fetch_comments(self) -> list[Comment]:
         self.fetch_calls += 1
         return list(self.comments)
 
-    def publish_reply(self, comment: Comment, text: str) -> None:
-        self.publish_calls.append((comment, text))
+    def publish_reply(
+        self, comment: Comment, text: str, *, auto_publish: bool
+    ) -> None:
+        self.publish_calls.append((comment, text, auto_publish))
 
 
 class FakeNotifier:

@@ -103,7 +103,9 @@ class DzenStudioPage:
             return None
         return synthetic_id(post_href, parent.get("authorHref", ""), parent["text"])
 
-    def publish_reply(self, comment: Comment, text: str) -> None:
+    def publish_reply(
+        self, comment: Comment, text: str, *, auto_publish: bool
+    ) -> None:
         for node, post_href in self._iter_comment_nodes():
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
             author_href = author_link.get_attribute("href") or "" if author_link else ""
@@ -113,7 +115,10 @@ class DzenStudioPage:
                 continue
             node.query_selector(selectors.COMMENT_REPLY_BUTTON).click()
             node.query_selector(selectors.REPLY_INPUT).fill(text)
-            node.query_selector(selectors.REPLY_SUBMIT).click()
+            if auto_publish:
+                node.query_selector(selectors.REPLY_SUBMIT).click()
+            else:
+                self._page.wait_for_timeout(5_000)
             return
         raise LookupError(f"comment {comment.dzen_comment_id!r} not found on page for reply")
 

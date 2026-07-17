@@ -46,7 +46,9 @@ class SessionManager(Protocol):
 
 class DzenPage(Protocol):
     def fetch_comments(self) -> list[Comment]: ...
-    def publish_reply(self, comment: Comment, text: str) -> None: ...
+    def publish_reply(
+        self, comment: Comment, text: str, *, auto_publish: bool
+    ) -> None: ...
 
 
 class Notifier(Protocol):

@@ -72,7 +72,7 @@ def test_orchestrator_has_no_direct_imports_from_concrete_layers():
     assert offenders == []
 
 
-def test_run_cycle_generates_replies_without_auto_publish(
+def test_run_cycle_enters_drafts_without_auto_publish(
     loop_factory,
     comment_factory,
 ):
@@ -91,7 +91,10 @@ def test_run_cycle_generates_replies_without_auto_publish(
         reply.status == ReplyStatus.GENERATED
         for reply in harness.repository.replies.values()
     )
-    assert harness.page.publish_calls == []
+    assert harness.page.publish_calls == [
+        (harness.repository.comments[1], "generated reply", False),
+        (harness.repository.comments[2], "generated reply", False),
+    ]
     assert len(harness.prompt_builder.contexts) == 2
     assert harness.classify_reply_type.calls == [
         (harness.settings.COMMENTS_URL, "comment text 1"),
@@ -209,7 +212,7 @@ def test_run_cycle_publishes_only_when_auto_publish_enabled(
     harness.loop.run_cycle()
 
     assert harness.page.publish_calls == [
-        (harness.repository.comments[1], "ready to publish")
+        (harness.repository.comments[1], "ready to publish", True)
     ]
     reply = next(iter(harness.repository.replies.values()))
     assert reply.status == ReplyStatus.PUBLISHED
@@ -227,7 +230,7 @@ def test_run_cycle_marks_reply_error_when_publishing_fails(
         settings_overrides={"AUTO_PUBLISH": True},
     )
 
-    def fail_publish(comment, text):
+    def fail_publish(comment, text, *, auto_publish):
         raise RuntimeError("Dzen form changed")
 
     harness.page.publish_reply = fail_publish

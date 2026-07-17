@@ -218,18 +218,23 @@ class OrchestratorLoop:
         )
         self.repository.set_comment_status(comment_id, CommentStatus.ANSWERED)
 
+        try:
+            self.page.publish_reply(
+                comment,
+                text,
+                auto_publish=self.settings.AUTO_PUBLISH,
+            )
+        except Exception as exc:
+            self.repository.set_reply_status(
+                reply_id,
+                ReplyStatus.ERROR,
+                "Dzen reply publication failed",
+            )
+            self.repository.set_comment_status(comment_id, CommentStatus.ERROR)
+            self.notifier.notify_error("Dzen reply publication failed", exc)
+            return
+
         if self.settings.AUTO_PUBLISH:
-            try:
-                self.page.publish_reply(comment, text)
-            except Exception as exc:
-                self.repository.set_reply_status(
-                    reply_id,
-                    ReplyStatus.ERROR,
-                    "Dzen reply publication failed",
-                )
-                self.repository.set_comment_status(comment_id, CommentStatus.ERROR)
-                self.notifier.notify_error("Dzen reply publication failed", exc)
-                return
             self.repository.set_reply_status(reply_id, ReplyStatus.PUBLISHED)
 
     @staticmethod
