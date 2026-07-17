@@ -56,11 +56,23 @@ class TelegramNotifier:
         return self._httpx.Client()
 
     def _send(self, text: str) -> None:
-        response = self._client.post(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            json={"chat_id": self.chat_id, "text": text},
-        )
-        response.raise_for_status()
+        chat_ids = [chat_id.strip() for chat_id in self.chat_id.split(",") if chat_id.strip()]
+        if not chat_ids:
+            raise ValueError("No Telegram chat IDs configured")
+
+        errors = []
+        for chat_id in chat_ids:
+            try:
+                response = self._client.post(
+                    f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+                    json={"chat_id": chat_id, "text": text},
+                )
+                response.raise_for_status()
+            except Exception as error:
+                errors.append(error)
+
+        if len(errors) == len(chat_ids):
+            raise errors[0]
 
     def _format_error(self, message: str, error: Exception | None) -> str:
         if error is None:

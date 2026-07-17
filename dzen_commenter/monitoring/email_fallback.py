@@ -43,6 +43,7 @@ class EmailFallbackNotifier:
         client = self.smtp_client_factory(self.host, self.port)
         try:
             if self.user:
+                client.starttls()
                 client.login(self.user, self.password)
             client.sendmail(self.from_addr, self.to_addrs, msg.as_string())
         finally:

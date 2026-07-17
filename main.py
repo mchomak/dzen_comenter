@@ -61,7 +61,7 @@ def build_app(
 
     notifier = DeveloperNotifier(TelegramNotifier(
         bot_token=settings.TELEGRAM_BOT_TOKEN,
-        chat_id=settings.DEVELOPER_TELEGRAM_CHAT_ID,
+        chat_id=settings.DEVELOPER_TELEGRAM_CHAT_ID_LIST,
         proxy_url=settings.TELEGRAM_PROXY_URL,
         fallback=email_fallback,
     ))

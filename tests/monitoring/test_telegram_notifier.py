@@ -60,6 +60,29 @@ def test_notify_posts_send_message_payload():
     assert request.read() == b'{"chat_id":"12345","text":"hello"}'
 
 
+def test_notify_sends_to_every_comma_separated_chat_id():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifier = TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id="first, second",
+        proxy_url=PROXY_URL,
+        client=client,
+    )
+
+    notifier.notify("hello")
+
+    assert [request.read() for request in requests] == [
+        b'{"chat_id":"first","text":"hello"}',
+        b'{"chat_id":"second","text":"hello"}',
+    ]
+
+
 def test_notify_posts_cyrillic_as_utf8_payload():
     requests = []
 

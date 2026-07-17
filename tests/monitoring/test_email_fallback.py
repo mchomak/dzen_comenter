@@ -8,12 +8,16 @@ class FakeSMTPClient:
     def __init__(self, host, port):
         self.host = host
         self.port = port
+        self.starttls_calls = 0
         self.login_calls = []
         self.sendmail_calls = []
         self.quit_calls = 0
 
     def login(self, user, password):
         self.login_calls.append((user, password))
+
+    def starttls(self):
+        self.starttls_calls += 1
 
     def sendmail(self, from_addr, to_addrs, body):
         self.sendmail_calls.append((from_addr, to_addrs, body))
@@ -62,6 +66,7 @@ def test_notify_sends_email_with_expected_headers_and_body():
     client = factory.clients[0]
     assert client.host == "smtp.example.test"
     assert client.port == 587
+    assert client.starttls_calls == 1
     assert client.login_calls == [("user", "secret")]
     from_addr, to_addrs, body = client.sendmail_calls[0]
     parsed = message_from_string(body)

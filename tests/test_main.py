@@ -17,7 +17,7 @@ def make_fake_settings(**overrides):
         SMTP_FROM="",
         TELEGRAM_BOT_TOKEN="tok",
         TELEGRAM_CHAT_ID="chat",
-        DEVELOPER_TELEGRAM_CHAT_ID="developer-chat",
+        DEVELOPER_TELEGRAM_CHAT_ID_LIST="developer-chat",
         TELEGRAM_PROXY_URL="",
     )
     base.update(overrides)
