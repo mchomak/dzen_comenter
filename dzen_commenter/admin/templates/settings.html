@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Настройки</h1>
+</div>
+
+{% if saved %}<p class="success">Сохранено ✓</p>{% endif %}
+{% if errors %}
+<div class="error">
+  <p>Не удалось сохранить настройки:</p>
+  <ul>
+    {% for message in errors.values() %}<li>{{ message }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form class="settings-form" action="/settings" method="post">
+  <fieldset>
+    <legend>Настройки бота</legend>
+    <label><input type="checkbox" name="auto_publish" {% if values.auto_publish %}checked{% endif %}> Автоматически публиковать ответы</label>
+    <label>Максимальный возраст комментария, дней
+      <input type="number" name="max_comment_age_days" value="{{ values.max_comment_age_days }}" min="0">
+    </label>
+    <label>Максимальная длина ответа
+      <input type="number" name="max_reply_length" value="{{ values.max_reply_length }}" min="1">
+    </label>
+    <label>Telegram ID разработчиков
+      <input type="text" name="developer_telegram_chat_ids" value="{{ values.developer_telegram_chat_ids }}">
+    </label>
+    <label>Список email для ошибок
+      <input type="text" name="error_email_list" value="{{ values.error_email_list }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Промпт</legend>
+    <label>Роль<textarea name="role">{{ values.role }}</textarea></label>
+    <label>Тон голоса<textarea name="tone_of_voice">{{ values.tone_of_voice }}</textarea></label>
+    <label>Антиправила<textarea name="anti_rules">{{ values.anti_rules }}</textarea></label>
+    <label>Задача для лидов<textarea name="task_lead">{{ values.task_lead }}</textarea></label>
+    <label>Задача для вовлечения<textarea name="task_engage">{{ values.task_engage }}</textarea></label>
+    <label>CTA-маркер<textarea name="cta_marker">{{ values.cta_marker }}</textarea></label>
+    <label>Язык<textarea name="language">{{ values.language }}</textarea></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>VNC (только чтение)</legend>
+    <label>Хост<input type="text" value="{{ vnc.host }}" readonly></label>
+    <label>Порт<input type="text" value="{{ vnc.port }}" readonly></label>
+    <label>Пароль<input type="text" value="{{ vnc.password }}" readonly></label>
+    <p>Меняется только через рестарт контейнера.</p>
+  </fieldset>
+
+  <button type="submit">Сохранить</button>
+</form>
+{% endblock %}

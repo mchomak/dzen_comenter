@@ -149,3 +149,56 @@ table.feed thead th {
   color: #b91c1c;
   margin: 0;
 }
+
+.settings-form {
+  max-width: 760px;
+}
+
+.settings-form fieldset {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #cbd2d9;
+  border-radius: 8px;
+}
+
+.settings-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.settings-form input,
+.settings-form textarea,
+.settings-form button {
+  padding: 8px 10px;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.settings-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.settings-form button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.settings-form input[readonly] {
+  background: #f4f6f8;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.success {
+  color: #166534;
+}

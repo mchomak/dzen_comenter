@@ -10,6 +10,8 @@ from dzen_commenter.admin import auth
 from dzen_commenter.admin.auth import BASE_DIR, NotAuthenticated, require_login, templates
 from dzen_commenter.admin.config import AdminSettings
 from dzen_commenter.admin.queries import fetch_feed
+from dzen_commenter.admin.validation import validate_settings_form
+from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
 
 def create_app(
@@ -21,6 +23,7 @@ def create_app(
     if engine is None and settings.DATABASE_URL:
         engine = create_engine(settings.DATABASE_URL)
     app.state.engine = engine
+    app.state.runtime_config = RuntimeConfig(settings.RUNTIME_CONFIG_PATH)
 
     app.add_middleware(SessionMiddleware, secret_key=settings.ADMIN_SESSION_SECRET)
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -46,7 +49,85 @@ def create_app(
             request=request, name="comments.html", context={"feed": feed}
         )
 
+    @app.get("/settings")
+    def settings_page(request: Request, _: None = Depends(require_login)):
+        data = request.app.state.runtime_config.get()
+        return templates.TemplateResponse(
+            request=request,
+            name="settings.html",
+            context={
+                "values": _runtime_values(data),
+                "vnc": _vnc_values(request.app.state.settings),
+                "errors": {},
+                "saved": request.query_params.get("saved") == "1",
+            },
+        )
+
+    @app.post("/settings")
+    async def settings_submit(request: Request, _: None = Depends(require_login)):
+        form = await request.form()
+        data, errors = validate_settings_form(form)
+        if errors:
+            return templates.TemplateResponse(
+                request=request,
+                name="settings.html",
+                context={
+                    "values": _form_values(form),
+                    "vnc": _vnc_values(request.app.state.settings),
+                    "errors": errors,
+                    "saved": False,
+                },
+            )
+
+        request.app.state.runtime_config.save(data)
+        return RedirectResponse("/settings?saved=1", status_code=HTTP_302_FOUND)
+
     return app
+
+
+def _runtime_values(data: RuntimeConfigData) -> dict[str, str]:
+    return {
+        "auto_publish": "on" if data.settings.auto_publish else "",
+        "max_comment_age_days": str(data.settings.max_comment_age_days),
+        "max_reply_length": str(data.settings.max_reply_length),
+        "developer_telegram_chat_ids": data.settings.developer_telegram_chat_ids,
+        "error_email_list": data.settings.error_email_list,
+        "role": data.prompt.role,
+        "tone_of_voice": data.prompt.tone_of_voice,
+        "anti_rules": data.prompt.anti_rules,
+        "task_lead": data.prompt.task_lead,
+        "task_engage": data.prompt.task_engage,
+        "cta_marker": data.prompt.cta_marker,
+        "language": data.prompt.language,
+    }
+
+
+def _form_values(form) -> dict[str, str]:
+    return {
+        name: str(form.get(name, ""))
+        for name in (
+            "auto_publish",
+            "max_comment_age_days",
+            "max_reply_length",
+            "developer_telegram_chat_ids",
+            "error_email_list",
+            "role",
+            "tone_of_voice",
+            "anti_rules",
+            "task_lead",
+            "task_engage",
+            "cta_marker",
+            "language",
+        )
+    }
+
+
+def _vnc_values(settings: AdminSettings) -> dict[str, str]:
+    return {
+        "host": settings.VNC_HOST,
+        "port": str(settings.VNC_PORT),
+        "password": settings.VNC_PASSWORD,
+    }
 
 
 app = create_app()
