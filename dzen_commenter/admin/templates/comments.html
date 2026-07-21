@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Комментарии{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Комментарии</h1>
+  <form class="refresh" action="/comments" method="get">
+    <button type="submit">Обновить</button>
+  </form>
+</div>
+
+{% if feed %}
+<table class="feed">
+  <thead>
+    <tr>
+      <th>Автор</th>
+      <th>Комментарий</th>
+      <th>Ответ бота</th>
+      <th>Статус</th>
+      <th>Ссылка</th>
+      <th>Время</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in feed %}
+    <tr>
+      <td>{{ row.author or "" }}</td>
+      <td>{{ row.comment_text or "" }}</td>
+      <td>{{ row.reply_text or "" }}</td>
+      <td>
+        {% if row.reply_status is none %}
+          нет ответа
+        {% elif row.reply_status == "error" %}
+          error{% if row.error_reason %} — {{ row.error_reason }}{% endif %}
+        {% else %}
+          {{ row.reply_status }}
+        {% endif %}
+      </td>
+      <td>
+        {% if row.post_url %}<a href="{{ row.post_url }}">пост</a>{% endif %}
+      </td>
+      <td>{{ row.fetched_at or "" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Пока нет комментариев.</p>
+{% endif %}
+{% endblock %}

@@ -1,18 +1,26 @@
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_302_FOUND
 
 from dzen_commenter.admin import auth
 from dzen_commenter.admin.auth import BASE_DIR, NotAuthenticated, require_login, templates
 from dzen_commenter.admin.config import AdminSettings
+from dzen_commenter.admin.queries import fetch_feed
 
 
-def create_app(settings: AdminSettings | None = None) -> FastAPI:
+def create_app(
+    settings: AdminSettings | None = None, engine: Engine | None = None
+) -> FastAPI:
     settings = settings or AdminSettings()
     app = FastAPI(title="Dzen Commenter — админ-панель")
     app.state.settings = settings
+    if engine is None and settings.DATABASE_URL:
+        engine = create_engine(settings.DATABASE_URL)
+    app.state.engine = engine
 
     app.add_middleware(SessionMiddleware, secret_key=settings.ADMIN_SESSION_SECRET)
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -29,6 +37,14 @@ def create_app(settings: AdminSettings | None = None) -> FastAPI:
     @app.get("/")
     def home(request: Request, _: None = Depends(require_login)):
         return templates.TemplateResponse(request=request, name="home.html")
+
+    @app.get("/comments")
+    def comments(request: Request, _: None = Depends(require_login)):
+        engine = request.app.state.engine
+        feed = fetch_feed(engine) if engine is not None else []
+        return templates.TemplateResponse(
+            request=request, name="comments.html", context={"feed": feed}
+        )
 
     return app
 
