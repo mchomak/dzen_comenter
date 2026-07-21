@@ -199,7 +199,7 @@ def test_build_app_wires_layers(monkeypatch):
     assert loop_kwargs["page"] is dzen_ev[1]
     assert isinstance(loop_kwargs["notifier"], DeveloperNotifier)
     assert loop_kwargs["notifier"].transport is tg
-    assert tg.kwargs["chat_id"] == "developer-chat"
+    assert tg.kwargs["chat_id"] == ""
     assert auth_assistant.kwargs["chat_id"] == "chat"
     assert loop_kwargs["auth_assistant"] is auth_assistant
     assert loop_kwargs["classify_reply_type"] is main.classify_reply_type
@@ -210,7 +210,7 @@ def test_build_app_wires_layers(monkeypatch):
     assert notifier.transport is tg
 
 
-# Acceptance 3 — email-фоллбэк собирается при непустом списке и SMTP_HOST.
+# Acceptance 3 — email-фоллбэк собирается при SMTP_HOST; адресаты живые.
 def test_build_app_email_fallback_configured(monkeypatch):
     rec = install_di_fakes(monkeypatch)
     settings = make_fake_settings(
@@ -221,7 +221,8 @@ def test_build_app_email_fallback_configured(monkeypatch):
     main.build_app(settings)
 
     ef = _first(rec, "email_fallback")[1]
-    assert ef.kwargs["to_addrs"] == ["a@x.com", "b@y.com"]
+    assert ef.kwargs["to_addrs"] == []
+    assert callable(ef.kwargs["to_addrs_provider"])
 
     tg = _first(rec, "telegram_notifier")[1]
     assert tg.kwargs["fallback"] is ef

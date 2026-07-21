@@ -335,7 +335,15 @@ def settings_factory() -> Callable[..., Settings]:
             "MAX_COMMENT_AGE_DAYS": 30,
             "MAX_REPLY_LENGTH": 1000,
         }
-        values.update(overrides)
+        moved_fields = {
+            "AUTO_PUBLISH",
+            "MAX_COMMENT_AGE_DAYS",
+            "MAX_REPLY_LENGTH",
+            "DEVELOPER_TELEGRAM_CHAT_ID_LIST",
+            "EMAIL_FALLBACK_LIST",
+            "PROMPT_CONFIG_PATH",
+        }
+        values.update({key: value for key, value in overrides.items() if key not in moved_fields})
         return Settings(**values)
 
     return _factory
@@ -355,7 +363,8 @@ def loop_factory(
         auth_assistant: FakeAuthAssistant | None = None,
         classifier: FakeReplyClassifier | None = None,
     ) -> LoopHarness:
-        settings = settings_factory(**(settings_overrides or {}))
+        runtime_overrides = settings_overrides or {}
+        settings = settings_factory(**runtime_overrides)
         repository = repository or FakeCommentRepository()
         ai_provider = FakeAIProvider(ai_responses)
         prompt_builder = FakePromptBuilder()
@@ -369,11 +378,13 @@ def loop_factory(
         runtime_config = FakeRuntimeConfig(
             RuntimeConfigData(
                 settings=RuntimeSettings(
-                    auto_publish=settings.AUTO_PUBLISH,
-                    max_comment_age_days=settings.MAX_COMMENT_AGE_DAYS,
-                    max_reply_length=settings.MAX_REPLY_LENGTH,
-                    developer_telegram_chat_ids=settings.DEVELOPER_TELEGRAM_CHAT_ID_LIST,
-                    error_email_list=settings.EMAIL_FALLBACK_LIST,
+                    auto_publish=runtime_overrides.get("AUTO_PUBLISH", False),
+                    max_comment_age_days=runtime_overrides.get("MAX_COMMENT_AGE_DAYS", 30),
+                    max_reply_length=runtime_overrides.get("MAX_REPLY_LENGTH", 1000),
+                    developer_telegram_chat_ids=runtime_overrides.get(
+                        "DEVELOPER_TELEGRAM_CHAT_ID_LIST", ""
+                    ),
+                    error_email_list=runtime_overrides.get("EMAIL_FALLBACK_LIST", ""),
                 ),
                 prompt=load_brand_config(None),
             )

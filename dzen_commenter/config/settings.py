@@ -37,29 +37,19 @@ class Settings(BaseSettings):
     # Цикл
     POLL_INTERVAL: int
     KEEPALIVE_INTERVAL: int
-    AUTO_PUBLISH: bool = False
     MAX_REPLIES_PER_CYCLE: int
 
     # Telegram (авторизация/уведомления)
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
-    DEVELOPER_TELEGRAM_CHAT_ID_LIST: str = ""
     TELEGRAM_PROXY_URL: str = ""
 
     # Email-фоллбэк
-    EMAIL_FALLBACK_LIST: str = ""
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
-
-    # Отсечки
-    MAX_COMMENT_AGE_DAYS: int = 30
-    MAX_REPLY_LENGTH: int = 1000
-
-    # Промпт
-    PROMPT_CONFIG_PATH: str = ""
 
     # Runtime-конфиг (живые настройки на общем томе)
     RUNTIME_CONFIG_PATH: str = "runtime_config.json"

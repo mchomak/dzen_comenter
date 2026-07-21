@@ -7,6 +7,7 @@ import pytest
 import dzen_commenter  # noqa: F401
 import dzen_commenter.config  # noqa: F401
 import dzen_commenter.contracts  # noqa: F401
+from dzen_commenter.config.runtime_config import RuntimeSettings
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts import interfaces
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
@@ -41,22 +42,16 @@ EXPECTED_FIELDS = {
     "DZEN_LOGIN_TIMEOUT_MS",
     "POLL_INTERVAL",
     "KEEPALIVE_INTERVAL",
-    "AUTO_PUBLISH",
     "MAX_REPLIES_PER_CYCLE",
     # stage-02 config extension
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
-    "DEVELOPER_TELEGRAM_CHAT_ID_LIST",
     "TELEGRAM_PROXY_URL",
-    "EMAIL_FALLBACK_LIST",
     "SMTP_HOST",
     "SMTP_PORT",
     "SMTP_USER",
     "SMTP_PASSWORD",
     "SMTP_FROM",
-    "MAX_COMMENT_AGE_DAYS",
-    "MAX_REPLY_LENGTH",
-    "PROMPT_CONFIG_PATH",
     "RUNTIME_CONFIG_PATH",
     "ADMIN_PASSWORD",
     "ADMIN_SESSION_SECRET",
@@ -126,8 +121,8 @@ def test_settings_fields_match_model():
     assert set(Settings.model_fields) == EXPECTED_FIELDS
 
 
-def test_auto_publish_defaults_false():
-    assert Settings.model_fields["AUTO_PUBLISH"].default is False
+def test_runtime_auto_publish_defaults_false():
+    assert RuntimeSettings().auto_publish is False
 
 
 def _parse_env_keys(path: pathlib.Path) -> set[str]:

@@ -156,11 +156,13 @@ def ensure_runtime_config(path: str, settings: object, brand_config: PromptBrand
 
     data = RuntimeConfigData(
         settings=RuntimeSettings(
-            auto_publish=settings.AUTO_PUBLISH,
-            max_comment_age_days=settings.MAX_COMMENT_AGE_DAYS,
-            max_reply_length=settings.MAX_REPLY_LENGTH,
-            developer_telegram_chat_ids=settings.DEVELOPER_TELEGRAM_CHAT_ID_LIST,
-            error_email_list=settings.EMAIL_FALLBACK_LIST,
+            auto_publish=getattr(settings, "AUTO_PUBLISH", False),
+            max_comment_age_days=getattr(settings, "MAX_COMMENT_AGE_DAYS", 30),
+            max_reply_length=getattr(settings, "MAX_REPLY_LENGTH", 1000),
+            developer_telegram_chat_ids=getattr(
+                settings, "DEVELOPER_TELEGRAM_CHAT_ID_LIST", ""
+            ),
+            error_email_list=getattr(settings, "EMAIL_FALLBACK_LIST", ""),
         ),
         prompt=brand_config,
     )

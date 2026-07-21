@@ -34,7 +34,7 @@ def build_app(
     ensure_runtime_config(
         settings.RUNTIME_CONFIG_PATH,
         settings,
-        load_brand_config(settings.PROMPT_CONFIG_PATH or None),
+        load_brand_config(None),
     )
 
     prompt_builder = DameoPromptBuilder(
@@ -59,11 +59,7 @@ def build_app(
             user=settings.SMTP_USER,
             password=settings.SMTP_PASSWORD,
             from_addr=settings.SMTP_FROM,
-            to_addrs=[
-                a.strip()
-                for a in settings.EMAIL_FALLBACK_LIST.split(",")
-                if a.strip()
-            ],
+            to_addrs=[],
             to_addrs_provider=lambda: [
                 a.strip()
                 for a in runtime_config.get().settings.error_email_list.split(",")
@@ -75,7 +71,7 @@ def build_app(
 
     notifier = DeveloperNotifier(TelegramNotifier(
         bot_token=settings.TELEGRAM_BOT_TOKEN,
-        chat_id=settings.DEVELOPER_TELEGRAM_CHAT_ID_LIST,
+        chat_id="",
         proxy_url=settings.TELEGRAM_PROXY_URL,
         fallback=email_fallback,
         chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
