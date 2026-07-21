@@ -32,3 +32,10 @@ server, and a noVNC web gateway. Set `VNC_PASSWORD` and `NOVNC_PORT` in `.env`,
 then open `http://<server-ip>:${NOVNC_PORT}/vnc.html` in a browser. Enter the
 same `VNC_PASSWORD` in the noVNC connection dialog. Keep `AUTO_PUBLISH=false`
 while testing authentication and browser behavior.
+
+## Admin panel
+
+Start the bot, database, and panel with `docker compose up -d postgres app admin`.
+The panel is available at `http://<server-ip>:8080`; set `ADMIN_PASSWORD` in
+`.env` before starting it. The bot and panel share the runtime configuration
+through the `config_data` Docker volume.

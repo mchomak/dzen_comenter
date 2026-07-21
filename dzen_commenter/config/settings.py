@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # Runtime-конфиг (живые настройки на общем томе)
     RUNTIME_CONFIG_PATH: str = "runtime_config.json"
 
+    # Admin panel
+    ADMIN_PASSWORD: str = ""
+    ADMIN_SESSION_SECRET: str = "change-me-in-production"
+
     # VNC
     VNC_PORT: int = 5900
     VNC_PASSWORD: str = ""
