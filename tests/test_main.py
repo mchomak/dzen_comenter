@@ -227,6 +227,19 @@ def test_build_app_email_fallback_configured(monkeypatch):
     assert tg.kwargs["fallback"] is ef
 
 
+def test_build_app_email_fallback_is_available_for_recipients_added_at_runtime(monkeypatch):
+    rec = install_di_fakes(monkeypatch)
+    settings = make_fake_settings(SMTP_HOST="smtp.example.com")
+
+    main.build_app(settings)
+
+    ef = _first(rec, "email_fallback")[1]
+    assert ef.kwargs["to_addrs"] == []
+    assert callable(ef.kwargs["to_addrs_provider"])
+    tg = _first(rec, "telegram_notifier")[1]
+    assert tg.kwargs["fallback"] is ef
+
+
 class FakeLoop:
     def __init__(self, raise_on=()):
         self.raise_on = set(raise_on)

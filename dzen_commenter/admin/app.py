@@ -20,8 +20,6 @@ def create_app(
     settings = settings or AdminSettings()
     app = FastAPI(title="Dzen Commenter — админ-панель")
     app.state.settings = settings
-    if engine is None and settings.DATABASE_URL:
-        engine = create_engine(settings.DATABASE_URL)
     app.state.engine = engine
     app.state.runtime_config = RuntimeConfig(settings.RUNTIME_CONFIG_PATH)
 
@@ -43,7 +41,7 @@ def create_app(
 
     @app.get("/comments")
     def comments(request: Request, _: None = Depends(require_login)):
-        engine = request.app.state.engine
+        engine = _get_engine(request.app)
         feed = fetch_feed(engine) if engine is not None else []
         return templates.TemplateResponse(
             request=request, name="comments.html", context={"feed": feed}
@@ -83,6 +81,14 @@ def create_app(
         return RedirectResponse("/settings?saved=1", status_code=HTTP_302_FOUND)
 
     return app
+
+
+def _get_engine(app: FastAPI) -> Engine | None:
+    engine = app.state.engine
+    if engine is None and app.state.settings.DATABASE_URL:
+        engine = create_engine(app.state.settings.DATABASE_URL)
+        app.state.engine = engine
+    return engine
 
 
 def _runtime_values(data: RuntimeConfigData) -> dict[str, str]:

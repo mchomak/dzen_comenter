@@ -52,7 +52,7 @@ def build_app(
     session.start()
     page = DzenStudioPage(session.page)
 
-    if settings.EMAIL_FALLBACK_LIST and settings.SMTP_HOST:
+    if settings.SMTP_HOST:
         email_fallback = EmailFallbackNotifier(
             host=settings.SMTP_HOST,
             port=settings.SMTP_PORT,

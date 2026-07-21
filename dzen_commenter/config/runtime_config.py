@@ -106,7 +106,8 @@ class RuntimeConfig:
     def get(self) -> RuntimeConfigData:
         try:
             mtime = self._path.stat().st_mtime
-        except OSError:
+        except OSError as exc:
+            logger.warning("Failed to read runtime config %s: %s", self._path, exc)
             if self._data is not None:
                 return self._data
             return _defaults()

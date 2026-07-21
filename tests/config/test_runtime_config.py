@@ -77,6 +77,16 @@ def test_broken_json_falls_back_without_raising(tmp_path, caplog):
     assert any("runtime config" in r.getMessage().lower() for r in caplog.records)
 
 
+def test_missing_config_falls_back_without_raising_and_logs_warning(tmp_path, caplog):
+    rc = RuntimeConfig(str(tmp_path / "missing.json"))
+
+    with caplog.at_level(logging.WARNING):
+        data = rc.get()
+
+    assert data.prompt.role == config_loader.DEFAULT_ROLE
+    assert any("runtime config" in record.getMessage().lower() for record in caplog.records)
+
+
 def test_broken_json_returns_last_valid(tmp_path):
     path = tmp_path / "rc.json"
     rc = RuntimeConfig(str(path))
