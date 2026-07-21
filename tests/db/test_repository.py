@@ -19,7 +19,11 @@ def _make_publication(dzen_id="pub-1", title="T", url="http://x") -> Publication
 
 
 def _make_comment(
-    publication_id, dzen_id="c-1", text="hello", status=CommentStatus.NEW
+    publication_id,
+    dzen_id="c-1",
+    text="hello",
+    status=CommentStatus.NEW,
+    post_url="http://post/1",
 ) -> Comment:
     return Comment(
         id=None,
@@ -31,6 +35,7 @@ def _make_comment(
         posted_at=datetime(2026, 1, 1, 12, 0, 0),
         fetched_at=datetime(2026, 1, 1, 12, 5, 0),
         status=status,
+        post_url=post_url,
     )
 
 
@@ -192,6 +197,28 @@ def test_upsert_comment_updates(repo, engine):
     assert row.text == "new"
     assert row.status == CommentStatus.ANSWERED.value
     assert count == 1
+
+
+# --- Acceptance 09: upsert stores and updates post_url ---
+
+
+def test_upsert_comment_stores_and_updates_post_url(repo, engine):
+    pub_id = repo.upsert_publication(_make_publication())
+    cid = repo.upsert_comment(_make_comment(pub_id, post_url="http://post/old"))
+
+    with engine.begin() as conn:
+        stored = conn.execute(
+            text("SELECT post_url FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one()
+    assert stored == "http://post/old"
+
+    repo.upsert_comment(_make_comment(pub_id, post_url="http://post/new"))
+
+    with engine.begin() as conn:
+        updated = conn.execute(
+            text("SELECT post_url FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one()
+    assert updated == "http://post/new"
 
 
 # --- Acceptance 8: status transitions ---

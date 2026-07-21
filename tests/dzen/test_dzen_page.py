@@ -242,6 +242,19 @@ def test_fetch_comments_empty_page():
     assert page.fetch_comments() == []
 
 
+# Acceptance 09.1 — post_url каждого Comment равен post_href своей группы.
+def test_fetch_comments_sets_post_url_per_group():
+    groups = [
+        FakeGroup("/a/post1", [make_node(0), make_node(1)]),
+        FakeGroup("/a/post2", [make_node(2)]),
+    ]
+    page = DzenStudioPage(FakePage(groups))
+
+    comments = page.fetch_comments()
+
+    assert [c.post_url for c in comments] == ["/a/post1", "/a/post1", "/a/post2"]
+
+
 def test_synthetic_id_matches_helper():
     node = make_node(5)
     page = DzenStudioPage(FakePage([FakeGroup("/a/postX", [node])]))

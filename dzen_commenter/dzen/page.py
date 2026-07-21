@@ -65,6 +65,7 @@ class DzenStudioPage:
                         status=CommentStatus.NEW,
                         publication_title=publication_title,
                         thread_text="\n".join(previous_messages),
+                        post_url=post_href,
                     )
                 )
                 if text:

@@ -25,6 +25,7 @@ class Comment:
     status: CommentStatus
     publication_title: str = ""
     thread_text: str = ""
+    post_url: str | None = None
 
 
 @dataclass

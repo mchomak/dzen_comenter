@@ -42,6 +42,7 @@ class PostgresCommentRepository:
                 posted_at=comment.posted_at,
                 fetched_at=comment.fetched_at,
                 status=comment.status.value,
+                post_url=comment.post_url,
             )
             .on_conflict_do_update(
                 index_elements=[CommentTable.dzen_comment_id],
@@ -53,6 +54,7 @@ class PostgresCommentRepository:
                     "posted_at": comment.posted_at,
                     "fetched_at": comment.fetched_at,
                     "status": comment.status.value,
+                    "post_url": comment.post_url,
                 },
             )
             .returning(CommentTable.id)

@@ -31,6 +31,7 @@ class CommentTable(Base):
     posted_at: Mapped[datetime | None] = mapped_column()
     fetched_at: Mapped[datetime | None] = mapped_column()
     status: Mapped[str] = mapped_column(Text, nullable=False)
+    post_url: Mapped[str | None] = mapped_column(Text)
 
 
 class ReplyTable(Base):
