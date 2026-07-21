@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # Промпт
     PROMPT_CONFIG_PATH: str = ""
 
+    # Runtime-конфиг (живые настройки на общем томе)
+    RUNTIME_CONFIG_PATH: str = "runtime_config.json"
+
     # VNC
     VNC_PORT: int = 5900
     VNC_PASSWORD: str = ""

@@ -165,6 +165,41 @@ def test_builder_uses_config_override(tmp_path):
     assert "custom CTA" not in engage
 
 
+def test_config_provider_is_reread_on_every_build():
+    holder = {
+        "config": PromptBrandConfig(
+            role="role one",
+            tone_of_voice="tone",
+            anti_rules="anti",
+            task_lead="lead task one",
+            task_engage="engage task one",
+            cta_marker="cta",
+            language="ru",
+        )
+    }
+    builder = DameoPromptBuilder(config_provider=lambda: holder["config"])
+
+    first = builder.build(make_context("lead"))
+    assert "role one" in first
+    assert "lead task one" in first
+
+    # Edit the prompt section live — the next build must pick it up, no restart.
+    holder["config"] = PromptBrandConfig(
+        role="role two",
+        tone_of_voice="tone",
+        anti_rules="anti",
+        task_lead="lead task two",
+        task_engage="engage task two",
+        cta_marker="cta",
+        language="ru",
+    )
+
+    second = builder.build(make_context("lead"))
+    assert "role two" in second
+    assert "lead task two" in second
+    assert "role one" not in second
+
+
 FORBIDDEN_TOP = {
     "httpx",
     "psycopg",

@@ -78,6 +78,34 @@ def test_notify_sends_email_with_expected_headers_and_body():
     assert client.quit_calls == 1
 
 
+def test_to_addrs_read_from_provider_at_send_time():
+    factory = SMTPFactory()
+    holder = {"addrs": ["a@example.test"]}
+    notifier = EmailFallbackNotifier(
+        host="smtp.example.test",
+        port=587,
+        user="user",
+        password="secret",
+        from_addr="from@example.test",
+        to_addrs=["stale@example.test"],
+        smtp_client_factory=factory,
+        to_addrs_provider=lambda: holder["addrs"],
+    )
+
+    notifier.notify("first")
+    _, to_addrs, body = factory.clients[0].sendmail_calls[0]
+    assert to_addrs == ["a@example.test"]
+    assert message_from_string(body)["To"] == "a@example.test"
+
+    # Edit recipients live — the next send must use the fresh value.
+    holder["addrs"] = ["b@example.test", "c@example.test"]
+    notifier.notify("second")
+    assert factory.clients[1].sendmail_calls[0][1] == [
+        "b@example.test",
+        "c@example.test",
+    ]
+
+
 def test_notify_error_body_includes_exception_type_and_text():
     factory = SMTPFactory()
     notifier = _notifier(factory)

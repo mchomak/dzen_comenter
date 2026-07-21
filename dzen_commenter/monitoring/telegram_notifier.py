@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from importlib import import_module
 import logging
 
@@ -15,9 +16,11 @@ class TelegramNotifier:
         proxy_url: str,
         fallback: Notifier | None = None,
         client: object | None = None,
+        chat_id_provider: Callable[[], str] | None = None,
     ) -> None:
         self.bot_token = bot_token
         self.chat_id = chat_id
+        self.chat_id_provider = chat_id_provider
         self.proxy_url = proxy_url.strip() if proxy_url else ""
         self.fallback = fallback
         self._httpx = import_module("httpx")
@@ -56,7 +59,10 @@ class TelegramNotifier:
         return self._httpx.Client()
 
     def _send(self, text: str) -> None:
-        chat_ids = [chat_id.strip() for chat_id in self.chat_id.split(",") if chat_id.strip()]
+        raw_chat_ids = (
+            self.chat_id_provider() if self.chat_id_provider is not None else self.chat_id
+        )
+        chat_ids = [chat_id.strip() for chat_id in raw_chat_ids.split(",") if chat_id.strip()]
         if not chat_ids:
             raise ValueError("No Telegram chat IDs configured")
 

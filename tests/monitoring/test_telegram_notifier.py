@@ -207,6 +207,35 @@ def test_notify_error_includes_exception_text_and_falls_back():
     assert fallback.notify_error_calls == [("broken", error)]
 
 
+def test_chat_ids_read_from_provider_at_send_time():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    holder = {"ids": "first"}
+    notifier = TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id="stale",
+        proxy_url=PROXY_URL,
+        client=client,
+        chat_id_provider=lambda: holder["ids"],
+    )
+
+    notifier.notify("hello")
+    assert requests[0].read() == b'{"chat_id":"first","text":"hello"}'
+
+    # Edit recipients live — the next send must use the fresh value.
+    holder["ids"] = "second, third"
+    notifier.notify("again")
+    assert [request.read() for request in requests[1:]] == [
+        b'{"chat_id":"second","text":"again"}',
+        b'{"chat_id":"third","text":"again"}',
+    ]
+
+
 def test_new_monitoring_dependency_imports_are_clean():
     allowed_roots = {
         "__future__",

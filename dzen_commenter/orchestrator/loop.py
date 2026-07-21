@@ -4,6 +4,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 
+from dzen_commenter.config.runtime_config import RuntimeConfig
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import (
@@ -33,6 +34,7 @@ class OrchestratorLoop:
         notifier: Notifier,
         auth_assistant: AuthAssistant,
         classify_reply_type: Callable[[str, str], ReplyType],
+        runtime_config: RuntimeConfig,
         sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         self.settings = settings
@@ -44,6 +46,7 @@ class OrchestratorLoop:
         self.notifier = notifier
         self.auth_assistant = auth_assistant
         self.classify_reply_type = classify_reply_type
+        self.runtime_config = runtime_config
         self.sleep_fn = sleep_fn
         self._authorization_not_confirmed_notified = False
 
@@ -151,9 +154,13 @@ class OrchestratorLoop:
         else:
             now = datetime.now(posted_at.tzinfo)
 
-        return (now - posted_at).days > self.settings.MAX_COMMENT_AGE_DAYS
+        max_age_days = self.runtime_config.get().settings.max_comment_age_days
+        return (now - posted_at).days > max_age_days
 
     def _generate_reply(self, comment_id: int, comment: Comment) -> None:
+        runtime_settings = self.runtime_config.get().settings
+        max_reply_length = runtime_settings.max_reply_length
+        auto_publish = runtime_settings.auto_publish
         publication_title = comment.publication_title or self.settings.COMMENTS_URL
         classifier_text = "\n".join(
             part for part in (comment.thread_text, comment.text) if part
@@ -181,7 +188,7 @@ class OrchestratorLoop:
             self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
             return
 
-        if len(text) > self.settings.MAX_REPLY_LENGTH:
+        if len(text) > max_reply_length:
             text = self._extract_reply_text(
                 self.ai_provider.generate(
                     prompt,
@@ -194,7 +201,7 @@ class OrchestratorLoop:
             self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
             return
 
-        if len(text) > self.settings.MAX_REPLY_LENGTH:
+        if len(text) > max_reply_length:
             reason = "reply too long after regeneration"
             self.repository.save_reply(
                 self._make_reply(
@@ -222,7 +229,7 @@ class OrchestratorLoop:
             self.page.publish_reply(
                 comment,
                 text,
-                auto_publish=self.settings.AUTO_PUBLISH,
+                auto_publish=auto_publish,
             )
         except Exception as exc:
             self.repository.set_reply_status(
@@ -234,7 +241,7 @@ class OrchestratorLoop:
             self.notifier.notify_error("Dzen reply publication failed", exc)
             return
 
-        if self.settings.AUTO_PUBLISH:
+        if auto_publish:
             self.repository.set_reply_status(reply_id, ReplyStatus.PUBLISHED)
 
     @staticmethod

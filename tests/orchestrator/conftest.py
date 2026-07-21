@@ -6,14 +6,28 @@ from datetime import datetime
 
 import pytest
 
+from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import PromptContext, ReplyType
 from dzen_commenter.contracts.models import Comment, Publication, Reply
 from dzen_commenter.orchestrator import OrchestratorLoop
+from dzen_commenter.prompt.config_loader import load_brand_config
 
 
 _MISSING = object()
+
+
+class FakeRuntimeConfig:
+    """In-memory RuntimeConfig stand-in whose settings can be mutated live."""
+
+    def __init__(self, data: RuntimeConfigData) -> None:
+        self.data = data
+        self.get_calls = 0
+
+    def get(self) -> RuntimeConfigData:
+        self.get_calls += 1
+        return self.data
 
 
 class FakeCommentRepository:
@@ -267,6 +281,7 @@ class LoopHarness:
     notifier: FakeNotifier
     auth_assistant: FakeAuthAssistant
     classify_reply_type: FakeReplyClassifier
+    runtime_config: FakeRuntimeConfig
     sleep_calls: list[float]
 
 
@@ -351,6 +366,19 @@ def loop_factory(
         classifier = classifier or FakeReplyClassifier()
         sleep_calls: list[float] = []
 
+        runtime_config = FakeRuntimeConfig(
+            RuntimeConfigData(
+                settings=RuntimeSettings(
+                    auto_publish=settings.AUTO_PUBLISH,
+                    max_comment_age_days=settings.MAX_COMMENT_AGE_DAYS,
+                    max_reply_length=settings.MAX_REPLY_LENGTH,
+                    developer_telegram_chat_ids=settings.DEVELOPER_TELEGRAM_CHAT_ID_LIST,
+                    error_email_list=settings.EMAIL_FALLBACK_LIST,
+                ),
+                prompt=load_brand_config(None),
+            )
+        )
+
         loop = OrchestratorLoop(
             settings=settings,
             repository=repository,
@@ -361,6 +389,7 @@ def loop_factory(
             notifier=notifier,
             auth_assistant=auth_assistant,
             classify_reply_type=classifier,
+            runtime_config=runtime_config,
             sleep_fn=sleep_calls.append,
         )
 
@@ -375,6 +404,7 @@ def loop_factory(
             notifier=notifier,
             auth_assistant=auth_assistant,
             classify_reply_type=classifier,
+            runtime_config=runtime_config,
             sleep_calls=sleep_calls,
         )
 

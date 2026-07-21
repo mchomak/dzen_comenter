@@ -1,5 +1,7 @@
+from collections.abc import Callable
+
 from dzen_commenter.contracts.interfaces import PromptContext
-from dzen_commenter.prompt.config_loader import load_brand_config
+from dzen_commenter.prompt.config_loader import PromptBrandConfig, load_brand_config
 
 
 class DameoPromptBuilder:
@@ -9,15 +11,25 @@ class DameoPromptBuilder:
         self,
         language: str | None = None,
         config_path: str | None = None,
+        config_provider: Callable[[], PromptBrandConfig] | None = None,
     ) -> None:
-        self._config = load_brand_config(config_path)
-        self.language = language if language is not None else self._config.language
+        self._config_provider = config_provider
+        if config_provider is not None:
+            self._config: PromptBrandConfig | None = None
+            self.language = language
+        else:
+            self._config = load_brand_config(config_path)
+            self.language = language if language is not None else self._config.language
 
     def build(self, context: PromptContext) -> str:
+        if self._config_provider is not None:
+            config = self._config_provider()
+        else:
+            config = self._config
         task = (
-            self._config.task_lead
+            config.task_lead
             if context.reply_type == "lead"
-            else self._config.task_engage
+            else config.task_engage
         )
         if context.comment_text:
             context_block = (
@@ -33,9 +45,9 @@ class DameoPromptBuilder:
                 f"Ветка обсуждения: {context.thread_text}"
             )
         blocks = [
-            self._config.role,
-            self._config.tone_of_voice,
-            self._config.anti_rules,
+            config.role,
+            config.tone_of_voice,
+            config.anti_rules,
             context_block,
             task,
         ]

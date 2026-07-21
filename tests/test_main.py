@@ -9,6 +9,7 @@ def make_fake_settings(**overrides):
         DATABASE_URL="postgresql://x",
         AI_PROMPT_LANGUAGE="ru",
         PROMPT_CONFIG_PATH="",
+        RUNTIME_CONFIG_PATH="runtime_config.json",
         EMAIL_FALLBACK_LIST="",
         SMTP_HOST="",
         SMTP_PORT=587,
@@ -50,10 +51,22 @@ def install_di_fakes(monkeypatch):
         return provider
 
     class FakePromptBuilder:
-        def __init__(self, language=None, config_path=None):
+        def __init__(self, language=None, config_path=None, config_provider=None):
             self.language = language
             self.config_path = config_path
+            self.config_provider = config_provider
             rec.events.append(("prompt_builder", self))
+
+    class FakeRuntimeConfig:
+        def __init__(self, path):
+            self.path = path
+            rec.events.append(("runtime_config", self))
+
+        def get(self):
+            return self
+
+    def fake_ensure_runtime_config(path, settings, brand_config):
+        rec.events.append(("ensure_runtime_config", path, settings, brand_config))
 
     class FakeSession:
         def __init__(self, settings, **kwargs):
@@ -96,6 +109,8 @@ def install_di_fakes(monkeypatch):
     monkeypatch.setattr(main, "PostgresCommentRepository", FakeRepository)
     monkeypatch.setattr(main, "create_provider", fake_create_provider)
     monkeypatch.setattr(main, "DameoPromptBuilder", FakePromptBuilder)
+    monkeypatch.setattr(main, "RuntimeConfig", FakeRuntimeConfig)
+    monkeypatch.setattr(main, "ensure_runtime_config", fake_ensure_runtime_config)
     monkeypatch.setattr(main, "PlaywrightSessionManager", FakeSession)
     monkeypatch.setattr(main, "DzenStudioPage", FakeDzenPage)
     monkeypatch.setattr(main, "EmailFallbackNotifier", FakeEmailFallback)
@@ -141,10 +156,18 @@ def test_build_app_wires_layers(monkeypatch):
     provider_ev = _first(rec, "create_provider")
     assert provider_ev[1] is settings
 
-    # DameoPromptBuilder: language и config_path из settings (пустой → None).
+    # DameoPromptBuilder: language из settings, prompt-секция из RuntimeConfig.
     pb = _first(rec, "prompt_builder")[1]
     assert pb.language == settings.AI_PROMPT_LANGUAGE
     assert pb.config_path is None
+    assert callable(pb.config_provider)
+
+    # RuntimeConfig создан по RUNTIME_CONFIG_PATH и просеян через ensure_runtime_config.
+    runtime_config = _first(rec, "runtime_config")[1]
+    assert runtime_config.path == settings.RUNTIME_CONFIG_PATH
+    ensure_ev = _first(rec, "ensure_runtime_config")
+    assert ensure_ev[1] == settings.RUNTIME_CONFIG_PATH
+    assert ensure_ev[2] is settings
 
     # EMAIL_FALLBACK_LIST="" → fallback=None (EmailFallbackNotifier не создан).
     assert all(ev[0] != "email_fallback" for ev in rec.events)
@@ -165,7 +188,9 @@ def test_build_app_wires_layers(monkeypatch):
         "notifier",
         "auth_assistant",
         "classify_reply_type",
+        "runtime_config",
     }
+    assert loop_kwargs["runtime_config"] is runtime_config
     assert loop_kwargs["settings"] is settings
     assert loop_kwargs["repository"] is _first(rec, "repository")[1]
     assert loop_kwargs["ai_provider"] is provider_ev[2]

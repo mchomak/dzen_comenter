@@ -16,6 +16,7 @@ class EmailFallbackNotifier:
         from_addr: str,
         to_addrs: list[str],
         smtp_client_factory: Callable[..., object] = smtplib.SMTP,
+        to_addrs_provider: Callable[[], list[str]] | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -23,6 +24,7 @@ class EmailFallbackNotifier:
         self.password = password
         self.from_addr = from_addr
         self.to_addrs = to_addrs
+        self.to_addrs_provider = to_addrs_provider
         self.smtp_client_factory = smtp_client_factory
 
     def notify(self, message: str) -> None:
@@ -34,9 +36,12 @@ class EmailFallbackNotifier:
         self._send(message)
 
     def _send(self, body: str) -> None:
+        to_addrs = (
+            self.to_addrs_provider() if self.to_addrs_provider is not None else self.to_addrs
+        )
         msg = EmailMessage()
         msg["From"] = self.from_addr
-        msg["To"] = ", ".join(self.to_addrs)
+        msg["To"] = ", ".join(to_addrs)
         msg["Subject"] = "Dzen Commenter notification"
         msg.set_content(body)
 
@@ -45,7 +50,7 @@ class EmailFallbackNotifier:
             if self.user:
                 client.starttls()
                 client.login(self.user, self.password)
-            client.sendmail(self.from_addr, self.to_addrs, msg.as_string())
+            client.sendmail(self.from_addr, to_addrs, msg.as_string())
         finally:
             quit_method = getattr(client, "quit", None)
             if callable(quit_method):

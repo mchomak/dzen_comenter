@@ -23,6 +23,7 @@ def test_orchestrator_loop_import_and_di_signature():
         "notifier",
         "auth_assistant",
         "classify_reply_type",
+        "runtime_config",
         "sleep_fn",
     ]
 
@@ -494,6 +495,64 @@ def test_run_cycle_falls_back_to_manual_auth_when_automated_login_fails(
     assert harness.auth_assistant.ask_ready_calls == 1
     assert harness.notifier.errors[0][0] == "Dzen automated login failed"
     assert harness.page.fetch_calls == 1
+
+
+def test_auto_publish_change_applies_next_cycle_without_restart(
+    loop_factory,
+    comment_factory,
+):
+    # settings.AUTO_PUBLISH is False; the loop must obey the live runtime config.
+    harness = loop_factory(comments=[])
+    harness.runtime_config.data.settings.auto_publish = False
+
+    harness.page.comments = [comment_factory(1)]
+    harness.loop.run_cycle()
+
+    assert harness.page.publish_calls[-1][2] is False
+    reply1 = next(r for r in harness.repository.replies.values() if r.comment_id == 1)
+    assert reply1.status == ReplyStatus.GENERATED
+
+    # Flip the flag live — no restart, no reconstruction of the loop.
+    harness.runtime_config.data.settings.auto_publish = True
+    harness.page.comments = [comment_factory(2)]
+    harness.loop.run_cycle()
+
+    assert harness.page.publish_calls[-1][2] is True
+    reply2 = next(r for r in harness.repository.replies.values() if r.comment_id == 2)
+    assert reply2.status == ReplyStatus.PUBLISHED
+
+
+def test_max_comment_age_days_read_from_runtime_config(
+    loop_factory,
+    comment_factory,
+):
+    comment = comment_factory(1, posted_at=datetime.now() - timedelta(days=10))
+    harness = loop_factory(comments=[comment])
+    # settings.MAX_COMMENT_AGE_DAYS is 30; runtime config tightens it to 5.
+    harness.runtime_config.data.settings.max_comment_age_days = 5
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[1].status == CommentStatus.SKIPPED
+    assert harness.ai_provider.calls == []
+
+
+def test_max_reply_length_read_from_runtime_config(
+    loop_factory,
+    comment_factory,
+):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["this text is too long", "still too long"],
+    )
+    # settings.MAX_REPLY_LENGTH is 1000; runtime config tightens it to 5.
+    harness.runtime_config.data.settings.max_reply_length = 5
+
+    harness.loop.run_cycle()
+
+    reply = next(iter(harness.repository.replies.values()))
+    assert reply.status == ReplyStatus.ERROR
+    assert reply.error_reason == "reply too long after regeneration"
 
 
 def test_run_forever_uses_max_cycles_and_injected_sleep(

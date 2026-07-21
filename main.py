@@ -7,6 +7,7 @@ import sqlalchemy
 from dzen_commenter.ai.factory import create_provider
 from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
 from dzen_commenter.browser.session_manager import PlaywrightSessionManager
+from dzen_commenter.config.runtime_config import RuntimeConfig, ensure_runtime_config
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import Notifier
 from dzen_commenter.db.repository import PostgresCommentRepository
@@ -18,6 +19,7 @@ from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
 from dzen_commenter.orchestrator.loop import OrchestratorLoop
 from dzen_commenter.prompt.builder import DameoPromptBuilder
 from dzen_commenter.prompt.classifier import classify_reply_type
+from dzen_commenter.prompt.config_loader import load_brand_config
 
 
 def build_app(
@@ -28,9 +30,16 @@ def build_app(
 
     ai_provider = create_provider(settings)
 
+    runtime_config = RuntimeConfig(settings.RUNTIME_CONFIG_PATH)
+    ensure_runtime_config(
+        settings.RUNTIME_CONFIG_PATH,
+        settings,
+        load_brand_config(settings.PROMPT_CONFIG_PATH or None),
+    )
+
     prompt_builder = DameoPromptBuilder(
         language=settings.AI_PROMPT_LANGUAGE,
-        config_path=settings.PROMPT_CONFIG_PATH or None,
+        config_provider=lambda: runtime_config.get().prompt,
     )
 
     auth_assistant = TelegramAuthAssistant(
@@ -55,6 +64,11 @@ def build_app(
                 for a in settings.EMAIL_FALLBACK_LIST.split(",")
                 if a.strip()
             ],
+            to_addrs_provider=lambda: [
+                a.strip()
+                for a in runtime_config.get().settings.error_email_list.split(",")
+                if a.strip()
+            ],
         )
     else:
         email_fallback = None
@@ -64,6 +78,7 @@ def build_app(
         chat_id=settings.DEVELOPER_TELEGRAM_CHAT_ID_LIST,
         proxy_url=settings.TELEGRAM_PROXY_URL,
         fallback=email_fallback,
+        chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
     ))
 
     loop = OrchestratorLoop(
@@ -76,6 +91,7 @@ def build_app(
         notifier=notifier,
         auth_assistant=auth_assistant,
         classify_reply_type=classify_reply_type,
+        runtime_config=runtime_config,
     )
 
     return loop, session, notifier
