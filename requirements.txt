@@ -5,4 +5,9 @@ alembic
 pydantic
 pydantic-settings
 httpx
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+itsdangerous
 pytest

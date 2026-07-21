@@ -11,6 +11,11 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "httpx",
+    "fastapi",
+    "uvicorn[standard]",
+    "jinja2",
+    "python-multipart",
+    "itsdangerous",
 ]
 
 [project.optional-dependencies]

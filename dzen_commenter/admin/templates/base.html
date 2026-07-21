@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Админ-панель{% endblock %} — Dzen Commenter</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar">
+      <div class="brand">Dzen Commenter</div>
+      <ul class="nav">
+        <li><a href="/comments">Комментарии</a></li>
+        <li><a href="/settings">Настройки</a></li>
+      </ul>
+      <form class="logout" action="/logout" method="post">
+        <button type="submit">Выйти</button>
+      </form>
+    </nav>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

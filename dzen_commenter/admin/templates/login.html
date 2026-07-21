@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход — Dzen Commenter</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-page">
+  <form class="login-form" action="/login" method="post">
+    <h1>Вход</h1>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <input type="password" name="password" placeholder="Пароль" autofocus>
+    <button type="submit">Войти</button>
+  </form>
+</body>
+</html>
