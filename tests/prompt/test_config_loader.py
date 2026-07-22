@@ -13,6 +13,7 @@ def _valid_config():
         "task_lead": "custom lead task with custom CTA",
         "task_engage": "custom engage task",
         "cta_marker": "custom CTA",
+        "cta_link": "https://custom.example/offer",
         "language": "en",
     }
 
@@ -37,6 +38,7 @@ def test_load_brand_config_reads_json_override(tmp_path):
     assert config.task_lead == "custom lead task with custom CTA"
     assert config.task_engage == "custom engage task"
     assert config.cta_marker == "custom CTA"
+    assert config.cta_link == "https://custom.example/offer"
     assert config.language == "en"
 
 
@@ -64,4 +66,14 @@ def test_load_brand_config_missing_required_key_raises_value_error(tmp_path):
     config_path.write_text(json.dumps(raw), encoding="utf-8")
 
     with pytest.raises(ValueError, match="missing required keys: role"):
+        load_brand_config(str(config_path))
+
+
+def test_load_brand_config_missing_cta_link_raises_value_error(tmp_path):
+    raw = _valid_config()
+    raw.pop("cta_link")
+    config_path = tmp_path / "prompt.json"
+    config_path.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing required keys.*cta_link"):
         load_brand_config(str(config_path))

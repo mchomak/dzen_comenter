@@ -14,6 +14,7 @@ _PROMPT_FIELDS = (
     "task_lead",
     "task_engage",
     "cta_marker",
+    "cta_link",
     "language",
 )
 _EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
@@ -72,6 +73,10 @@ def validate_settings_form(
     for name, value in prompt_values.items():
         if not value:
             errors[name] = "Поле обязательно."
+
+    cta_link = prompt_values["cta_link"]
+    if cta_link and not cta_link.startswith(("http://", "https://")):
+        errors["cta_link"] = "Введите ссылку (http:// или https://)."
 
     if errors:
         return None, errors

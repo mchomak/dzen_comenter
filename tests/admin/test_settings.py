@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from dzen_commenter.admin.app import create_app
 from dzen_commenter.admin.config import AdminSettings
+from dzen_commenter.admin.validation import validate_settings_form
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData, RuntimeSettings
 from dzen_commenter.prompt.config_loader import PromptBrandConfig
 
@@ -29,6 +30,7 @@ def _runtime_data() -> RuntimeConfigData:
             task_lead="answer leads",
             task_engage="answer discussions",
             cta_marker="request an estimate",
+            cta_link="https://saved.example/remont",
             language="ru",
         ),
     )
@@ -71,6 +73,7 @@ def _form() -> dict[str, str]:
         "task_lead": "new lead task",
         "task_engage": "new engage task",
         "cta_marker": "new cta",
+        "cta_link": "https://new.example/remont",
         "language": "ru",
     }
 
@@ -101,6 +104,58 @@ def test_settings_page_renders_runtime_values_and_only_readonly_vnc(client):
     assert "db-secret" not in response.text
     assert "TELEGRAM_PROXY_URL" not in response.text
     assert "DATABASE_URL" not in response.text
+
+
+def test_settings_page_renders_cta_link_input(client):
+    response = client.get("/settings")
+
+    assert 'name="cta_link"' in response.text
+    assert 'type="url"' in response.text
+    assert 'value="https://saved.example/remont"' in response.text
+
+
+def test_settings_prompt_fields_split_into_two_columns(client):
+    response = client.get("/settings")
+
+    assert 'class="prompt-columns"' in response.text
+    assert "prompt-column-left" in response.text
+    assert "prompt-column-right" in response.text
+
+    left = response.text.split("prompt-column-left", 1)[1].split("prompt-column-right", 1)[0]
+    right = response.text.split("prompt-column-right", 1)[1]
+    for name in ("role", "tone_of_voice", "anti_rules", "task_lead"):
+        assert f'name="{name}"' in left
+    for name in ("task_engage", "cta_marker", "cta_link", "language"):
+        assert f'name="{name}"' in right
+
+
+def test_valid_cta_link_persists_through_hot_reload(client):
+    data = _form()
+    data["cta_link"] = "https://persisted.example/remont"
+
+    response = client.post("/settings", data=data)
+    assert response.status_code == 302
+
+    reloaded = client.get("/settings")
+    assert 'value="https://persisted.example/remont"' in reloaded.text
+
+
+def test_validate_settings_form_cta_link():
+    empty = _form()
+    empty["cta_link"] = ""
+    _, errors = validate_settings_form(empty)
+    assert "cta_link" in errors
+
+    bad = _form()
+    bad["cta_link"] = "l.domeo.ru/remont"
+    _, errors = validate_settings_form(bad)
+    assert "cta_link" in errors
+
+    good = _form()
+    good["cta_link"] = "https://valid.example/remont"
+    data, errors = validate_settings_form(good)
+    assert errors == {}
+    assert data.prompt.cta_link == "https://valid.example/remont"
 
 
 def test_settings_page_has_responsive_layout_hooks(client):

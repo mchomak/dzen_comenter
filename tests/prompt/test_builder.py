@@ -8,6 +8,7 @@ from dzen_commenter.contracts.interfaces import PromptContext
 from dzen_commenter.prompt import DameoPromptBuilder, PromptBrandConfig, load_brand_config
 from dzen_commenter.prompt.config_loader import (
     DEFAULT_ANTI_RULES,
+    DEFAULT_CTA_LINK,
     DEFAULT_CTA_MARKER,
     DEFAULT_ROLE,
     DEFAULT_TASK_ENGAGE,
@@ -40,7 +41,7 @@ def _expected_default_prompt(task: str) -> str:
             ),
             task,
         ]
-    )
+    ).replace("{cta_link}", DEFAULT_CTA_LINK)
 
     return "\n\n".join(
         [
@@ -82,6 +83,18 @@ def test_cta_only_in_lead():
     lead = builder.build(make_context("lead"))
     engage = builder.build(make_context("engage"))
     assert DEFAULT_CTA_MARKER in lead
+    assert DEFAULT_CTA_MARKER not in engage
+
+
+def test_default_cta_link_token_substituted_in_lead():
+    lead = DameoPromptBuilder().build(make_context("lead"))
+    assert DEFAULT_CTA_LINK in lead
+    assert "{cta_link}" not in lead
+
+
+def test_engage_has_no_cta_link():
+    engage = DameoPromptBuilder().build(make_context("engage"))
+    assert DEFAULT_CTA_LINK not in engage
     assert DEFAULT_CTA_MARKER not in engage
 
 
@@ -142,9 +155,10 @@ def test_builder_uses_config_override(tmp_path):
           "role": "custom role",
           "tone_of_voice": "custom tone",
           "anti_rules": "custom anti rules",
-          "task_lead": "custom lead task with custom CTA",
+          "task_lead": "custom lead task with custom CTA link {cta_link}",
           "task_engage": "custom engage task",
           "cta_marker": "custom CTA",
+          "cta_link": "https://custom.example/offer",
           "language": "en"
         }
         """,
@@ -156,6 +170,8 @@ def test_builder_uses_config_override(tmp_path):
     lead = builder.build(make_context("lead"))
     engage = builder.build(make_context("engage"))
     assert builder.language == "en"
+    assert "https://custom.example/offer" in lead
+    assert "{cta_link}" not in lead
     assert "custom role" in lead
     assert "custom tone" in lead
     assert "custom anti rules" in lead
@@ -174,6 +190,7 @@ def test_config_provider_is_reread_on_every_build():
             task_lead="lead task one",
             task_engage="engage task one",
             cta_marker="cta",
+            cta_link="https://one.example/link",
             language="ru",
         )
     }
@@ -191,6 +208,7 @@ def test_config_provider_is_reread_on_every_build():
         task_lead="lead task two",
         task_engage="engage task two",
         cta_marker="cta",
+        cta_link="https://two.example/link",
         language="ru",
     )
 

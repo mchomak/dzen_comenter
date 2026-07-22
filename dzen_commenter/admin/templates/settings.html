@@ -45,13 +45,20 @@
 
     <fieldset class="settings-column settings-column-prompt">
       <legend>Промпт</legend>
-      <label>Роль<textarea name="role">{{ values.role }}</textarea></label>
-      <label>Тон голоса<textarea name="tone_of_voice">{{ values.tone_of_voice }}</textarea></label>
-      <label>Антиправила<textarea name="anti_rules">{{ values.anti_rules }}</textarea></label>
-      <label>Задача для лидов<textarea name="task_lead">{{ values.task_lead }}</textarea></label>
-      <label>Задача для вовлечения<textarea name="task_engage">{{ values.task_engage }}</textarea></label>
-      <label>CTA-маркер<textarea name="cta_marker">{{ values.cta_marker }}</textarea></label>
-      <label>Язык<textarea name="language">{{ values.language }}</textarea></label>
+      <div class="prompt-columns">
+        <div class="prompt-column prompt-column-left">
+          <label>Роль<textarea name="role">{{ values.role }}</textarea></label>
+          <label>Тон голоса<textarea name="tone_of_voice">{{ values.tone_of_voice }}</textarea></label>
+          <label>Антиправила<textarea name="anti_rules">{{ values.anti_rules }}</textarea></label>
+          <label>Задача для лидов<textarea name="task_lead">{{ values.task_lead }}</textarea></label>
+        </div>
+        <div class="prompt-column prompt-column-right">
+          <label>Задача для вовлечения<textarea name="task_engage">{{ values.task_engage }}</textarea></label>
+          <label>CTA-маркер<textarea name="cta_marker">{{ values.cta_marker }}</textarea></label>
+          <label>Ссылка на CTA<input type="url" name="cta_link" value="{{ values.cta_link }}"></label>
+          <label>Язык<textarea name="language">{{ values.language }}</textarea></label>
+        </div>
+      </div>
     </fieldset>
   </div>
 

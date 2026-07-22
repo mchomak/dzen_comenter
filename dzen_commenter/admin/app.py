@@ -128,6 +128,7 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, str]:
         "task_lead": data.prompt.task_lead,
         "task_engage": data.prompt.task_engage,
         "cta_marker": data.prompt.cta_marker,
+        "cta_link": data.prompt.cta_link,
         "language": data.prompt.language,
     }
 
@@ -147,6 +148,7 @@ def _form_values(form) -> dict[str, str]:
             "task_lead",
             "task_engage",
             "cta_marker",
+            "cta_link",
             "language",
         )
     }

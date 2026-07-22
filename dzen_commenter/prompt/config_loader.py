@@ -24,13 +24,15 @@ DEFAULT_ANTI_RULES = (
 DEFAULT_TASK_LEAD = (
     "Тип: лидогенерационный. Ответь по сути комментария. Мягкий CTA допустим "
     "только если он органично продолжает разговор: «если интересно, можем бесплатно "
-    "прикинуть смету под ваш бюджет». CTA — максимум один и не в каждом ответе."
+    "прикинуть смету под ваш бюджет — вот ссылка: {cta_link}». CTA — максимум один "
+    "и не в каждом ответе, ссылку добавляй только вместе с самим CTA."
 )
 DEFAULT_TASK_ENGAGE = (
     "Тип: вовлекающий / нейтральный. Поддержи диалог и ответь по сути, без продаж "
     "и без CTA. При критике спокойно признай право человека на своё мнение."
 )
 DEFAULT_CTA_MARKER = "бесплатно прикинуть смету"
+DEFAULT_CTA_LINK = "https://l.domeo.ru/remont"
 
 REQUIRED_KEYS = {
     "role",
@@ -39,6 +41,7 @@ REQUIRED_KEYS = {
     "task_lead",
     "task_engage",
     "cta_marker",
+    "cta_link",
 }
 
 
@@ -50,6 +53,7 @@ class PromptBrandConfig:
     task_lead: str
     task_engage: str
     cta_marker: str
+    cta_link: str
     language: str = "ru"
 
 
@@ -87,6 +91,7 @@ def load_brand_config(path: str | None) -> PromptBrandConfig:
         task_lead=values["task_lead"],
         task_engage=values["task_engage"],
         cta_marker=values["cta_marker"],
+        cta_link=values["cta_link"],
         language=values["language"],
     )
 
@@ -99,4 +104,5 @@ def _default_config() -> PromptBrandConfig:
         task_lead=DEFAULT_TASK_LEAD,
         task_engage=DEFAULT_TASK_ENGAGE,
         cta_marker=DEFAULT_CTA_MARKER,
+        cta_link=DEFAULT_CTA_LINK,
     )

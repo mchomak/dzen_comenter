@@ -16,6 +16,7 @@ from pathlib import Path
 
 from dzen_commenter.prompt.config_loader import (
     DEFAULT_ANTI_RULES,
+    DEFAULT_CTA_LINK,
     DEFAULT_CTA_MARKER,
     DEFAULT_ROLE,
     DEFAULT_TASK_ENGAGE,
@@ -50,6 +51,7 @@ def _default_prompt() -> PromptBrandConfig:
         task_lead=DEFAULT_TASK_LEAD,
         task_engage=DEFAULT_TASK_ENGAGE,
         cta_marker=DEFAULT_CTA_MARKER,
+        cta_link=DEFAULT_CTA_LINK,
         language="ru",
     )
 
@@ -80,6 +82,7 @@ def _parse_prompt(raw: dict) -> PromptBrandConfig:
         task_lead=str(raw.get("task_lead", base.task_lead)),
         task_engage=str(raw.get("task_engage", base.task_engage)),
         cta_marker=str(raw.get("cta_marker", base.cta_marker)),
+        cta_link=str(raw.get("cta_link", base.cta_link)),
         language=str(raw.get("language", base.language)),
     )
 

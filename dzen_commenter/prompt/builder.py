@@ -51,4 +51,5 @@ class DameoPromptBuilder:
             context_block,
             task,
         ]
-        return "\n\n".join(blocks)
+        text = "\n\n".join(blocks)
+        return text.replace("{cta_link}", config.cta_link)
