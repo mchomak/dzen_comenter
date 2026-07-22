@@ -19,20 +19,38 @@
   <div class="settings-grid">
     <div class="settings-column settings-column-bot">
       <fieldset>
-        <legend>Настройки бота</legend>
-        <label class="checkbox-row"><input type="checkbox" name="auto_publish" {% if values.auto_publish %}checked{% endif %}> Автоматически публиковать ответы</label>
+        <div class="fieldset-title">Настройки бота</div>
+        <label class="checkbox-row"><span>Автоматически публиковать ответы</span><input type="checkbox" name="auto_publish" {% if values.auto_publish %}checked{% endif %}></label>
         <label>Максимальный возраст комментария, дней
           <input type="number" name="max_comment_age_days" value="{{ values.max_comment_age_days }}" min="0">
         </label>
         <label>Максимальная длина ответа
           <input type="number" name="max_reply_length" value="{{ values.max_reply_length }}" min="1">
         </label>
-        <label>Telegram ID разработчиков
-          <input type="text" name="developer_telegram_chat_ids" value="{{ values.developer_telegram_chat_ids }}">
-        </label>
-        <label>Список email для ошибок
-          <input type="text" name="error_email_list" value="{{ values.error_email_list }}">
-        </label>
+        <div class="repeatable" data-repeatable="developer_telegram_chat_ids">
+          <span class="repeatable-label">Telegram ID разработчиков</span>
+          <div class="repeatable-list">
+            {% for item in values.developer_telegram_chat_ids %}
+            <div class="repeatable-row">
+              <input type="text" name="developer_telegram_chat_ids" value="{{ item }}">
+              <button type="button" class="repeatable-remove" aria-label="Удалить">&minus;</button>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="repeatable-add">+ Добавить</button>
+        </div>
+        <div class="repeatable" data-repeatable="error_email_list">
+          <span class="repeatable-label">Список email для ошибок</span>
+          <div class="repeatable-list">
+            {% for item in values.error_email_list %}
+            <div class="repeatable-row">
+              <input type="text" name="error_email_list" value="{{ item }}">
+              <button type="button" class="repeatable-remove" aria-label="Удалить">&minus;</button>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="repeatable-add">+ Добавить</button>
+        </div>
       </fieldset>
       <fieldset class="settings-column settings-column-vnc">
         <legend>VNC (только чтение)</legend>
@@ -44,7 +62,7 @@
     </div>
 
     <fieldset class="settings-column settings-column-prompt">
-      <legend>Промпт</legend>
+      <div class="fieldset-title">Промпт</div>
       <div class="prompt-columns">
         <div class="prompt-column prompt-column-left">
           <label>Роль<textarea name="role">{{ values.role }}</textarea></label>
@@ -64,4 +82,33 @@
 
   <button type="submit">Сохранить</button>
 </form>
+<script>
+  document.querySelectorAll(".repeatable").forEach(function (block) {
+    var list = block.querySelector(".repeatable-list");
+    var addButton = block.querySelector(".repeatable-add");
+    var name = block.getAttribute("data-repeatable");
+    addButton.addEventListener("click", function () {
+      var row = document.createElement("div");
+      row.className = "repeatable-row";
+      var input = document.createElement("input");
+      input.type = "text";
+      input.name = name;
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "repeatable-remove";
+      remove.setAttribute("aria-label", "Удалить");
+      remove.innerHTML = "&minus;";
+      row.appendChild(input);
+      row.appendChild(remove);
+      list.appendChild(row);
+      input.focus();
+    });
+    list.addEventListener("click", function (event) {
+      var button = event.target.closest(".repeatable-remove");
+      if (!button) return;
+      var row = button.closest(".repeatable-row");
+      if (row) row.remove();
+    });
+  });
+</script>
 {% endblock %}

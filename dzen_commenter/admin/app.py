@@ -15,7 +15,7 @@ from dzen_commenter.admin.queries import (
     fetch_status_counts,
     parse_thread_messages,
 )
-from dzen_commenter.admin.validation import validate_settings_form
+from dzen_commenter.admin.validation import split_csv_items, validate_settings_form
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
 templates.env.filters["thread_messages"] = parse_thread_messages
@@ -118,13 +118,13 @@ def _get_engine(app: FastAPI) -> Engine | None:
     return engine
 
 
-def _runtime_values(data: RuntimeConfigData) -> dict[str, str]:
+def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
     return {
         "auto_publish": "on" if data.settings.auto_publish else "",
         "max_comment_age_days": str(data.settings.max_comment_age_days),
         "max_reply_length": str(data.settings.max_reply_length),
-        "developer_telegram_chat_ids": data.settings.developer_telegram_chat_ids,
-        "error_email_list": data.settings.error_email_list,
+        "developer_telegram_chat_ids": split_csv_items(data.settings.developer_telegram_chat_ids),
+        "error_email_list": split_csv_items(data.settings.error_email_list),
         "role": data.prompt.role,
         "tone_of_voice": data.prompt.tone_of_voice,
         "anti_rules": data.prompt.anti_rules,
@@ -136,15 +136,13 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, str]:
     }
 
 
-def _form_values(form) -> dict[str, str]:
-    return {
+def _form_values(form) -> dict[str, object]:
+    values: dict[str, object] = {
         name: str(form.get(name, ""))
         for name in (
             "auto_publish",
             "max_comment_age_days",
             "max_reply_length",
-            "developer_telegram_chat_ids",
-            "error_email_list",
             "role",
             "tone_of_voice",
             "anti_rules",
@@ -155,6 +153,9 @@ def _form_values(form) -> dict[str, str]:
             "language",
         )
     }
+    for name in ("developer_telegram_chat_ids", "error_email_list"):
+        values[name] = [item.strip() for item in form.getlist(name) if item.strip()]
+    return values
 
 
 def _vnc_values(settings: AdminSettings) -> dict[str, str]:

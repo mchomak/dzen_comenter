@@ -60,13 +60,13 @@ def client(settings) -> TestClient:
     return test_client
 
 
-def _form() -> dict[str, str]:
+def _form() -> dict[str, object]:
     return {
         "auto_publish": "on",
         "max_comment_age_days": "21",
         "max_reply_length": "600",
-        "developer_telegram_chat_ids": "111, 222",
-        "error_email_list": "one@example.com, two@example.com",
+        "developer_telegram_chat_ids": ["111", "222"],
+        "error_email_list": ["one@example.com", "two@example.com"],
         "role": "new role",
         "tone_of_voice": "new tone",
         "anti_rules": "new rules",
@@ -93,7 +93,8 @@ def test_settings_page_renders_runtime_values_and_only_readonly_vnc(client):
     assert response.status_code == 200
     assert 'name="max_comment_age_days" value="14"' in response.text
     assert 'name="max_reply_length" value="450"' in response.text
-    assert 'name="developer_telegram_chat_ids" value="123,456"' in response.text
+    assert 'name="developer_telegram_chat_ids" value="123"' in response.text
+    assert 'name="developer_telegram_chat_ids" value="456"' in response.text
     assert 'name="role"' in response.text
     assert "community manager" in response.text
     assert 'name="vnc_host"' not in response.text
@@ -127,6 +128,54 @@ def test_settings_prompt_fields_split_into_two_columns(client):
         assert f'name="{name}"' in left
     for name in ("task_engage", "cta_marker", "cta_link", "language"):
         assert f'name="{name}"' in right
+
+
+def test_settings_renders_repeatable_lists_with_add_and_remove(client):
+    response = client.get("/settings")
+
+    for name, values in (
+        ("developer_telegram_chat_ids", ("123", "456")),
+        ("error_email_list", ("ops@example.com", "dev@example.com")),
+    ):
+        block = response.text.split(f'data-repeatable="{name}"', 1)[1].split("</fieldset>", 1)[0]
+        for value in values:
+            assert f'name="{name}" value="{value}"' in block
+        assert block.count("repeatable-remove") >= len(values)
+        assert "repeatable-add" in block
+
+
+def test_multiple_list_values_saved_as_single_csv_string(client, settings):
+    data = _form()
+    data["developer_telegram_chat_ids"] = ["111", "222"]
+
+    response = client.post("/settings", data=data)
+    assert response.status_code == 302
+
+    saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
+    stored = saved["settings"]["developer_telegram_chat_ids"]
+    assert stored == "111, 222"
+    # telegram_notifier reads the stored string back the same way.
+    assert [c.strip() for c in stored.split(",") if c.strip()] == ["111", "222"]
+
+
+def test_validate_settings_form_rejects_invalid_list_item():
+    bad_telegram = _form()
+    bad_telegram["developer_telegram_chat_ids"] = ["111", "nope"]
+    _, errors = validate_settings_form(bad_telegram)
+    assert "developer_telegram_chat_ids" in errors
+
+    bad_email = _form()
+    bad_email["error_email_list"] = ["ok@example.com", "broken"]
+    _, errors = validate_settings_form(bad_email)
+    assert "error_email_list" in errors
+
+    good = _form()
+    good["developer_telegram_chat_ids"] = ["111", "222"]
+    good["error_email_list"] = ["one@example.com", "two@example.com"]
+    data, errors = validate_settings_form(good)
+    assert errors == {}
+    assert data.settings.developer_telegram_chat_ids == "111, 222"
+    assert data.settings.error_email_list == "one@example.com, two@example.com"
 
 
 def test_valid_cta_link_persists_through_hot_reload(client):
@@ -225,8 +274,8 @@ def test_invalid_settings_post_keeps_file_unchanged(client, settings, monkeypatc
     data = _form()
     data.update(
         max_comment_age_days="-1",
-        developer_telegram_chat_ids="not-a-telegram-id",
-        error_email_list="broken-email",
+        developer_telegram_chat_ids=["111", "not-a-telegram-id"],
+        error_email_list=["ok@example.com", "broken-email"],
     )
     response = client.post("/settings", data=data)
 

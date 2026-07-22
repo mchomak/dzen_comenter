@@ -18,12 +18,26 @@ _PROMPT_FIELDS = (
     "language",
 )
 _EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
-_TELEGRAM_IDS_RE = re.compile(r"\d+(?:\s*,\s*\d+)*")
+_TELEGRAM_ID_RE = re.compile(r"\d+")
+
+
+def split_csv_items(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _value(form: Mapping[str, object], name: str) -> str:
     value = form.get(name, "")
     return str(value).strip()
+
+
+def _list_values(form: Mapping[str, object], name: str) -> list[str]:
+    getlist = getattr(form, "getlist", None)
+    if callable(getlist):
+        raw = getlist(name)
+    else:
+        value = form.get(name, [])
+        raw = value if isinstance(value, list) else [value]
+    return [str(item).strip() for item in raw if str(item).strip()]
 
 
 def _integer(
@@ -60,12 +74,11 @@ def validate_settings_form(
         errors=errors,
     )
 
-    telegram_ids = _value(form, "developer_telegram_chat_ids")
-    if telegram_ids and not _TELEGRAM_IDS_RE.fullmatch(telegram_ids):
+    telegram_ids = _list_values(form, "developer_telegram_chat_ids")
+    if any(not _TELEGRAM_ID_RE.fullmatch(item) for item in telegram_ids):
         errors["developer_telegram_chat_ids"] = "Используйте только числовые Telegram ID через запятую."
 
-    email_list = _value(form, "error_email_list")
-    emails = [email.strip() for email in email_list.split(",")] if email_list else []
+    emails = _list_values(form, "error_email_list")
     if any(not _EMAIL_RE.fullmatch(email) for email in emails):
         errors["error_email_list"] = "Введите email-адреса через запятую."
 
@@ -87,7 +100,7 @@ def validate_settings_form(
                 auto_publish=_value(form, "auto_publish").lower() in {"on", "true", "1", "yes"},
                 max_comment_age_days=max_comment_age_days,
                 max_reply_length=max_reply_length,
-                developer_telegram_chat_ids=telegram_ids,
+                developer_telegram_chat_ids=", ".join(telegram_ids),
                 error_email_list=", ".join(emails),
             ),
             prompt=PromptBrandConfig(**prompt_values),
