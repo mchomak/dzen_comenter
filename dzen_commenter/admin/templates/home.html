@@ -2,5 +2,30 @@
 {% block title %}Панель управления{% endblock %}
 {% block content %}
 <h1>Панель управления</h1>
-<p>Выберите раздел в меню слева.</p>
+
+<div class="home-metrics">
+  <div class="metric">
+    <span class="metric-value">{{ total }}</span>
+    <span class="metric-label">Всего в ленте</span>
+  </div>
+  <div class="metric metric-attention">
+    <span class="metric-value">{{ counts.error }}</span>
+    <span class="metric-label">Ошибок</span>
+  </div>
+  <div class="metric metric-attention">
+    <span class="metric-value">{{ counts.no_reply }}</span>
+    <span class="metric-label">Без ответа</span>
+  </div>
+  <div class="metric">
+    <span class="metric-value">{{ counts.generated }}</span>
+    <span class="metric-label">Сгенерировано</span>
+  </div>
+</div>
+
+<p class="home-note">Показатели по последним 100 комментариям.</p>
+
+<div class="home-links">
+  <a href="/comments">Комментарии</a>
+  <a href="/settings">Настройки</a>
+</div>
 {% endblock %}

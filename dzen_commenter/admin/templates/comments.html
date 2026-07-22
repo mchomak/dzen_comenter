@@ -3,10 +3,31 @@
 {% block content %}
 <div class="page-head">
   <h1>Комментарии</h1>
-  <form class="refresh" action="/comments" method="get">
+  <form class="refresh" action="/comments" method="get" data-pending="Обновляю…">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
     <button type="submit">Обновить</button>
   </form>
 </div>
+
+<form class="feed-filters" action="/comments" method="get">
+  <label>Статус
+    <select name="status">
+      <option value="" {% if not status %}selected{% endif %}>Все</option>
+      <option value="error" {% if status == "error" %}selected{% endif %}>Ошибка</option>
+      <option value="no_reply" {% if status == "no_reply" %}selected{% endif %}>Нет ответа</option>
+      <option value="generated" {% if status == "generated" %}selected{% endif %}>Сгенерирован</option>
+      <option value="published" {% if status == "published" %}selected{% endif %}>Опубликован</option>
+      <option value="skipped" {% if status == "skipped" %}selected{% endif %}>Пропущен</option>
+    </select>
+  </label>
+  <label>Автор
+    <input type="text" name="q" value="{{ q }}">
+  </label>
+  <button type="submit">Применить</button>
+</form>
+
+<p class="feed-count">Показано {{ feed | length }} из последних 100</p>
 
 {% if feed %}
 <div class="table-scroll">
@@ -23,7 +44,7 @@
   </thead>
   <tbody>
     {% for row in feed %}
-    <tr>
+    <tr{% if row.reply_status == "error" or row.reply_status is none %} class="row-attention"{% endif %}>
       <td>{{ row.author or "" }}</td>
       <td class="dialogue-cell">
         {% if row.thread_text is none %}

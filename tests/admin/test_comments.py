@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from dzen_commenter.admin.app import create_app
 from dzen_commenter.admin.config import AdminSettings
-from dzen_commenter.admin.queries import fetch_feed
+from dzen_commenter.admin.queries import fetch_feed, fetch_status_counts
 from dzen_commenter.db.models import Base, CommentTable, PublicationTable, ReplyTable
 
 PASSWORD = "correct-horse-battery"
@@ -327,6 +327,131 @@ def test_refresh_button_reissues_get_and_reflects_db(client, engine):
         fetched_at=datetime(2026, 1, 1, 14, 0, 0),
     )
     assert "freshguy" in client.get("/comments").text
+
+
+# --- fetch_feed filters ---
+
+
+@pytest.fixture
+def mixed_feed(engine):
+    """Три автора: alice/error, Bob/no_reply, alina/published."""
+    _add_comment(
+        engine, cid=1, author="alice", text="a", post_url="http://post/1",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 3),
+    )
+    _add_comment(
+        engine, cid=2, author="Bob", text="b", post_url="http://post/2",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 2),
+    )
+    _add_comment(
+        engine, cid=3, author="alina", text="c", post_url="http://post/3",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 1),
+    )
+    _add_reply(engine, rid=1, comment_id=1, generated_text="x", status="error",
+               error_reason="boom")
+    _add_reply(engine, rid=3, comment_id=3, generated_text="y", status="published")
+    # comment 2 (Bob) has no reply
+    return engine
+
+
+def test_fetch_feed_status_error_filter(mixed_feed):
+    rows = fetch_feed(mixed_feed, status="error")
+    assert [r.author for r in rows] == ["alice"]
+    assert all(r.reply_status == "error" for r in rows)
+
+
+def test_fetch_feed_status_no_reply_filter(mixed_feed):
+    rows = fetch_feed(mixed_feed, status="no_reply")
+    assert [r.author for r in rows] == ["Bob"]
+    assert all(r.reply_status is None for r in rows)
+
+
+def test_fetch_feed_no_status_unchanged(mixed_feed):
+    assert len(fetch_feed(mixed_feed)) == 3
+
+
+def test_fetch_feed_author_query_case_insensitive(mixed_feed):
+    rows = fetch_feed(mixed_feed, author_query="ali")
+    assert sorted(r.author for r in rows) == ["alice", "alina"]
+
+
+def test_fetch_feed_author_query_empty_no_filter(mixed_feed):
+    assert len(fetch_feed(mixed_feed, author_query="")) == 3
+    assert len(fetch_feed(mixed_feed, author_query=None)) == 3
+
+
+# --- fetch_status_counts ---
+
+
+def test_fetch_status_counts(engine):
+    specs = [
+        (1, "error"), (2, "error"),
+        (3, "generated"),
+        (4, "published"),
+        (5, "skipped"),
+        (6, None),  # no reply
+        (7, None),
+    ]
+    for cid, status in specs:
+        _add_comment(
+            engine, cid=cid, author=f"a{cid}", text="t", post_url=f"http://post/{cid}",
+            fetched_at=datetime(2026, 1, 1, 12, 0, cid),
+        )
+        if status is not None:
+            _add_reply(engine, rid=cid, comment_id=cid, generated_text="r", status=status)
+
+    counts = fetch_status_counts(engine)
+    assert counts["error"] == 2
+    assert counts["generated"] == 1
+    assert counts["published"] == 1
+    assert counts["skipped"] == 1
+    assert counts["no_reply"] == 2
+    assert sum(counts.values()) == 7
+
+
+# --- route filters & rendering ---
+
+
+def _tbody_row_count(body: str) -> int:
+    tbody = body.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+    return tbody.count("<tr")
+
+
+def test_comments_status_filter_renders_only_error(client, mixed_feed):
+    body = client.get("/comments?status=error").text
+    assert "alice" in body
+    assert "alina" not in body
+    assert "Bob" not in body
+    assert '<option value="error" selected>Ошибка</option>' in body
+
+
+def test_comments_author_query_renders_and_preserves_input(client, mixed_feed):
+    body = client.get("/comments?q=alice").text
+    assert "alice" in body
+    assert "alina" not in body
+    assert 'name="q" value="alice"' in body
+
+
+def test_comments_count_matches_rendered_rows(client, mixed_feed):
+    body = client.get("/comments?q=ali").text
+    assert _tbody_row_count(body) == 2
+    assert "Показано 2 из последних 100" in body
+
+
+def test_comments_error_rows_get_attention_class(client, mixed_feed):
+    body = client.get("/comments").text
+    assert 'class="row-attention"' in body
+
+
+# --- home ---
+
+
+def test_home_renders_counts_and_links(client, mixed_feed):
+    body = client.get("/").text
+    assert "Ошибок" in body
+    assert "Без ответа" in body
+    assert 'href="/comments"' in body
+    assert 'href="/settings"' in body
 
 
 def test_guest_redirected_to_login(engine):

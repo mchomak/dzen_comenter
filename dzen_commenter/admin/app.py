@@ -9,7 +9,11 @@ from starlette.status import HTTP_302_FOUND
 from dzen_commenter.admin import auth
 from dzen_commenter.admin.auth import BASE_DIR, NotAuthenticated, require_login, templates
 from dzen_commenter.admin.config import AdminSettings
-from dzen_commenter.admin.queries import fetch_feed
+from dzen_commenter.admin.queries import (
+    STATUS_CATEGORIES,
+    fetch_feed,
+    fetch_status_counts,
+)
 from dzen_commenter.admin.validation import validate_settings_form
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
@@ -37,14 +41,34 @@ def create_app(
 
     @app.get("/")
     def home(request: Request, _: None = Depends(require_login)):
-        return templates.TemplateResponse(request=request, name="home.html")
+        engine = _get_engine(request.app)
+        counts = (
+            fetch_status_counts(engine)
+            if engine is not None
+            else {category: 0 for category in STATUS_CATEGORIES}
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="home.html",
+            context={"counts": counts, "total": sum(counts.values())},
+        )
 
     @app.get("/comments")
     def comments(request: Request, _: None = Depends(require_login)):
         engine = _get_engine(request.app)
-        feed = fetch_feed(engine) if engine is not None else []
+        status = request.query_params.get("status") or ""
+        if status not in STATUS_CATEGORIES:
+            status = ""
+        author_query = request.query_params.get("q") or ""
+        feed = (
+            fetch_feed(engine, status=status or None, author_query=author_query or None)
+            if engine is not None
+            else []
+        )
         return templates.TemplateResponse(
-            request=request, name="comments.html", context={"feed": feed}
+            request=request,
+            name="comments.html",
+            context={"feed": feed, "status": status, "q": author_query},
         )
 
     @app.get("/settings")

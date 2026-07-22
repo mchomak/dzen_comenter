@@ -40,11 +40,57 @@ def _post_url(value: str | None) -> str | None:
     return None
 
 
-def fetch_feed(engine: Engine, limit: int = 100) -> list[FeedRow]:
+STATUS_CATEGORIES = ("published", "generated", "error", "skipped", "no_reply")
+
+
+def _row_category(row: FeedRow) -> str:
+    """Категория статуса строки: `no_reply` при отсутствии ответа."""
+    return row.reply_status if row.reply_status is not None else "no_reply"
+
+
+def fetch_feed(
+    engine: Engine,
+    limit: int = 100,
+    status: str | None = None,
+    author_query: str | None = None,
+) -> list[FeedRow]:
     """Лента: свежие комментарии сверху (по fetched_at desc), до `limit` записей.
 
     Для каждого комментария берётся последний связанный reply (с наибольшим id).
+
+    Опциональные фильтры применяются в Python-слое поверх собранной ленты:
+    - `status` — одна из категорий `STATUS_CATEGORIES` (`no_reply` → нет ответа);
+    - `author_query` — регистронезависимая подстрока по `author`; пустая строка
+      или `None` не фильтрует.
     """
+    feed = _load_feed(engine, limit)
+
+    if status:
+        feed = [row for row in feed if _row_category(row) == status]
+
+    if author_query:
+        needle = author_query.casefold()
+        feed = [
+            row
+            for row in feed
+            if row.author is not None and needle in row.author.casefold()
+        ]
+
+    return feed
+
+
+def fetch_status_counts(engine: Engine, limit: int = 100) -> dict[str, int]:
+    """Подсчёт строк ленты (последние `limit`) по 5 категориям статуса.
+
+    Сумма значений равна числу строк ленты.
+    """
+    counts = {category: 0 for category in STATUS_CATEGORIES}
+    for row in _load_feed(engine, limit):
+        counts[_row_category(row)] += 1
+    return counts
+
+
+def _load_feed(engine: Engine, limit: int) -> list[FeedRow]:
     with engine.connect() as conn:
         comment_rows = conn.execute(
             select(
