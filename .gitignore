@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 .venv/
+.worktrees/
 venv/
 user_data/
 storage_state.json
