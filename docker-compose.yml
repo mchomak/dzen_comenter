@@ -24,6 +24,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "alembic current --check-heads"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
 
   admin:
@@ -31,7 +37,7 @@ services:
       context: .
       dockerfile: Dockerfile
     entrypoint: []
-    command: sh -c "alembic upgrade head && exec uvicorn dzen_commenter.admin.app:app --host 0.0.0.0 --port 8080"
+    command: uvicorn dzen_commenter.admin.app:app --host 0.0.0.0 --port 8080
     env_file:
       - .env
     environment:
@@ -42,7 +48,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      postgres:
+      app:
         condition: service_healthy
     restart: unless-stopped
 
