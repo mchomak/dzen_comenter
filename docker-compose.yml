@@ -31,7 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile
     entrypoint: []
-    command: uvicorn dzen_commenter.admin.app:app --host 0.0.0.0 --port 8080
+    command: sh -c "alembic upgrade head && exec uvicorn dzen_commenter.admin.app:app --host 0.0.0.0 --port 8080"
     env_file:
       - .env
     environment:

@@ -252,7 +252,22 @@ def test_fetch_comments_sets_post_url_per_group():
 
     comments = page.fetch_comments()
 
-    assert [c.post_url for c in comments] == ["/a/post1", "/a/post1", "/a/post2"]
+    assert [c.post_url for c in comments] == [
+        "https://dzen.ru/a/post1",
+        "https://dzen.ru/a/post1",
+        "https://dzen.ru/a/post2",
+    ]
+
+
+def test_fetch_comments_keeps_relative_path_for_id_and_saves_prior_dialogue():
+    groups = [FakeGroup("/a/post1", [make_node(0), make_node(1)])]
+    page = DzenStudioPage(FakePage(groups))
+
+    first, second = page.fetch_comments()
+
+    assert first.thread_text == ""
+    assert second.thread_text == "author0: text0"
+    assert second.dzen_comment_id == synthetic_id("/a/post1", "/user/u1", "text1")
 
 
 def test_synthetic_id_matches_helper():

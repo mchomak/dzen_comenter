@@ -17,6 +17,12 @@ def synthetic_id(post_href: str, author_href: str, text: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _post_url(post_href: str) -> str:
+    if post_href.startswith("/"):
+        return f"https://dzen.ru{post_href}"
+    return post_href
+
+
 def parse_relative_time(text: str | None, now: datetime) -> datetime | None:
     if not text:
         return None
@@ -65,7 +71,7 @@ class DzenStudioPage:
                         status=CommentStatus.NEW,
                         publication_title=publication_title,
                         thread_text="\n".join(previous_messages),
-                        post_url=post_href,
+                        post_url=_post_url(post_href),
                     )
                 )
                 if text:

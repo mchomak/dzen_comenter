@@ -9,14 +9,15 @@
 </div>
 
 {% if feed %}
+<div class="table-scroll">
 <table class="feed">
   <thead>
     <tr>
       <th>Автор</th>
-      <th>Комментарий</th>
+      <th>Диалог</th>
       <th>Ответ бота</th>
       <th>Статус</th>
-      <th>Ссылка</th>
+      <th>Пост</th>
       <th>Время</th>
     </tr>
   </thead>
@@ -24,25 +25,42 @@
     {% for row in feed %}
     <tr>
       <td>{{ row.author or "" }}</td>
-      <td>{{ row.comment_text or "" }}</td>
-      <td>{{ row.reply_text or "" }}</td>
+      <td class="dialogue-cell">
+        {% if row.thread_text is none %}
+          <p class="thread-unavailable">История до комментария не сохранена</p>
+        {% elif row.thread_text %}
+          <div class="thread-history">{{ row.thread_text }}</div>
+        {% endif %}
+        <div class="current-comment">
+          <span>Комментарий пользователя</span>
+          {{ row.comment_text or "" }}
+        </div>
+      </td>
+      <td class="reply-cell">{{ row.reply_text or "" }}</td>
       <td>
         {% if row.reply_status is none %}
-          нет ответа
+          <span class="status-badge status-no-reply">Нет ответа</span>
         {% elif row.reply_status == "error" %}
-          error{% if row.error_reason %} — {{ row.error_reason }}{% endif %}
+          <span class="status-badge status-error">Ошибка</span>{% if row.error_reason %}<span class="error-reason"> — {{ row.error_reason }}</span>{% endif %}
+        {% elif row.reply_status == "published" %}
+          <span class="status-badge status-published">Отправлен</span>
+        {% elif row.reply_status == "generated" %}
+          <span class="status-badge status-generated">Сгенерирован</span>
+        {% elif row.reply_status == "skipped" %}
+          <span class="status-badge status-skipped">Пропущен</span>
         {% else %}
           {{ row.reply_status }}
         {% endif %}
       </td>
       <td>
-        {% if row.post_url %}<a href="{{ row.post_url }}">пост</a>{% endif %}
+        {% if row.post_url %}<a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">Открыть пост</a>{% endif %}
       </td>
       <td>{{ row.fetched_at or "" }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <p>Пока нет комментариев.</p>
 {% endif %}

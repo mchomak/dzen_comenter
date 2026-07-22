@@ -11,8 +11,8 @@
     <nav class="sidebar">
       <div class="brand">Dzen Commenter</div>
       <ul class="nav">
-        <li><a href="/comments">Комментарии</a></li>
-        <li><a href="/settings">Настройки</a></li>
+        <li><a href="/comments" {% if request.url.path == '/comments' %}aria-current="page"{% endif %}>Комментарии</a></li>
+        <li><a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>Настройки</a></li>
       </ul>
       <form class="logout" action="/logout" method="post">
         <button type="submit">Выйти</button>

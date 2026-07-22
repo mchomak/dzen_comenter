@@ -1,4 +1,4 @@
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -43,8 +43,11 @@ class PostgresCommentRepository:
                 fetched_at=comment.fetched_at,
                 status=comment.status.value,
                 post_url=comment.post_url,
+                thread_text=comment.thread_text,
             )
-            .on_conflict_do_update(
+        )
+        stmt = (
+            stmt.on_conflict_do_update(
                 index_elements=[CommentTable.dzen_comment_id],
                 set_={
                     "publication_id": comment.publication_id,
@@ -55,6 +58,14 @@ class PostgresCommentRepository:
                     "fetched_at": comment.fetched_at,
                     "status": comment.status.value,
                     "post_url": comment.post_url,
+                    "thread_text": case(
+                        (
+                            CommentTable.thread_text.is_(None)
+                            & (stmt.excluded.thread_text == ""),
+                            CommentTable.thread_text,
+                        ),
+                        else_=stmt.excluded.thread_text,
+                    ),
                 },
             )
             .returning(CommentTable.id)

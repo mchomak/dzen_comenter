@@ -24,6 +24,7 @@ def _make_comment(
     text="hello",
     status=CommentStatus.NEW,
     post_url="http://post/1",
+    thread_text="",
 ) -> Comment:
     return Comment(
         id=None,
@@ -36,6 +37,7 @@ def _make_comment(
         fetched_at=datetime(2026, 1, 1, 12, 5, 0),
         status=status,
         post_url=post_url,
+        thread_text=thread_text,
     )
 
 
@@ -75,6 +77,7 @@ def test_tables_exist_with_columns(engine):
         "posted_at",
         "fetched_at",
         "status",
+        "thread_text",
     } <= com_cols
 
     rep_cols = {c["name"] for c in insp.get_columns("replies")}
@@ -219,6 +222,47 @@ def test_upsert_comment_stores_and_updates_post_url(repo, engine):
             text("SELECT post_url FROM comments WHERE id = :id"), {"id": cid}
         ).scalar_one()
     assert updated == "http://post/new"
+
+
+def test_upsert_comment_stores_thread_text_and_keeps_legacy_null(repo, engine):
+    pub_id = repo.upsert_publication(_make_publication())
+    comment_id = repo.upsert_comment(
+        _make_comment(pub_id, thread_text="alice: hello\\nbob: reply")
+    )
+
+    with engine.begin() as conn:
+        stored = conn.execute(
+            text("SELECT thread_text FROM comments WHERE id = :id"), {"id": comment_id}
+        ).scalar_one()
+
+    assert stored == "alice: hello\\nbob: reply"
+
+
+def test_upsert_preserves_legacy_null_until_a_real_history_arrives(repo, engine):
+    pub_id = repo.upsert_publication(_make_publication())
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO comments "
+                "(dzen_comment_id, publication_id, status, thread_text) "
+                "VALUES (:dzen_comment_id, :publication_id, 'new', NULL)"
+            ),
+            {"dzen_comment_id": "legacy", "publication_id": pub_id},
+        )
+
+    repo.upsert_comment(_make_comment(pub_id, dzen_id="legacy", thread_text=""))
+    with engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT thread_text FROM comments WHERE dzen_comment_id = 'legacy'")
+        ).scalar_one() is None
+
+    repo.upsert_comment(
+        _make_comment(pub_id, dzen_id="legacy", thread_text="alice: prior message")
+    )
+    with engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT thread_text FROM comments WHERE dzen_comment_id = 'legacy'")
+        ).scalar_one() == "alice: prior message"
 
 
 # --- Acceptance 8: status transitions ---

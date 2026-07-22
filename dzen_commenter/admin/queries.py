@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
@@ -13,11 +14,30 @@ class FeedRow:
 
     author: str | None
     comment_text: str | None
+    thread_text: str | None
     post_url: str | None
     fetched_at: datetime | None
     reply_text: str | None
     reply_status: str | None  # None → ответа ещё нет
     error_reason: str | None
+
+
+def _post_url(value: str | None) -> str | None:
+    if value and value.startswith("/a/"):
+        return f"https://dzen.ru{value}"
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return None
+    if (
+        parsed.scheme == "https"
+        and parsed.hostname in {"dzen.ru", "www.dzen.ru"}
+        and parsed.path.startswith("/a/")
+    ):
+        return value
+    return None
 
 
 def fetch_feed(engine: Engine, limit: int = 100) -> list[FeedRow]:
@@ -31,6 +51,7 @@ def fetch_feed(engine: Engine, limit: int = 100) -> list[FeedRow]:
                 CommentTable.id,
                 CommentTable.author,
                 CommentTable.text,
+                CommentTable.thread_text,
                 CommentTable.post_url,
                 CommentTable.fetched_at,
             )
@@ -62,7 +83,8 @@ def fetch_feed(engine: Engine, limit: int = 100) -> list[FeedRow]:
             FeedRow(
                 author=row.author,
                 comment_text=row.text,
-                post_url=row.post_url,
+                thread_text=row.thread_text,
+                post_url=_post_url(row.post_url),
                 fetched_at=row.fetched_at,
                 reply_text=reply.generated_text if reply else None,
                 reply_status=reply.status if reply else None,

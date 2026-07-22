@@ -27,7 +27,7 @@ def engine():
     return eng
 
 
-def _add_comment(engine, *, cid, author, text, post_url, fetched_at):
+def _add_comment(engine, *, cid, author, text, post_url, fetched_at, thread_text=None):
     with engine.begin() as conn:
         conn.execute(
             insert(CommentTable).values(
@@ -37,6 +37,7 @@ def _add_comment(engine, *, cid, author, text, post_url, fetched_at):
                 author=author,
                 text=text,
                 post_url=post_url,
+                thread_text=thread_text,
                 fetched_at=fetched_at,
                 status="new",
             )
@@ -146,12 +147,64 @@ def test_feed_picks_last_reply(engine):
     assert row.reply_status == "published"
 
 
+def test_feed_preserves_legacy_history_fallback_and_normalizes_post_url(engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="current message",
+        post_url="/a/legacy-post",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+    _add_comment(
+        engine,
+        cid=2,
+        author="bob",
+        text="another current message",
+        post_url="https://dzen.ru/a/new-post",
+        thread_text="alice: first message\\ncarol: second message",
+        fetched_at=datetime(2026, 1, 1, 12, 1, 0),
+    )
+
+    feed = {row.author: row for row in fetch_feed(engine)}
+
+    assert feed["alice"].thread_text is None
+    assert feed["alice"].post_url == "https://dzen.ru/a/legacy-post"
+    assert feed["bob"].thread_text == "alice: first message\\ncarol: second message"
+
+
+@pytest.mark.parametrize(
+    ("stored_url", "expected_url"),
+    [
+        ("/a/legacy-post", "https://dzen.ru/a/legacy-post"),
+        ("https://dzen.ru/a/new-post", "https://dzen.ru/a/new-post"),
+        ("https://www.dzen.ru/a/new-post", "https://www.dzen.ru/a/new-post"),
+        ("javascript:alert(1)", None),
+        ("data:text/html,unsafe", None),
+        ("http://dzen.ru/a/insecure", None),
+        ("https://evil.example/a/not-dzen", None),
+        ("https://dzen.ru/not-a-post", None),
+    ],
+)
+def test_feed_allows_only_safe_dzen_post_urls(engine, stored_url, expected_url):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="comment",
+        post_url=stored_url,
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    assert fetch_feed(engine)[0].post_url == expected_url
+
+
 # --- route / rendering ---
 
 
 def test_comments_page_renders_feed(client, engine):
     _add_comment(
-        engine, cid=1, author="alice", text="great post", post_url="http://post/xyz",
+        engine, cid=1, author="alice", text="great post", post_url="https://dzen.ru/a/xyz",
         fetched_at=datetime(2026, 1, 1, 12, 0, 0),
     )
     _add_reply(engine, rid=1, comment_id=1, generated_text="thanks!", status="published")
@@ -162,8 +215,10 @@ def test_comments_page_renders_feed(client, engine):
     assert "alice" in body
     assert "great post" in body
     assert "thanks!" in body
-    assert "published" in body
-    assert 'href="http://post/xyz"' in body
+    assert "Отправлен" in body
+    assert 'href="https://dzen.ru/a/xyz"' in body
+    assert 'target="_blank"' in body
+    assert 'rel="noopener noreferrer"' in body
 
 
 def test_comments_page_shows_no_reply_label(client, engine):
@@ -172,7 +227,24 @@ def test_comments_page_shows_no_reply_label(client, engine):
         fetched_at=datetime(2026, 1, 1, 12, 0, 0),
     )
     resp = client.get("/comments")
-    assert "нет ответа" in resp.text
+    assert "Нет ответа" in resp.text
+    assert 'class="status-badge status-no-reply"' in resp.text
+
+
+def test_comments_page_omits_unsafe_post_link(client, engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="hmm",
+        post_url="javascript:alert(1)",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    body = client.get("/comments").text
+
+    assert "javascript:alert(1)" not in body
+    assert "Открыть пост" not in body
 
 
 def test_comments_page_shows_error_reason(client, engine):
@@ -184,6 +256,50 @@ def test_comments_page_shows_error_reason(client, engine):
                error_reason="quota exceeded")
     resp = client.get("/comments")
     assert "quota exceeded" in resp.text
+
+
+@pytest.mark.parametrize(
+    ("status", "label", "badge_class"),
+    [
+        ("published", "Отправлен", "status-published"),
+        ("generated", "Сгенерирован", "status-generated"),
+        ("error", "Ошибка", "status-error"),
+        ("skipped", "Пропущен", "status-skipped"),
+    ],
+)
+def test_comments_page_renders_russian_status_badges(
+    client, engine, status, label, badge_class
+):
+    _add_comment(
+        engine, cid=1, author="alice", text="hmm", post_url="/a/post-1",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+    _add_reply(engine, rid=1, comment_id=1, generated_text="x", status=status)
+
+    body = client.get("/comments").text
+
+    assert label in body
+    assert f'class="status-badge {badge_class}"' in body
+    assert 'href="https://dzen.ru/a/post-1"' in body
+
+
+def test_comments_page_renders_dialogue_and_legacy_fallback(client, engine):
+    _add_comment(
+        engine, cid=1, author="legacy", text="current", post_url="/a/legacy",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+    _add_comment(
+        engine, cid=2, author="new", text="latest", post_url="/a/new",
+        thread_text="first: hello\\nsecond: world",
+        fetched_at=datetime(2026, 1, 1, 12, 1, 0),
+    )
+
+    body = client.get("/comments").text
+
+    assert "История до комментария не сохранена" in body
+    assert "first: hello" in body
+    assert "second: world" in body
+    assert "Комментарий пользователя" in body
 
 
 def test_comments_page_fresh_first_in_html(client, engine):

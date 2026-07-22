@@ -103,6 +103,33 @@ def test_settings_page_renders_runtime_values_and_only_readonly_vnc(client):
     assert "DATABASE_URL" not in response.text
 
 
+def test_settings_page_has_responsive_layout_hooks(client):
+    response = client.get("/settings")
+
+    assert 'class="settings-grid"' in response.text
+    assert 'class="settings-column settings-column-bot"' in response.text
+    assert 'class="settings-column settings-column-prompt"' in response.text
+    assert 'class="settings-column settings-column-vnc"' in response.text
+    assert 'class="checkbox-row"' in response.text
+
+
+def test_settings_checkbox_keeps_its_compact_native_width():
+    stylesheet = (
+        Path(__file__).parents[2] / "dzen_commenter" / "admin" / "static" / "style.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".settings-form input[type=\"checkbox\"] { width: auto; }" in stylesheet
+
+
+def test_settings_switches_to_one_column_by_tablet_width():
+    stylesheet = (
+        Path(__file__).parents[2] / "dzen_commenter" / "admin" / "static" / "style.css"
+    ).read_text(encoding="utf-8")
+
+    assert "@media (max-width: 1024px)" in stylesheet
+    assert "@media (max-width: 860px)" not in stylesheet
+
+
 def test_valid_settings_post_saves_atomically_and_shows_success(client, settings, monkeypatch):
     import dzen_commenter.config.runtime_config as runtime_config_module
 
