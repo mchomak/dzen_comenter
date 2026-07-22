@@ -82,17 +82,23 @@ table.feed tbody tr:hover td { background: #eaf1fb; }
 table.feed tbody tr.row-attention td { background: #fdecec; }
 table.feed tbody tr:last-child td { border-bottom: 0; }
 table.feed th:nth-child(1) { width: 12%; }
-table.feed th:nth-child(2) { width: 32%; }
-table.feed th:nth-child(3) { width: 22%; }
-table.feed th:nth-child(4) { width: 12%; }
-table.feed th:nth-child(5) { width: 10%; }
-table.feed th:nth-child(6) { width: 12%; }
+table.feed th:nth-child(2) { width: 54%; }
+table.feed th:nth-child(3) { width: 12%; }
+table.feed th:nth-child(4) { width: 10%; }
+table.feed th:nth-child(5) { width: 12%; }
+table.feed td:nth-child(1),
+table.feed td:nth-child(3),
+table.feed td:nth-child(4),
+table.feed td:nth-child(5) { text-align: center; }
 
-.dialogue-cell, .reply-cell { white-space: pre-wrap; }
-.thread-history { color: var(--muted); }
+.dialogue-cell { white-space: pre-wrap; }
+.thread-message { display: grid; gap: 3px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f8fafc; color: var(--muted); }
+.thread-message .thread-author { color: #41506a; font-size: 0.8125rem; font-weight: 700; }
 .thread-unavailable { margin: 0 0 10px; color: var(--muted); font-style: italic; }
 .current-comment { display: grid; gap: 3px; margin-top: 10px; padding: 10px; border: 1px solid #cfe0ff; border-radius: 7px; background: #f2f7ff; }
 .current-comment span { color: #315694; font-size: 0.75rem; font-weight: 750; }
+.bot-reply { display: grid; gap: 3px; margin-top: 10px; padding: 10px; border: 1px solid var(--blue); border-left: 4px solid var(--blue); border-radius: 7px; background: #eef4ff; }
+.bot-reply span { color: var(--blue); font-size: 0.75rem; font-weight: 750; }
 .status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 0.8125rem; font-weight: 700; line-height: 1.35; white-space: nowrap; }
 .status-published { color: var(--success-ink); background: var(--success-bg); }
 .status-generated { color: var(--warning-ink); background: var(--warning-bg); }

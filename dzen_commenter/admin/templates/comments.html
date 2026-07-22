@@ -36,7 +36,6 @@
     <tr>
       <th>Автор</th>
       <th>Диалог</th>
-      <th>Ответ бота</th>
       <th>Статус</th>
       <th>Пост</th>
       <th>Время</th>
@@ -49,15 +48,25 @@
       <td class="dialogue-cell">
         {% if row.thread_text is none %}
           <p class="thread-unavailable">История до комментария не сохранена</p>
-        {% elif row.thread_text %}
-          <div class="thread-history">{{ row.thread_text }}</div>
+        {% else %}
+          {% for author, text in row.thread_text | thread_messages %}
+          <div class="thread-message">
+            {% if author %}<span class="thread-author">{{ author }}</span>{% endif %}
+            {{ text }}
+          </div>
+          {% endfor %}
         {% endif %}
         <div class="current-comment">
           <span>Комментарий пользователя</span>
           {{ row.comment_text or "" }}
         </div>
+        {% if row.reply_text %}
+        <div class="bot-reply">
+          <span>Ответ бота</span>
+          {{ row.reply_text }}
+        </div>
+        {% endif %}
       </td>
-      <td class="reply-cell">{{ row.reply_text or "" }}</td>
       <td>
         {% if row.reply_status is none %}
           <span class="status-badge status-no-reply">Нет ответа</span>

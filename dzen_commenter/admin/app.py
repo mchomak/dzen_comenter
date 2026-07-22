@@ -13,9 +13,12 @@ from dzen_commenter.admin.queries import (
     STATUS_CATEGORIES,
     fetch_feed,
     fetch_status_counts,
+    parse_thread_messages,
 )
 from dzen_commenter.admin.validation import validate_settings_form
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
+
+templates.env.filters["thread_messages"] = parse_thread_messages
 
 
 def create_app(

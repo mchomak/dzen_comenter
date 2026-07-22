@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import pytest
@@ -7,7 +8,11 @@ from sqlalchemy.pool import StaticPool
 
 from dzen_commenter.admin.app import create_app
 from dzen_commenter.admin.config import AdminSettings
-from dzen_commenter.admin.queries import fetch_feed, fetch_status_counts
+from dzen_commenter.admin.queries import (
+    fetch_feed,
+    fetch_status_counts,
+    parse_thread_messages,
+)
 from dzen_commenter.db.models import Base, CommentTable, PublicationTable, ReplyTable
 
 PASSWORD = "correct-horse-battery"
@@ -68,6 +73,32 @@ def client(engine) -> TestClient:
     client = TestClient(app, follow_redirects=False)
     client.post("/login", data={"password": PASSWORD})
     return client
+
+
+# --- parse_thread_messages unit ---
+
+
+def test_parse_thread_messages_basic():
+    assert parse_thread_messages("alice: hello\nbob: hi there") == [
+        ("alice", "hello"),
+        ("bob", "hi there"),
+    ]
+
+
+def test_parse_thread_messages_none_and_empty():
+    assert parse_thread_messages(None) == []
+    assert parse_thread_messages("") == []
+
+
+def test_parse_thread_messages_no_separator():
+    assert parse_thread_messages("just a line") == [("", "just a line")]
+
+
+def test_parse_thread_messages_skips_blank_lines():
+    assert parse_thread_messages("alice: hi\n\nbob: yo") == [
+        ("alice", "hi"),
+        ("bob", "yo"),
+    ]
 
 
 # --- fetch_feed unit ---
@@ -290,16 +321,77 @@ def test_comments_page_renders_dialogue_and_legacy_fallback(client, engine):
     )
     _add_comment(
         engine, cid=2, author="new", text="latest", post_url="/a/new",
-        thread_text="first: hello\\nsecond: world",
+        thread_text="first: hello\nsecond: world",
         fetched_at=datetime(2026, 1, 1, 12, 1, 0),
     )
 
     body = client.get("/comments").text
 
     assert "История до комментария не сохранена" in body
-    assert "first: hello" in body
-    assert "second: world" in body
+    assert "hello" in body
+    assert "world" in body
     assert "Комментарий пользователя" in body
+
+
+def test_comments_page_renders_thread_as_separate_cards(client, engine):
+    _add_comment(
+        engine, cid=1, author="new", text="latest", post_url="/a/new",
+        thread_text="alice: hello\nbob: hi there",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    body = client.get("/comments").text
+
+    # One DOM card per history message, not one merged <div> with \n inside.
+    assert body.count('class="thread-message"') == 2
+    assert "thread-history" not in body
+
+
+def test_comments_page_bot_reply_block_present_and_distinct(client, engine):
+    _add_comment(
+        engine, cid=1, author="alice", text="hi", post_url="/a/p",
+        thread_text="alice: hello",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+    _add_reply(engine, rid=1, comment_id=1, generated_text="bot answer", status="published")
+
+    body = client.get("/comments").text
+
+    assert 'class="bot-reply"' in body
+    assert "Ответ бота" in body
+    assert "bot answer" in body
+    # Distinct class from history cards and the current comment block.
+    assert 'class="thread-message"' in body
+    assert 'class="current-comment"' in body
+
+
+def test_comments_page_no_bot_reply_when_empty(client, engine):
+    _add_comment(
+        engine, cid=1, author="alice", text="hi", post_url="/a/p",
+        thread_text="alice: hello",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+    # No reply added → no bot-reply block.
+    body = client.get("/comments").text
+
+    assert 'class="bot-reply"' not in body
+    assert "Ответ бота" not in body
+
+
+def test_comments_page_has_five_columns_and_no_reply_column(client, engine):
+    _add_comment(
+        engine, cid=1, author="alice", text="hi", post_url="/a/p",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    body = client.get("/comments").text
+
+    assert "<th>Ответ бота</th>" not in body
+    assert 'class="reply-cell"' not in body
+
+    thead = body.split("<thead>", 1)[1].split("</thead>", 1)[0]
+    headers = re.findall(r"<th>(.*?)</th>", thead)
+    assert headers == ["Автор", "Диалог", "Статус", "Пост", "Время"]
 
 
 def test_comments_page_fresh_first_in_html(client, engine):

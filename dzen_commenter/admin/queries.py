@@ -22,6 +22,27 @@ class FeedRow:
     error_reason: str | None
 
 
+def parse_thread_messages(thread_text: str | None) -> list[tuple[str, str]]:
+    """Разбор плоской истории ветки в список сообщений `(author, text)`.
+
+    `None`/пустая строка → `[]`. Иначе строка бьётся по `\\n`, пустые строки
+    пропускаются, каждая непустая делится по первому `": "` на автора и текст.
+    Строка без `": "` возвращается как `("", строка_целиком)` (fallback).
+    """
+    if not thread_text:
+        return []
+    messages: list[tuple[str, str]] = []
+    for line in thread_text.split("\n"):
+        if not line.strip():
+            continue
+        author, sep, text = line.partition(": ")
+        if sep:
+            messages.append((author, text))
+        else:
+            messages.append(("", line))
+    return messages
+
+
 def _post_url(value: str | None) -> str | None:
     if value and value.startswith("/a/"):
         return f"https://dzen.ru{value}"
