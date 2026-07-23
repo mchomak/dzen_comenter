@@ -271,7 +271,8 @@ def test_comments_page_renders_title_link_above_dialogue_and_seconds_only(client
 
     body = client.get("/comments").text
 
-    assert 'class="post-title"' in body
+    assert 'class="thread-post"' in body
+    assert 'class="thread-tree"' in body
     assert 'href="https://dzen.ru/a/post-1"' in body
     assert body.index("Заголовок публикации") < body.index("earlier")
     assert body.index("earlier") < body.index("Комментарий пользователя")
@@ -294,6 +295,21 @@ def test_comments_page_keeps_generic_post_link_without_title(client, engine):
 
     assert "Заголовок публикации" not in body
     assert ">Открыть пост</a>" in body
+
+
+def test_comments_page_shows_post_placeholder_without_safe_url(client, engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="current",
+        post_url=None,
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    body = client.get("/comments").text
+
+    assert "Ссылка на пост недоступна" in body
 
 
 def test_comments_page_shows_no_reply_label(client, engine):
@@ -320,6 +336,7 @@ def test_comments_page_omits_unsafe_post_link(client, engine):
 
     assert "javascript:alert(1)" not in body
     assert "Открыть пост" not in body
+    assert "Ссылка на пост недоступна" in body
 
 
 def test_comments_page_shows_error_reason(client, engine):
@@ -377,7 +394,7 @@ def test_comments_page_renders_dialogue_and_legacy_fallback(client, engine):
     assert "Комментарий пользователя" in body
 
 
-def test_comments_page_renders_thread_as_separate_cards(client, engine):
+def test_comments_page_renders_thread_as_nested_nodes(client, engine):
     _add_comment(
         engine, cid=1, author="new", text="latest", post_url="/a/new",
         thread_text="alice: hello\nbob: hi there",
@@ -386,9 +403,16 @@ def test_comments_page_renders_thread_as_separate_cards(client, engine):
 
     body = client.get("/comments").text
 
-    # One DOM card per history message, not one merged <div> with \n inside.
-    assert body.count('class="thread-message"') == 2
-    assert "thread-history" not in body
+    assert 'class="thread-node thread-depth-0"' in body
+    assert 'class="thread-node thread-depth-1"' in body
+    assert 'class="thread-current thread-depth-2"' in body
+    assert body.index("hello") < body.index("hi there") < body.index("latest")
+    assert 'class="thread-message"' not in body
+    assert 'class="current-comment"' not in body
+    assert 'class="bot-reply"' not in body
+    assert "Лайк" not in body
+    assert "Дизлайк" not in body
+    assert "Ответить" not in body
 
 
 def test_comments_page_bot_reply_block_present_and_distinct(client, engine):
@@ -401,12 +425,10 @@ def test_comments_page_bot_reply_block_present_and_distinct(client, engine):
 
     body = client.get("/comments").text
 
-    assert 'class="bot-reply"' in body
+    assert 'class="thread-bot-reply thread-depth-2"' in body
     assert "Ответ бота" in body
     assert "bot answer" in body
-    # Distinct class from history cards and the current comment block.
-    assert 'class="thread-message"' in body
-    assert 'class="current-comment"' in body
+    assert 'class="thread-current thread-depth-1"' in body
 
 
 def test_comments_page_no_bot_reply_when_empty(client, engine):
@@ -415,10 +437,10 @@ def test_comments_page_no_bot_reply_when_empty(client, engine):
         thread_text="alice: hello",
         fetched_at=datetime(2026, 1, 1, 12, 0, 0),
     )
-    # No reply added → no bot-reply block.
+    # No reply added → no bot reply node.
     body = client.get("/comments").text
 
-    assert 'class="bot-reply"' not in body
+    assert 'class="thread-bot-reply"' not in body
     assert "Ответ бота" not in body
 
 
@@ -594,8 +616,16 @@ def test_comments_compact_thread_styles_center_every_table_header():
     )
 
     assert "table.feed thead th { text-align: center;" in css
-    assert ".post-title" in css
-    assert ".bot-reply {" in css
+    assert "min-width: 760px" in css
+    assert "table.feed th:nth-child(2) { width: 42%; }" in css
+    assert ".thread-tree { display: grid; gap: 4px; border-left: 1px solid var(--line); }" in css
+    assert ".thread-depth-1 { margin-left: 16px; }" in css
+    assert ".thread-depth-2 { margin-left: 32px; }" in css
+    assert ".thread-depth-3 { margin-left: 48px; }" in css
+    assert ".thread-node, .thread-current, .thread-bot-reply" in css
+    assert ".thread-message" not in css
+    assert ".current-comment" not in css
+    assert ".bot-reply" not in css
 
 
 def test_comments_count_matches_rendered_rows(client, mixed_feed):

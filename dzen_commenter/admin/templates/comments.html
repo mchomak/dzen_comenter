@@ -49,29 +49,38 @@
     <tr{% if row.reply_status == "error" or row.reply_status is none %} class="row-attention"{% endif %}>
       <td>{{ row.author or "" }}</td>
       <td class="dialogue-cell">
-        {% if row.post_title and row.post_url %}
-        <a class="post-title" href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">{{ row.post_title }}</a>
-        {% endif %}
+        <div class="thread-post">
+          {% if row.post_url %}
+          <a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">{{ row.post_title or "Открыть пост" }}</a>
+          {% else %}
+          <span>Ссылка на пост недоступна</span>
+          {% endif %}
+        </div>
+        {% set messages = row.thread_text | thread_messages %}
+        {% set current_depth = messages | length if messages | length < 4 else 4 %}
         {% if row.thread_text is none %}
+        <div class="thread-tree">
           <p class="thread-unavailable">История до комментария не сохранена</p>
         {% else %}
-          {% for author, text in row.thread_text | thread_messages %}
-          <div class="thread-message">
+        <div class="thread-tree">
+          {% for author, text in messages %}
+          <div class="thread-node thread-depth-{{ loop.index0 if loop.index0 < 3 else 3 }}">
             {% if author %}<span class="thread-author">{{ author }}</span>{% endif %}
             {{ text }}
           </div>
           {% endfor %}
         {% endif %}
-        <div class="current-comment">
+        <div class="thread-current thread-depth-{{ current_depth }}">
           <span>Комментарий пользователя</span>
           {{ row.comment_text or "" }}
         </div>
         {% if row.reply_text %}
-        <div class="bot-reply">
+        <div class="thread-bot-reply thread-depth-{{ current_depth + 1 }}">
           <span>Ответ бота</span>
           {{ row.reply_text }}
         </div>
         {% endif %}
+        </div>
       </td>
       <td>
         {% if row.reply_status is none %}
