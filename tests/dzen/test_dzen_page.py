@@ -73,6 +73,8 @@ class FakeGroup:
 
     def query_selector(self, selector: str):
         if selector == selectors.POST_LINK:
+            if 'href^="/a/"' in selector and not self._post_link._href.startswith("/a/"):
+                return None
             return self._post_link
         if selector == selectors.POST_TITLE:
             return self._title
@@ -262,6 +264,14 @@ def test_fetch_comments_sets_post_url_per_group():
         "https://dzen.ru/a/post1",
         "https://dzen.ru/a/post2",
     ]
+
+
+def test_fetch_comments_accepts_absolute_post_href():
+    page = DzenStudioPage(
+        FakePage([FakeGroup("https://dzen.ru/a/absolute-post", [make_node(0)])])
+    )
+
+    assert page.fetch_comments()[0].post_url == "https://dzen.ru/a/absolute-post"
 
 
 def test_fetch_comments_sets_publication_title_per_group():
