@@ -210,8 +210,8 @@ AUTH_CAPTCHA = (
 
 # Группа: один пост + все его комментарии.
 POST_GROUP = '[data-testid="comment"]'
-# Ссылка на пост внутри группы (href вида "/a/<id>").
-POST_LINK = '[class*="editor--comments-page__postContainer-"] a[href^="/a/"]'
+# Ссылка на пост внутри группы (относительный или абсолютный href).
+POST_LINK = '[class*="editor--comments-page__postContainer-"] a[href]'
 
 POST_TITLE = '[class*="editor--comment-post__title-"]'
 
