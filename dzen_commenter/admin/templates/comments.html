@@ -53,11 +53,13 @@
           {% if row.post_url %}
           <a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">{{ row.post_title or "Открыть пост" }}</a>
           {% else %}
-          <span>Ссылка на пост недоступна</span>
+          <span>Ссылка отсутствует</span>
           {% endif %}
         </div>
         {% set messages = row.thread_text | thread_messages %}
-        {% set current_depth = messages | length if messages | length < 4 else 4 %}
+        {% set current_depth = messages | length %}
+        {% if current_depth < 1 %}{% set current_depth = 1 %}{% endif %}
+        {% if current_depth > 4 %}{% set current_depth = 4 %}{% endif %}
         {% if row.thread_text is none %}
         <div class="thread-tree">
           <p class="thread-unavailable">История до комментария не сохранена</p>
@@ -66,18 +68,18 @@
           {% for author, text in messages %}
           <div class="thread-node thread-depth-{{ loop.index0 if loop.index0 < 3 else 3 }}">
             {% if author %}<span class="thread-author">{{ author }}</span>{% endif %}
-            {{ text }}
+            <div class="thread-text">{{ text }}</div>
           </div>
           {% endfor %}
         {% endif %}
         <div class="thread-current thread-depth-{{ current_depth }}">
           <span>Комментарий пользователя</span>
-          {{ row.comment_text or "" }}
+          <div class="thread-text">{{ row.comment_text or "" }}</div>
         </div>
         {% if row.reply_text %}
         <div class="thread-bot-reply thread-depth-{{ current_depth + 1 }}">
           <span>Ответ бота</span>
-          {{ row.reply_text }}
+          <div class="thread-text">{{ row.reply_text }}</div>
         </div>
         {% endif %}
         </div>
@@ -98,7 +100,11 @@
         {% endif %}
       </td>
       <td>
-        {% if row.post_url %}<a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">Открыть пост</a>{% endif %}
+        {% if row.post_url %}
+        <a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">Открыть пост</a>
+        {% else %}
+        <span class="post-link-placeholder">Ссылка отсутствует</span>
+        {% endif %}
       </td>
       <td>{{ row.fetched_at.strftime("%Y-%m-%d %H:%M:%S") if row.fetched_at else "" }}</td>
     </tr>

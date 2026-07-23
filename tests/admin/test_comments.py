@@ -297,19 +297,21 @@ def test_comments_page_keeps_generic_post_link_without_title(client, engine):
     assert ">Открыть пост</a>" in body
 
 
-def test_comments_page_shows_post_placeholder_without_safe_url(client, engine):
+@pytest.mark.parametrize("post_url", [None, ""])
+def test_comments_page_shows_post_placeholder_without_safe_url(client, engine, post_url):
     _add_comment(
         engine,
         cid=1,
         author="alice",
         text="current",
-        post_url=None,
+        post_url=post_url,
         fetched_at=datetime(2026, 1, 1, 12, 0, 0),
     )
 
     body = client.get("/comments").text
 
-    assert "Ссылка на пост недоступна" in body
+    assert body.count("Ссылка отсутствует") == 2
+    assert 'class="thread-current thread-depth-1"' in body
 
 
 def test_comments_page_shows_no_reply_label(client, engine):
@@ -336,7 +338,7 @@ def test_comments_page_omits_unsafe_post_link(client, engine):
 
     assert "javascript:alert(1)" not in body
     assert "Открыть пост" not in body
-    assert "Ссылка на пост недоступна" in body
+    assert "Ссылка отсутствует" in body
 
 
 def test_comments_page_shows_error_reason(client, engine):
@@ -429,6 +431,20 @@ def test_comments_page_bot_reply_block_present_and_distinct(client, engine):
     assert "Ответ бота" in body
     assert "bot answer" in body
     assert 'class="thread-current thread-depth-1"' in body
+
+
+def test_comments_page_renders_long_multiline_comment_and_reply(client, engine):
+    long_text = "длинный комментарий " * 40 + "\nвторая строка"
+    _add_comment(
+        engine, cid=1, author="alice", text=long_text, post_url="/a/p",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+    _add_reply(engine, rid=1, comment_id=1, generated_text=long_text, status="published")
+
+    body = client.get("/comments").text
+
+    assert body.count(long_text) == 2
+    assert body.count('class="thread-text"') == 2
 
 
 def test_comments_page_no_bot_reply_when_empty(client, engine):
@@ -618,6 +634,10 @@ def test_comments_compact_thread_styles_center_every_table_header():
     assert "table.feed thead th { text-align: center;" in css
     assert "min-width: 760px" in css
     assert "table.feed th:nth-child(2) { width: 42%; }" in css
+    assert ".dialogue-cell { white-space: normal; }" in css
+    assert ".thread-text { white-space: pre-wrap; overflow-wrap: anywhere; }" in css
+    assert ".post-link-placeholder { color: var(--muted); }" in css
+    assert "text-indent" not in css
     assert ".thread-tree { display: grid; gap: 4px; border-left: 1px solid var(--line); }" in css
     assert ".thread-depth-1 { margin-left: 16px; }" in css
     assert ".thread-depth-2 { margin-left: 32px; }" in css
