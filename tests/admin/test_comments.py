@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,7 +33,9 @@ def engine():
     return eng
 
 
-def _add_comment(engine, *, cid, author, text, post_url, fetched_at, thread_text=None):
+def _add_comment(
+    engine, *, cid, author, text, post_url, fetched_at, thread_text=None, post_title=None
+):
     with engine.begin() as conn:
         conn.execute(
             insert(CommentTable).values(
@@ -41,6 +44,7 @@ def _add_comment(engine, *, cid, author, text, post_url, fetched_at, thread_text
                 publication_id=1,
                 author=author,
                 text=text,
+                post_title=post_title,
                 post_url=post_url,
                 thread_text=thread_text,
                 fetched_at=fetched_at,
@@ -250,6 +254,46 @@ def test_comments_page_renders_feed(client, engine):
     assert 'href="https://dzen.ru/a/xyz"' in body
     assert 'target="_blank"' in body
     assert 'rel="noopener noreferrer"' in body
+
+
+def test_comments_page_renders_title_link_above_dialogue_and_seconds_only(client, engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="current",
+        post_title="Заголовок публикации",
+        post_url="/a/post-1",
+        thread_text="first: earlier",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0, 123456),
+    )
+    _add_reply(engine, rid=1, comment_id=1, generated_text="bot answer", status="published")
+
+    body = client.get("/comments").text
+
+    assert 'class="post-title"' in body
+    assert 'href="https://dzen.ru/a/post-1"' in body
+    assert body.index("Заголовок публикации") < body.index("earlier")
+    assert body.index("earlier") < body.index("Комментарий пользователя")
+    assert body.index("Комментарий пользователя") < body.index("Ответ бота")
+    assert "2026-01-01 12:00:00" in body
+    assert "2026-01-01 12:00:00.123456" not in body
+
+
+def test_comments_page_keeps_generic_post_link_without_title(client, engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="current",
+        post_url="/a/post-1",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    body = client.get("/comments").text
+
+    assert "Заголовок публикации" not in body
+    assert ">Открыть пост</a>" in body
 
 
 def test_comments_page_shows_no_reply_label(client, engine):
@@ -522,6 +566,36 @@ def test_comments_author_query_renders_and_preserves_input(client, mixed_feed):
     assert "alice" in body
     assert "alina" not in body
     assert 'name="q" value="alice"' in body
+
+
+def test_comments_author_datalist_contains_each_nonempty_displayed_author_once(client, engine):
+    for cid, author in enumerate(("alice", "Alice", "alice", ""), start=1):
+        _add_comment(
+            engine,
+            cid=cid,
+            author=author,
+            text="comment",
+            post_url="/a/post",
+            fetched_at=datetime(2026, 1, 1, 12, 0, cid),
+        )
+
+    body = client.get("/comments?q=ali").text
+
+    assert '<input type="text" name="q" list="author-options" value="ali">' in body
+    datalist = body.split('<datalist id="author-options">', 1)[1].split("</datalist>", 1)[0]
+    assert datalist.count('<option value="alice">') == 1
+    assert datalist.count('<option value="Alice">') == 1
+    assert '<option value="">' not in datalist
+
+
+def test_comments_compact_thread_styles_center_every_table_header():
+    css = (Path(__file__).parents[2] / "dzen_commenter/admin/static/style.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "table.feed thead th { text-align: center;" in css
+    assert ".post-title" in css
+    assert ".bot-reply {" in css
 
 
 def test_comments_count_matches_rendered_rows(client, mixed_feed):

@@ -42,6 +42,7 @@ class PostgresCommentRepository:
                 posted_at=comment.posted_at,
                 fetched_at=comment.fetched_at,
                 status=comment.status.value,
+                post_title=comment.publication_title or None,
                 post_url=comment.post_url,
                 thread_text=comment.thread_text,
             )
@@ -57,6 +58,7 @@ class PostgresCommentRepository:
                     "posted_at": comment.posted_at,
                     "fetched_at": comment.fetched_at,
                     "status": comment.status.value,
+                    "post_title": stmt.excluded.post_title,
                     "post_url": comment.post_url,
                     "thread_text": case(
                         (

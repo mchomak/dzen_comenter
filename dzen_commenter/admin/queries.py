@@ -15,6 +15,7 @@ class FeedRow:
     author: str | None
     comment_text: str | None
     thread_text: str | None
+    post_title: str | None
     post_url: str | None
     fetched_at: datetime | None
     reply_text: str | None
@@ -41,6 +42,11 @@ def parse_thread_messages(thread_text: str | None) -> list[tuple[str, str]]:
         else:
             messages.append(("", line))
     return messages
+
+
+def unique_authors(feed: list[FeedRow]) -> list[str]:
+    """Непустые имена авторов из отображаемой ленты, без повторов."""
+    return list(dict.fromkeys(row.author for row in feed if row.author))
 
 
 def _post_url(value: str | None) -> str | None:
@@ -119,6 +125,7 @@ def _load_feed(engine: Engine, limit: int) -> list[FeedRow]:
                 CommentTable.author,
                 CommentTable.text,
                 CommentTable.thread_text,
+                CommentTable.post_title,
                 CommentTable.post_url,
                 CommentTable.fetched_at,
             )
@@ -151,6 +158,7 @@ def _load_feed(engine: Engine, limit: int) -> list[FeedRow]:
                 author=row.author,
                 comment_text=row.text,
                 thread_text=row.thread_text,
+                post_title=row.post_title,
                 post_url=_post_url(row.post_url),
                 fetched_at=row.fetched_at,
                 reply_text=reply.generated_text if reply else None,

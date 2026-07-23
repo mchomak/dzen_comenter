@@ -24,6 +24,7 @@ def _make_comment(
     text="hello",
     status=CommentStatus.NEW,
     post_url="http://post/1",
+    publication_title="",
     thread_text="",
 ) -> Comment:
     return Comment(
@@ -36,6 +37,7 @@ def _make_comment(
         posted_at=datetime(2026, 1, 1, 12, 0, 0),
         fetched_at=datetime(2026, 1, 1, 12, 5, 0),
         status=status,
+        publication_title=publication_title,
         post_url=post_url,
         thread_text=thread_text,
     )
@@ -77,6 +79,7 @@ def test_tables_exist_with_columns(engine):
         "posted_at",
         "fetched_at",
         "status",
+        "post_title",
         "thread_text",
     } <= com_cols
 
@@ -222,6 +225,24 @@ def test_upsert_comment_stores_and_updates_post_url(repo, engine):
             text("SELECT post_url FROM comments WHERE id = :id"), {"id": cid}
         ).scalar_one()
     assert updated == "http://post/new"
+
+
+def test_upsert_comment_stores_and_updates_post_title(repo, engine):
+    pub_id = repo.upsert_publication(_make_publication())
+    cid = repo.upsert_comment(
+        _make_comment(pub_id, publication_title="Первый заголовок")
+    )
+
+    with engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT post_title FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one() == "Первый заголовок"
+
+    repo.upsert_comment(_make_comment(pub_id, publication_title="Новый заголовок"))
+    with engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT post_title FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one() == "Новый заголовок"
 
 
 def test_upsert_comment_stores_thread_text_and_keeps_legacy_null(repo, engine):

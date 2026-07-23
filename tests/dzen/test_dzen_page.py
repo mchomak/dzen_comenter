@@ -64,13 +64,18 @@ class FakeCommentNode:
 
 
 class FakeGroup:
-    def __init__(self, post_href: str, nodes: list[FakeCommentNode]) -> None:
+    def __init__(
+        self, post_href: str, nodes: list[FakeCommentNode], title: str | None = None
+    ) -> None:
         self._post_link = FakeLink(post_href)
         self._nodes = nodes
+        self._title = FakeText(title) if title is not None else None
 
     def query_selector(self, selector: str):
         if selector == selectors.POST_LINK:
             return self._post_link
+        if selector == selectors.POST_TITLE:
+            return self._title
         return None
 
     def query_selector_all(self, selector: str):
@@ -257,6 +262,14 @@ def test_fetch_comments_sets_post_url_per_group():
         "https://dzen.ru/a/post1",
         "https://dzen.ru/a/post2",
     ]
+
+
+def test_fetch_comments_sets_publication_title_per_group():
+    page = DzenStudioPage(
+        FakePage([FakeGroup("/a/post1", [make_node(0)], title="  Заголовок  ")])
+    )
+
+    assert page.fetch_comments()[0].publication_title == "Заголовок"
 
 
 def test_fetch_comments_keeps_relative_path_for_id_and_saves_prior_dialogue():

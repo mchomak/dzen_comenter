@@ -22,7 +22,10 @@
     </select>
   </label>
   <label>Автор
-    <input type="text" name="q" value="{{ q }}">
+    <input type="text" name="q" list="author-options" value="{{ q }}">
+    <datalist id="author-options">
+      {% for author in authors %}<option value="{{ author }}">{% endfor %}
+    </datalist>
   </label>
   <button type="submit">Применить</button>
 </form>
@@ -46,6 +49,9 @@
     <tr{% if row.reply_status == "error" or row.reply_status is none %} class="row-attention"{% endif %}>
       <td>{{ row.author or "" }}</td>
       <td class="dialogue-cell">
+        {% if row.post_title and row.post_url %}
+        <a class="post-title" href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">{{ row.post_title }}</a>
+        {% endif %}
         {% if row.thread_text is none %}
           <p class="thread-unavailable">История до комментария не сохранена</p>
         {% else %}
@@ -85,7 +91,7 @@
       <td>
         {% if row.post_url %}<a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">Открыть пост</a>{% endif %}
       </td>
-      <td>{{ row.fetched_at or "" }}</td>
+      <td>{{ row.fetched_at.strftime("%Y-%m-%d %H:%M:%S") if row.fetched_at else "" }}</td>
     </tr>
     {% endfor %}
   </tbody>

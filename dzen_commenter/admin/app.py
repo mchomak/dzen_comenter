@@ -14,6 +14,7 @@ from dzen_commenter.admin.queries import (
     fetch_feed,
     fetch_status_counts,
     parse_thread_messages,
+    unique_authors,
 )
 from dzen_commenter.admin.validation import split_csv_items, validate_settings_form
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
@@ -71,7 +72,12 @@ def create_app(
         return templates.TemplateResponse(
             request=request,
             name="comments.html",
-            context={"feed": feed, "status": status, "q": author_query},
+            context={
+                "feed": feed,
+                "authors": unique_authors(feed),
+                "status": status,
+                "q": author_query,
+            },
         )
 
     @app.get("/settings")
