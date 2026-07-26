@@ -118,7 +118,7 @@ class PlaywrightSessionManager:
     def keep_alive(self) -> None:
         """Лёгкий reload, чтобы сессия не протухала. НЕ в Protocol."""
         try:
-            self._page.reload()
+            self._page.reload(wait_until="domcontentloaded")
         except PlaywrightError as exc:
             if not self._is_browser_crash_error(exc):
                 raise

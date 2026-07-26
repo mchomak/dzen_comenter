@@ -4,6 +4,10 @@ import uuid
 import httpx
 
 
+_CONNECT_RETRY_COUNT = 3
+_CONNECT_RETRY_DELAYS = (1.0, 3.0)
+
+
 class GigaChatProvider:
     """GigaChat REST adapter with OAuth access-token caching."""
 
@@ -25,7 +29,10 @@ class GigaChatProvider:
         self.scope = scope
         self.oauth_url = oauth_url
         self.token_refresh_margin = token_refresh_margin
-        self._client = client if client is not None else httpx.Client(verify=verify_ssl_certs)
+        self._client = client if client is not None else httpx.Client(
+            verify=verify_ssl_certs,
+            timeout=httpx.Timeout(90.0, connect=15.0),
+        )
         self._access_token = ""
         self._token_expires_at = 0.0
 
@@ -38,7 +45,7 @@ class GigaChatProvider:
         ):
             return self._access_token
 
-        response = self._client.post(
+        response = self._post(
             self.oauth_url,
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -82,7 +89,7 @@ class GigaChatProvider:
         force_token_refresh: bool = False,
     ) -> httpx.Response:
         token = self._get_access_token(force_refresh=force_token_refresh)
-        return self._client.post(
+        return self._post(
             f"{self.base_url}/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {token}",
@@ -95,3 +102,14 @@ class GigaChatProvider:
                 "max_tokens": max_tokens,
             },
         )
+
+    def _post(self, url: str, **kwargs) -> httpx.Response:
+        for attempt in range(_CONNECT_RETRY_COUNT):
+            try:
+                return self._client.post(url, **kwargs)
+            except httpx.ConnectTimeout:
+                if attempt == _CONNECT_RETRY_COUNT - 1:
+                    raise
+                time.sleep(_CONNECT_RETRY_DELAYS[attempt])
+
+        raise RuntimeError("unreachable")

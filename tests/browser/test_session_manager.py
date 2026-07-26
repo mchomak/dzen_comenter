@@ -39,6 +39,7 @@ class FakePage:
         self.login_form_present = login_form_present
         self.goto_calls: list[str] = []
         self.reload_count = 0
+        self.reload_kwargs: list[dict] = []
         self.url = "about:blank"
         self.reload_error: Exception | None = None
 
@@ -46,8 +47,9 @@ class FakePage:
         self.goto_calls.append(url)
         self.url = url
 
-    def reload(self) -> None:
+    def reload(self, **kwargs) -> None:
         self.reload_count += 1
+        self.reload_kwargs.append(kwargs)
         if self.reload_error is not None:
             raise self.reload_error
 
@@ -404,6 +406,7 @@ def test_keep_alive_reloads_once():
     mgr.keep_alive()
 
     assert page.reload_count == 1
+    assert page.reload_kwargs == [{"wait_until": "domcontentloaded"}]
 
 
 def test_keep_alive_restarts_session_after_page_crash():

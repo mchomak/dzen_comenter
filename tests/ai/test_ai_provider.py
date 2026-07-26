@@ -264,3 +264,27 @@ def test_gigachat_refreshes_token_after_401():
 
     assert provider.generate("prompt", temperature=0.1, max_tokens=8) == "recovered"
     assert token_calls == 2
+
+
+def test_gigachat_retries_connect_timeout(monkeypatch):
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.ConnectTimeout("timed out", request=request)
+        if request.url.path.endswith("/oauth"):
+            return httpx.Response(200, json={"access_token": "token-1", "expires_at": 4102444800})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    monkeypatch.setattr("dzen_commenter.ai.gigachat.time.sleep", lambda _: None)
+    provider = GigaChatProvider(
+        api_key="authorization-key",
+        base_url="https://gigachat.example/api",
+        model="GigaChat-Pro",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert provider.generate("prompt", temperature=0.1, max_tokens=8) == "ok"
+    assert attempts == 3
