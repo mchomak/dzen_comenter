@@ -165,6 +165,22 @@ def test_fetch_article_text_uses_article_body_and_closes_temporary_tab():
     assert article_page.close_calls == 1
 
 
+def test_fetch_article_text_uses_dzen_article_class_when_semantic_elements_are_empty():
+    class ClassOnlyArticlePage(FakeArticlePage):
+        def query_selector(self, selector: str):
+            if selector == '[class*="article"]':
+                return FakeText("Dzen article body")
+            return None
+
+    browser = FakePage([FakeGroup("/a/post", [])])
+    article_page = ClassOnlyArticlePage()
+    browser.context.article_pages = [article_page]
+    page = DzenStudioPage(browser)
+
+    assert page.fetch_article_text("https://dzen.ru/a/post") == "Dzen article body"
+    assert article_page.close_calls == 1
+
+
 def test_fetch_article_text_closes_failed_temporary_tab_and_caches_none():
     browser = FakePage([FakeGroup("/a/post", [])])
     failed = FakeArticlePage(goto_error=RuntimeError("unavailable"))

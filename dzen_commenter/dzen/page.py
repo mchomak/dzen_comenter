@@ -71,8 +71,13 @@ class DzenStudioPage:
         article_page = self._page.context.new_page()
         try:
             article_page.goto(post_url, wait_until="domcontentloaded")
-            article = article_page.query_selector("article") or article_page.query_selector("main")
-            text = article.inner_text().strip() if article else ""
+            text = ""
+            for selector in ("article", "main", '[class*="article"]'):
+                article = article_page.query_selector(selector)
+                candidate = article.inner_text().strip() if article else ""
+                if candidate:
+                    text = candidate
+                    break
         except Exception:
             text = ""
         finally:
