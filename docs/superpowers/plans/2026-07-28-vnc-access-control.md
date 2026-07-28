@@ -13,7 +13,7 @@
 - The default and boot-time state is closed for TCP ports 5900 and 6080 in IPv4 and IPv6.
 - Do not change SSH (22), PostgreSQL (5432), Docker volumes, or database data.
 - Only the root host service may invoke iptables/ip6tables; the admin container receives a Unix socket only.
-- The controller accepts exactly `status`, `open`, and `close` commands and touches only `DZEN_VNC` plus its jump in `DOCKER-USER`.
+- The controller accepts exactly `status`, `open`, and `close` commands and touches only `DZEN_VNC`, its jump in `DOCKER-USER`, and the exact legacy direct `DROP` rule for TCP ports `5900,6080` that this deployment installed before the controller exists.
 - Socket errors leave VNC closed/unchanged and are shown in the admin UI.
 - Commit implementation as `fix: add admin VNC access control`.
 
@@ -66,7 +66,7 @@ Expected: FAIL because `dzen_commenter.vnc_control` does not exist.
 
 - [x] **Step 3: Implement the minimal controller and installer**
 
-`VncFirewall` must ensure a `DZEN_VNC` chain, ensure one `DOCKER-USER` jump matching TCP multiports `5900,6080`, flush the dedicated chain, and append `DROP` only when disabled. `is_enabled` is true only if neither IPv4 nor IPv6 chain has the drop rule. The Unix server handles one JSON line with `{"action":"status"}`, `{"action":"open"}`, or `{"action":"close"}` and returns `{"enabled": bool}`; invalid messages return an error without running firewall commands.
+`VncFirewall` must first remove all occurrences of the exact temporary legacy direct `DOCKER-USER` `DROP` rule matching TCP multiports `5900,6080`, then ensure a `DZEN_VNC` chain, ensure one `DOCKER-USER` jump matching TCP multiports `5900,6080`, flush the dedicated chain, and append `DROP` only when disabled. `is_enabled` is true only if neither IPv4 nor IPv6 dedicated chain has the drop rule. The Unix server handles one JSON line with `{"action":"status"}`, `{"action":"open"}`, or `{"action":"close"}` and returns `{"enabled": bool}`; invalid messages return an error without running firewall commands.
 
 The systemd service runs `python3 /usr/local/lib/dzen-commenter/vnc_control.py`; its installer copies the module, installs the unit, runs `daemon-reload`, enables and restarts it. Starting the server calls `set_enabled(False)` before accepting clients. Socket mode is `0660` and the socket is not exposed over TCP.
 
