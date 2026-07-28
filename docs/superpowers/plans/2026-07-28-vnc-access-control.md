@@ -43,7 +43,7 @@
 - Produces `VncFirewall.set_enabled(enabled: bool) -> bool` and `VncFirewall.is_enabled() -> bool`.
 - Produces `serve(socket_path: str = "/run/dzen-vnc-control.sock") -> None` with newline-delimited JSON requests.
 
-- [ ] **Step 1: Write failing controller tests**
+- [x] **Step 1: Write failing controller tests**
 
 Use a fake command runner recording argument lists. Assert a closed controller creates/links `DZEN_VNC`, flushes it, and appends `DROP`; an open controller removes only that drop by flushing the dedicated chain. Assert every command uses either `iptables` or `ip6tables`, `DOCKER-USER`, `DZEN_VNC`, and ports `5900,6080` only.
 
@@ -58,19 +58,19 @@ def test_close_vnc_installs_dedicated_drop_rule_for_ipv4_and_ipv6():
     assert ["ip6tables", "-A", "DZEN_VNC", "-j", "DROP"] in runner.calls
 ```
 
-- [ ] **Step 2: Run the controller tests and confirm RED**
+- [x] **Step 2: Run the controller tests and confirm RED**
 
 Run: `python -m pytest tests/test_vnc_control.py -v`
 
 Expected: FAIL because `dzen_commenter.vnc_control` does not exist.
 
-- [ ] **Step 3: Implement the minimal controller and installer**
+- [x] **Step 3: Implement the minimal controller and installer**
 
 `VncFirewall` must ensure a `DZEN_VNC` chain, ensure one `DOCKER-USER` jump matching TCP multiports `5900,6080`, flush the dedicated chain, and append `DROP` only when disabled. `is_enabled` is true only if neither IPv4 nor IPv6 chain has the drop rule. The Unix server handles one JSON line with `{"action":"status"}`, `{"action":"open"}`, or `{"action":"close"}` and returns `{"enabled": bool}`; invalid messages return an error without running firewall commands.
 
 The systemd service runs `python3 /usr/local/lib/dzen-commenter/vnc_control.py`; its installer copies the module, installs the unit, runs `daemon-reload`, enables and restarts it. Starting the server calls `set_enabled(False)` before accepting clients. Socket mode is `0660` and the socket is not exposed over TCP.
 
-- [ ] **Step 4: Run controller tests and verify GREEN**
+- [x] **Step 4: Run controller tests and verify GREEN**
 
 Run: `python -m pytest tests/test_vnc_control.py -v`
 
@@ -91,7 +91,7 @@ Expected: PASS.
 - Produces `VncAccessClient.status() -> bool` and `VncAccessClient.set_enabled(enabled: bool) -> bool`.
 - Produces authenticated `POST /settings/vnc-access` accepting `action=open|close`.
 
-- [ ] **Step 1: Write failing client and route tests**
+- [x] **Step 1: Write failing client and route tests**
 
 Inject a fake socket into `VncAccessClient` and assert it sends only a JSON action line and reads `enabled`. Make `create_app(..., vnc_access=fake)` accept a fake with `status()` and `set_enabled()`. Add:
 
@@ -112,13 +112,13 @@ def test_guest_cannot_toggle_vnc(settings):
 
 Also assert settings renders «VNC закрыт» plus «Открыть VNC» when fake status is false, and «VNC открыт» plus «Закрыть VNC» when true.
 
-- [ ] **Step 2: Run focused admin tests and confirm RED**
+- [x] **Step 2: Run focused admin tests and confirm RED**
 
 Run: `python -m pytest tests/admin/test_vnc_access.py tests/admin/test_settings.py -k "vnc" -v`
 
 Expected: FAIL because neither client nor endpoint exists.
 
-- [ ] **Step 3: Implement minimal authenticated UI**
+- [x] **Step 3: Implement minimal authenticated UI**
 
 Add `VNC_CONTROL_SOCKET: str = "/run/dzen-vnc-control.sock"` to `AdminSettings`. `VncAccessClient` uses `AF_UNIX`, a 2-second timeout, one JSON request and one response; it raises `VncAccessUnavailable` on connection, timeout, malformed response, or controller error.
 
@@ -126,7 +126,7 @@ Set `app.state.vnc_access` to injected client or `VncAccessClient(settings.VNC_C
 
 Render a separate VNC access fieldset below the existing read-only VNC connection fields. Never render or accept the VNC password through the new control. Do not add JavaScript or an auto-open timer.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `python -m pytest tests/admin/test_vnc_access.py tests/admin/test_settings.py -k "vnc" -v`
 
@@ -142,17 +142,17 @@ Expected: PASS.
 - Consumes `/run/dzen-vnc-control.sock` created by the host systemd service.
 - Produces an admin container with no firewall capability and access only to that socket.
 
-- [ ] **Step 1: Write a failing structural test**
+- [x] **Step 1: Write a failing structural test**
 
 Add a test reading `docker-compose.yml` and asserting the `admin` service contains the exact bind mount `/run/dzen-vnc-control.sock:/run/dzen-vnc-control.sock` and does not contain `privileged`, `NET_ADMIN`, or `/var/run/docker.sock`.
 
-- [ ] **Step 2: Run the structural test and confirm RED**
+- [x] **Step 2: Run the structural test and confirm RED**
 
 Run: `python -m pytest tests/admin/test_vnc_access.py -k "compose" -v`
 
 Expected: FAIL because the socket mount is absent.
 
-- [ ] **Step 3: Add only the socket bind mount**
+- [x] **Step 3: Add only the socket bind mount**
 
 Under `services.admin.volumes`, add:
 
@@ -162,7 +162,7 @@ Under `services.admin.volumes`, add:
 
 Do not add capabilities, privileged mode, Docker socket, firewall tools, or a database migration.
 
-- [ ] **Step 4: Run full verification and commit**
+- [x] **Step 4: Run full verification and commit**
 
 Run: `python -m pytest -q; git diff --check`
 
