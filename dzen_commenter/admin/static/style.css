@@ -97,6 +97,7 @@ table.feed td:nth-child(5) { text-align: center; }
 .thread-post a:hover { text-decoration: underline; }
 .thread-post span { color: var(--muted); font-weight: 600; }
 .post-link-placeholder { color: var(--muted); }
+.post-video-note { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
 .thread-tree { display: grid; gap: 4px; border-left: 1px solid var(--line); }
 .thread-node, .thread-current, .thread-bot-reply { position: relative; padding: 1px 0; border: 0; background: transparent; line-height: 1.4; }
 .thread-node::before, .thread-current::before, .thread-bot-reply::before { content: ""; position: absolute; top: 0.75em; left: -7px; width: 6px; border-top: 1px solid var(--line); }

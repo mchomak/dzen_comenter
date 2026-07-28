@@ -211,10 +211,13 @@ AUTH_CAPTCHA = (
 # Группа: один пост + все его комментарии.
 POST_GROUP = '[data-testid="comment"]'
 # Ссылка на пост внутри группы (относительный или абсолютный href).
+# Ведёт либо на статью (/a/…), либо на видео/клип (/video/watch/…).
 POST_LINK = '[class*="editor--comments-page__postContainer-"] a[href]'
 POST_LINK_FALLBACK = (
     'a[href^="/a/"], a[href^="https://dzen.ru/a/"], '
-    'a[href^="https://www.dzen.ru/a/"]'
+    'a[href^="https://www.dzen.ru/a/"], '
+    'a[href^="/video/watch/"], a[href^="https://dzen.ru/video/watch/"], '
+    'a[href^="https://www.dzen.ru/video/watch/"]'
 )
 
 POST_TITLE = '[class*="editor--comment-post__title-"]'

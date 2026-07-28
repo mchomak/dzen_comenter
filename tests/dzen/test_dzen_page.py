@@ -8,7 +8,7 @@ from dzen_commenter.contracts.enums import CommentStatus
 from dzen_commenter.contracts.interfaces import DzenPage
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import DzenStudioPage, selectors
-from dzen_commenter.dzen.page import synthetic_id
+from dzen_commenter.dzen.page import is_video_post_url, synthetic_id
 
 
 class FakeText:
@@ -181,6 +181,14 @@ def test_fetch_article_text_uses_dzen_article_class_when_semantic_elements_are_e
     assert article_page.close_calls == 1
 
 
+def test_fetch_article_text_skips_video_posts_without_opening_a_tab():
+    browser = FakePage([])
+    page = DzenStudioPage(browser)
+
+    assert page.fetch_article_text("https://dzen.ru/video/watch/vid1") is None
+    assert browser.context.new_page_calls == 0
+
+
 def test_fetch_article_text_closes_failed_temporary_tab_and_caches_none():
     browser = FakePage([FakeGroup("/a/post", [])])
     failed = FakeArticlePage(goto_error=RuntimeError("unavailable"))
@@ -348,6 +356,30 @@ def test_fetch_comments_accepts_absolute_post_href():
     )
 
     assert page.fetch_comments()[0].post_url == "https://dzen.ru/a/absolute-post"
+
+
+def test_fetch_comments_accepts_video_post_href():
+    page = DzenStudioPage(
+        FakePage([FakeGroup("/video/watch/6a4628a617f7ac487bdc5899", [make_node(0)])])
+    )
+
+    assert (
+        page.fetch_comments()[0].post_url
+        == "https://dzen.ru/video/watch/6a4628a617f7ac487bdc5899"
+    )
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://dzen.ru/video/watch/vid1", True),
+        ("https://dzen.ru/a/post1", False),
+        (None, False),
+        ("", False),
+    ],
+)
+def test_is_video_post_url(url, expected):
+    assert is_video_post_url(url) is expected
 
 
 @pytest.mark.parametrize(

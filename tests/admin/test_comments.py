@@ -276,6 +276,9 @@ def test_feed_preserves_legacy_history_fallback_and_normalizes_post_url(engine):
         ("http://dzen.ru/a/insecure", None),
         ("https://evil.example/a/not-dzen", None),
         ("https://dzen.ru/not-a-post", None),
+        ("/video/watch/vid1", "https://dzen.ru/video/watch/vid1"),
+        ("https://dzen.ru/video/watch/vid1", "https://dzen.ru/video/watch/vid1"),
+        ("https://www.dzen.ru/video/watch/vid1", "https://www.dzen.ru/video/watch/vid1"),
     ],
 )
 def test_feed_allows_only_safe_dzen_post_urls(engine, stored_url, expected_url):
@@ -289,6 +292,27 @@ def test_feed_allows_only_safe_dzen_post_urls(engine, stored_url, expected_url):
     )
 
     assert fetch_feed(engine)[0].post_url == expected_url
+
+
+@pytest.mark.parametrize(
+    ("stored_url", "expected_is_video"),
+    [
+        ("/a/post-1", False),
+        ("/video/watch/vid1", True),
+        (None, False),
+    ],
+)
+def test_feed_flags_video_post_url(engine, stored_url, expected_is_video):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="comment",
+        post_url=stored_url,
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    assert fetch_feed(engine)[0].post_is_video is expected_is_video
 
 
 # --- route / rendering ---
@@ -369,6 +393,23 @@ def test_comments_page_shows_post_placeholder_without_safe_url(client, engine, p
 
     assert body.count("Ссылка отсутствует") == 2
     assert 'class="thread-current thread-depth-1"' in body
+
+
+def test_comments_page_shows_video_note_next_to_video_post_link(client, engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="current",
+        post_url="/video/watch/vid1",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    body = client.get("/comments").text
+
+    assert 'href="https://dzen.ru/video/watch/vid1"' in body
+    assert body.count("видео — текст не учитывается") == 2
+    assert "Ссылка отсутствует" not in body
 
 
 def test_comments_page_shows_no_reply_label(client, engine):

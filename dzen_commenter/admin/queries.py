@@ -17,6 +17,7 @@ class FeedRow:
     thread_text: str | None
     post_title: str | None
     post_url: str | None
+    post_is_video: bool
     fetched_at: datetime | None
     reply_text: str | None
     reply_status: str | None  # None → ответа ещё нет
@@ -50,8 +51,11 @@ def unique_authors(feed: list[FeedRow]) -> list[str]:
     return list(dict.fromkeys(row.author for row in feed if row.author))
 
 
+_POST_PATH_PREFIXES = ("/a/", "/video/watch/")
+
+
 def _post_url(value: str | None) -> str | None:
-    if value and value.startswith("/a/"):
+    if value and value.startswith(_POST_PATH_PREFIXES):
         return f"https://dzen.ru{value}"
     if not value:
         return None
@@ -62,10 +66,20 @@ def _post_url(value: str | None) -> str | None:
     if (
         parsed.scheme == "https"
         and parsed.hostname in {"dzen.ru", "www.dzen.ru"}
-        and parsed.path.startswith("/a/")
+        and parsed.path.startswith(_POST_PATH_PREFIXES)
     ):
         return value
     return None
+
+
+def _is_video_post_url(value: str | None) -> bool:
+    """Ведёт ли ссылка поста на видео/клип, а не на текстовую статью."""
+    if not value:
+        return False
+    try:
+        return urlsplit(value).path.startswith("/video/watch/")
+    except ValueError:
+        return False
 
 
 STATUS_CATEGORIES = ("published", "generated", "error", "skipped", "no_reply")
@@ -171,13 +185,15 @@ def _load_feed(
     feed: list[FeedRow] = []
     for row in comment_rows:
         reply = last_reply.get(row.id)
+        post_url = _post_url(row.post_url)
         feed.append(
             FeedRow(
                 author=row.author,
                 comment_text=row.text,
                 thread_text=row.thread_text,
                 post_title=row.post_title,
-                post_url=_post_url(row.post_url),
+                post_url=post_url,
+                post_is_video=_is_video_post_url(post_url),
                 fetched_at=row.fetched_at,
                 reply_text=reply.generated_text if reply else None,
                 reply_status=reply.status if reply else None,

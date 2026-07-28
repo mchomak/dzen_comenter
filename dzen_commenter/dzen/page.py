@@ -19,8 +19,11 @@ def synthetic_id(post_href: str, author_href: str, text: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+_POST_PATH_PREFIXES = ("/a/", "/video/watch/")
+
+
 def _post_url(post_href: str) -> str | None:
-    if post_href.startswith("/a/"):
+    if post_href.startswith(_POST_PATH_PREFIXES):
         return f"https://dzen.ru{post_href}"
     try:
         parsed = urlsplit(post_href)
@@ -29,11 +32,21 @@ def _post_url(post_href: str) -> str | None:
     if (
         parsed.scheme == "https"
         and parsed.hostname in {"dzen.ru", "www.dzen.ru"}
-        and parsed.path.startswith("/a/")
+        and parsed.path.startswith(_POST_PATH_PREFIXES)
     ):
         suffix = f"?{parsed.query}" if parsed.query else ""
         return f"https://dzen.ru{parsed.path}{suffix}"
     return None
+
+
+def is_video_post_url(url: str | None) -> bool:
+    """Ведёт ли ссылка поста на видео/клип (/video/watch/…), а не на текстовую статью."""
+    if not url:
+        return False
+    try:
+        return urlsplit(url).path.startswith("/video/watch/")
+    except ValueError:
+        return False
 
 
 def _post_href(group) -> str:
@@ -63,7 +76,7 @@ class DzenStudioPage:
         self._article_text_by_url: dict[str, str | None] = {}
 
     def fetch_article_text(self, post_url: str) -> str | None:
-        if not post_url:
+        if not post_url or is_video_post_url(post_url):
             return None
         if post_url in self._article_text_by_url:
             return self._article_text_by_url[post_url]

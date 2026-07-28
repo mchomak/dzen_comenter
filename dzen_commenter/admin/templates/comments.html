@@ -73,6 +73,7 @@
         <div class="thread-post">
           {% if row.post_url %}
           <a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">{{ row.post_title or "Открыть пост" }}</a>
+          {% if row.post_is_video %}<span class="post-video-note">видео — текст не учитывается</span>{% endif %}
           {% else %}
           <span>Ссылка отсутствует</span>
           {% endif %}
@@ -130,6 +131,7 @@
       <td>
         {% if row.post_url %}
         <a href="{{ row.post_url }}" target="_blank" rel="noopener noreferrer">Открыть пост</a>
+        {% if row.post_is_video %}<span class="post-video-note">видео — текст не учитывается</span>{% endif %}
         {% else %}
         <span class="post-link-placeholder">Ссылка отсутствует</span>
         {% endif %}
