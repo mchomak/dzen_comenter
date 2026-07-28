@@ -45,7 +45,7 @@
 - Produces: `DzenStudioPage.fetch_article_text(post_url: str) -> str | None`.
 - Consumed by: `OrchestratorLoop` in Task 3.
 
-- [ ] **Step 1: Write failing tests for extract, cache, and close-on-error behavior**
+- [x] **Step 1: Write failing tests for extract, cache, and close-on-error behavior**
 
 Add fake browser-context and temporary-page doubles. The temporary page must record `goto`, `close`, and allow a fixture article element. Add these tests:
 
@@ -73,13 +73,13 @@ def test_fetch_article_text_closes_failed_temporary_tab_and_caches_none():
     assert browser.context.new_page_calls == 1
 ```
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run: `pytest tests/dzen/test_dzen_page.py -k "fetch_article_text" -v`
 
 Expected: FAIL because the protocol/implementation method and test doubles do not exist.
 
-- [ ] **Step 3: Implement the minimal article reader**
+- [x] **Step 3: Implement the minimal article reader**
 
 Add the protocol signature and initialize a per-instance cache:
 
@@ -117,7 +117,7 @@ return self._article_text_by_url[post_url]
 
 Do not alter comment extraction or reply publication.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Run: `pytest tests/dzen/test_dzen_page.py -k "fetch_article_text or implements_dzen_page_contract" -v`
 
@@ -138,7 +138,7 @@ Expected: PASS.
 - Produces: a prompt article block only when `article_text` is non-empty.
 - Consumed by: `OrchestratorLoop` in Task 3.
 
-- [ ] **Step 1: Write failing prompt tests**
+- [x] **Step 1: Write failing prompt tests**
 
 Add tests that assert the builder carries the URL and exact supplied article text with an explicit reading instruction, and that all three active/default configuration sources have the nine-topic restriction and skip rule:
 
@@ -171,13 +171,13 @@ def test_default_anti_rules_skip_every_requested_restricted_topic():
 
 For the JSON files, parse their UTF-8 text with `json.loads` and apply the same topic assertions to `payload["prompt"]["anti_rules"]` and `payload["anti_rules"]` respectively.
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run: `pytest tests/prompt/test_builder.py -k "article_text_context or restricted_topic" -v`
 
 Expected: FAIL because `PromptContext` has no article fields and the topic blocklist is absent.
 
-- [ ] **Step 3: Implement the prompt-only changes**
+- [x] **Step 3: Implement the prompt-only changes**
 
 Append optional fields to `PromptContext` to retain current call sites:
 
@@ -201,7 +201,7 @@ Insert `article_block` after the existing input/context block and before the tas
 
 Extend only each `anti_rules` value with a bullet that names all nine topics and directs the model to output `тип: пропуск` with an empty `ответ`. Preserve all pre-existing bullets, including the current answer-length rule in the live runtime configuration.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Run: `pytest tests/prompt/test_builder.py -v`
 
@@ -224,7 +224,7 @@ Expected: PASS.
 - Produces: `Reply.article_context_status: str | None`, set to `article_text_used` or `without_article_text` for every newly generated reply.
 - Consumed by: admin feed in Task 4.
 
-- [ ] **Step 1: Write failing loop and repository tests**
+- [x] **Step 1: Write failing loop and repository tests**
 
 Make `FakeDzenPage` expose `article_text_by_url: dict[str, str | None]` and record lookup URLs. Add these loop tests:
 
@@ -256,13 +256,13 @@ def test_run_cycle_falls_back_and_marks_reply_without_article_text(loop_factory,
 
 Add a repository assertion querying `replies.article_context_status` after `save_reply`.
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run: `pytest tests/orchestrator/test_loop.py -k "article_text" -v; pytest tests/db/test_repository.py -k "article_context_status" -v`
 
 Expected: FAIL because neither the protocol fake, reply field, nor persistence column exists.
 
-- [ ] **Step 3: Implement the minimal data flow and migration**
+- [x] **Step 3: Implement the minimal data flow and migration**
 
 Add the optional dataclass field after `created_at`:
 
@@ -281,7 +281,7 @@ Pass `post_url=comment.post_url` and `article_text=article_text or ""` into `Pro
 
 Add `ReplyTable.article_context_status: Mapped[str | None] = mapped_column(Text)` and include it in `save_reply` values. Create migration revision `0006_add_reply_article_context_status`, with `down_revision = "0005_store_moscow_time"`, that adds a nullable `Text` column to `replies`; downgrade drops it. This preserves one linear Alembic head after stage-21's existing `0005_store_moscow_time` migration.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Run: `pytest tests/orchestrator/test_loop.py -k "article_text" -v; pytest tests/db/test_repository.py -k "article_context_status" -v`
 
@@ -298,7 +298,7 @@ Expected: PASS.
 - Consumes: `ReplyTable.article_context_status` from Task 3.
 - Produces: `FeedRow.article_context_status: str | None` and an admin label.
 
-- [ ] **Step 1: Write failing admin tests**
+- [x] **Step 1: Write failing admin tests**
 
 Extend the reply fixture helper to accept `article_context_status`. Add a query test and HTML test:
 
@@ -319,13 +319,13 @@ def test_comments_page_shows_article_context_status(client, engine):
 
 Also assert a historical reply with `None` renders «Нет данных».
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run: `pytest tests/admin/test_comments.py -k "article_context_status" -v`
 
 Expected: FAIL because the feed query and template do not expose the marker.
 
-- [ ] **Step 3: Implement the feed mapping and labels**
+- [x] **Step 3: Implement the feed mapping and labels**
 
 Add `article_context_status: str | None` to `FeedRow`, select `ReplyTable.article_context_status` with the existing latest reply columns, and map it from the latest reply. In the existing reply-status table cell, render a separate `status-badge` after the lifecycle badge:
 
@@ -341,7 +341,7 @@ Add `article_context_status: str | None` to `FeedRow`, select `ReplyTable.articl
 
 Do not add an admin filter and do not change existing lifecycle labels.
 
-- [ ] **Step 4: Run focused tests, then the full suite**
+- [x] **Step 4: Run focused tests, then the full suite**
 
 Run: `pytest tests/admin/test_comments.py -k "article_context_status" -v`
 
@@ -351,7 +351,7 @@ Run: `pytest -q`
 
 Expected: PASS with zero failures.
 
-- [ ] **Step 5: Review and commit only stage-22 changes**
+- [x] **Step 5: Review and commit only stage-22 changes**
 
 Run: `git diff --check; git status --short; git diff -- dzen_commenter tests config prompt_config.example.json`
 
