@@ -1,0 +1,12 @@
+[Unit]
+Description=Dzen Commenter VNC firewall controller
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/dzen-commenter/vnc_control.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

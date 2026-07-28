@@ -59,6 +59,18 @@
         <label>Пароль<input type="text" value="{{ vnc.password }}" readonly></label>
         <p>Меняется только через рестарт контейнера.</p>
       </fieldset>
+      <fieldset class="settings-column settings-column-vnc-access">
+        <legend>Доступ к VNC</legend>
+        {% if vnc_unavailable %}
+        <p class="error">Управление VNC недоступно.</p>
+        {% elif vnc_access.enabled %}
+        <p>VNC открыт</p>
+        <button type="submit" formaction="/settings/vnc-access" formmethod="post" name="action" value="close">Закрыть VNC</button>
+        {% else %}
+        <p>VNC закрыт</p>
+        <button type="submit" formaction="/settings/vnc-access" formmethod="post" name="action" value="open">Открыть VNC</button>
+        {% endif %}
+      </fieldset>
     </div>
 
     <fieldset class="settings-column settings-column-prompt">

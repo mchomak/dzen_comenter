@@ -14,6 +14,20 @@ from dzen_commenter.prompt.config_loader import PromptBrandConfig
 PASSWORD = "correct-horse-battery"
 
 
+class FakeVncAccess:
+    def __init__(self, enabled: bool):
+        self.enabled = enabled
+        self.set_calls: list[bool] = []
+
+    def status(self) -> bool:
+        return self.enabled
+
+    def set_enabled(self, enabled: bool) -> bool:
+        self.set_calls.append(enabled)
+        self.enabled = enabled
+        return enabled
+
+
 def _runtime_data() -> RuntimeConfigData:
     return RuntimeConfigData(
         settings=RuntimeSettings(
@@ -85,6 +99,49 @@ def test_guest_settings_redirects_to_login(settings):
 
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
+
+
+def test_authenticated_admin_can_open_vnc(client, settings):
+    fake_vnc = FakeVncAccess(False)
+    client = TestClient(create_app(settings, vnc_access=fake_vnc), follow_redirects=False)
+    client.post("/login", data={"password": PASSWORD})
+
+    response = client.post("/settings/vnc-access", data={"action": "open"})
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/settings?vnc=opened"
+    assert fake_vnc.set_calls == [True]
+
+
+def test_guest_cannot_toggle_vnc(settings):
+    response = TestClient(create_app(settings), follow_redirects=False).post(
+        "/settings/vnc-access", data={"action": "open"}
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/login"
+
+
+def test_settings_renders_closed_vnc_state_and_open_action(settings):
+    fake_vnc = FakeVncAccess(False)
+    client = TestClient(create_app(settings, vnc_access=fake_vnc), follow_redirects=False)
+    client.post("/login", data={"password": PASSWORD})
+
+    response = client.get("/settings")
+
+    assert "VNC закрыт" in response.text
+    assert "Открыть VNC" in response.text
+
+
+def test_settings_renders_open_vnc_state_and_close_action(settings):
+    fake_vnc = FakeVncAccess(True)
+    client = TestClient(create_app(settings, vnc_access=fake_vnc), follow_redirects=False)
+    client.post("/login", data={"password": PASSWORD})
+
+    response = client.get("/settings")
+
+    assert "VNC открыт" in response.text
+    assert "Закрыть VNC" in response.text
 
 
 def test_settings_page_renders_runtime_values_and_only_readonly_vnc(client):

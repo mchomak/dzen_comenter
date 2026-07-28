@@ -45,6 +45,7 @@ services:
       RUNTIME_CONFIG_PATH: /app/config/runtime_config.json
     volumes:
       - config_data:/app/config
+      - /run/dzen-vnc-control.sock:/run/dzen-vnc-control.sock
     ports:
       - "8080:8080"
     depends_on:

@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
@@ -18,19 +18,23 @@ from dzen_commenter.admin.queries import (
     unique_authors,
 )
 from dzen_commenter.admin.validation import split_csv_items, validate_settings_form
+from dzen_commenter.admin.vnc_access import VncAccessClient, VncAccessUnavailable
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
 templates.env.filters["thread_messages"] = parse_thread_messages
 
 
 def create_app(
-    settings: AdminSettings | None = None, engine: Engine | None = None
+    settings: AdminSettings | None = None,
+    engine: Engine | None = None,
+    vnc_access: VncAccessClient | None = None,
 ) -> FastAPI:
     settings = settings or AdminSettings()
     app = FastAPI(title="Dzen Commenter — админ-панель")
     app.state.settings = settings
     app.state.engine = engine
     app.state.runtime_config = RuntimeConfig(settings.RUNTIME_CONFIG_PATH)
+    app.state.vnc_access = vnc_access or VncAccessClient(settings.VNC_CONTROL_SOCKET)
 
     app.add_middleware(SessionMiddleware, secret_key=settings.ADMIN_SESSION_SECRET)
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -125,6 +129,7 @@ def create_app(
                 "vnc": _vnc_values(request.app.state.settings),
                 "errors": {},
                 "saved": request.query_params.get("saved") == "1",
+                **_vnc_access_values(request.app.state.vnc_access),
             },
         )
 
@@ -141,11 +146,24 @@ def create_app(
                     "vnc": _vnc_values(request.app.state.settings),
                     "errors": errors,
                     "saved": False,
+                    **_vnc_access_values(request.app.state.vnc_access),
                 },
             )
 
         request.app.state.runtime_config.save(data)
         return RedirectResponse("/settings?saved=1", status_code=HTTP_302_FOUND)
+
+    @app.post("/settings/vnc-access")
+    async def vnc_access_submit(request: Request, _: None = Depends(require_login)):
+        action = (await request.form()).get("action")
+        if action not in {"open", "close"}:
+            raise HTTPException(status_code=400, detail="invalid VNC action")
+        try:
+            request.app.state.vnc_access.set_enabled(action == "open")
+        except VncAccessUnavailable:
+            return RedirectResponse("/settings?vnc=unavailable", status_code=HTTP_302_FOUND)
+        state = "opened" if action == "open" else "closed"
+        return RedirectResponse(f"/settings?vnc={state}", status_code=HTTP_302_FOUND)
 
     return app
 
@@ -218,6 +236,13 @@ def _vnc_values(settings: AdminSettings) -> dict[str, str]:
         "port": str(settings.VNC_PORT),
         "password": settings.VNC_PASSWORD,
     }
+
+
+def _vnc_access_values(vnc_access: VncAccessClient) -> dict[str, object]:
+    try:
+        return {"vnc_access": {"enabled": vnc_access.status()}, "vnc_unavailable": False}
+    except VncAccessUnavailable:
+        return {"vnc_access": {"enabled": None}, "vnc_unavailable": True}
 
 
 app = create_app()

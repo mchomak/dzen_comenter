@@ -17,3 +17,4 @@ class AdminSettings(BaseSettings):
     VNC_HOST: str = "localhost"
     VNC_PORT: int = 5900
     VNC_PASSWORD: str = ""
+    VNC_CONTROL_SOCKET: str = "/run/dzen-vnc-control.sock"
