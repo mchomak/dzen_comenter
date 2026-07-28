@@ -243,6 +243,24 @@ def test_upsert_comment_stores_and_updates_post_url(repo, engine):
     assert updated == "http://post/new"
 
 
+def test_upsert_comment_keeps_prior_post_url_when_rescrape_fails_to_capture_it(
+    repo, engine
+):
+    """Ре-скрейп уже известного комментария с несработавшим захватом ссылки
+    (post_url=None) не должен затирать ранее сохранённую ссылку — иначе
+    ссылка «пропадает» из админки для уже отвеченных комментариев."""
+    pub_id = repo.upsert_publication(_make_publication())
+    cid = repo.upsert_comment(_make_comment(pub_id, post_url="http://post/known"))
+
+    repo.upsert_comment(_make_comment(pub_id, post_url=None))
+
+    with engine.begin() as conn:
+        stored = conn.execute(
+            text("SELECT post_url FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one()
+    assert stored == "http://post/known"
+
+
 def test_upsert_comment_stores_and_updates_post_title(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     cid = repo.upsert_comment(

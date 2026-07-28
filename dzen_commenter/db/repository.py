@@ -59,7 +59,13 @@ class PostgresCommentRepository:
                     "fetched_at": comment.fetched_at,
                     "status": comment.status.value,
                     "post_title": stmt.excluded.post_title,
-                    "post_url": comment.post_url,
+                    "post_url": case(
+                        (
+                            stmt.excluded.post_url.is_(None),
+                            CommentTable.post_url,
+                        ),
+                        else_=stmt.excluded.post_url,
+                    ),
                     "thread_text": case(
                         (
                             CommentTable.thread_text.is_(None)
