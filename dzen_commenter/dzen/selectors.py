@@ -212,6 +212,10 @@ AUTH_CAPTCHA = (
 POST_GROUP = '[data-testid="comment"]'
 # Ссылка на пост внутри группы (относительный или абсолютный href).
 POST_LINK = '[class*="editor--comments-page__postContainer-"] a[href]'
+POST_LINK_FALLBACK = (
+    'a[href^="/a/"], a[href^="https://dzen.ru/a/"], '
+    'a[href^="https://www.dzen.ru/a/"]'
+)
 
 POST_TITLE = '[class*="editor--comment-post__title-"]'
 

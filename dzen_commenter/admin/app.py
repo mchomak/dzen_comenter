@@ -1,3 +1,5 @@
+from datetime import date, datetime, time, timedelta
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +14,6 @@ from dzen_commenter.admin.config import AdminSettings
 from dzen_commenter.admin.queries import (
     STATUS_CATEGORIES,
     fetch_feed,
-    fetch_status_counts,
     parse_thread_messages,
     unique_authors,
 )
@@ -46,26 +47,9 @@ def create_app(
     @app.get("/")
     def home(request: Request, _: None = Depends(require_login)):
         engine = _get_engine(request.app)
-        counts = (
-            fetch_status_counts(engine)
-            if engine is not None
-            else {category: 0 for category in STATUS_CATEGORIES}
-        )
-        return templates.TemplateResponse(
-            request=request,
-            name="home.html",
-            context={"counts": counts, "total": sum(counts.values())},
-        )
-
-    @app.get("/comments")
-    def comments(request: Request, _: None = Depends(require_login)):
-        engine = _get_engine(request.app)
-        status = request.query_params.get("status") or ""
-        if status not in STATUS_CATEGORIES:
-            status = ""
-        author_query = request.query_params.get("q") or ""
+        status, author_query = _feed_filters(request)
         feed = (
-            fetch_feed(engine, status=status or None, author_query=author_query or None)
+            fetch_feed(engine, limit=100, status=status or None, author_query=author_query or None)
             if engine is not None
             else []
         )
@@ -77,6 +61,56 @@ def create_app(
                 "authors": unique_authors(feed),
                 "status": status,
                 "q": author_query,
+                "is_history": False,
+                "route": "/",
+                "date_from": "",
+                "date_to": "",
+                "order": "desc",
+            },
+        )
+
+    @app.get("/comments")
+    def comments(request: Request, _: None = Depends(require_login)):
+        engine = _get_engine(request.app)
+        status, author_query = _feed_filters(request)
+        raw_date_from = request.query_params.get("date_from") or ""
+        raw_date_to = request.query_params.get("date_to") or ""
+        parsed_date_from = _parse_date(raw_date_from)
+        parsed_date_to = _parse_date(raw_date_to)
+        order = request.query_params.get("order")
+        order = order if order in {"asc", "desc"} else "desc"
+        date_from = datetime.combine(parsed_date_from, time.min) if parsed_date_from else None
+        date_to = (
+            datetime.combine(parsed_date_to + timedelta(days=1), time.min)
+            if parsed_date_to
+            else None
+        )
+        feed = (
+            fetch_feed(
+                engine,
+                limit=None,
+                status=status or None,
+                author_query=author_query or None,
+                date_from=date_from,
+                date_to=date_to,
+                order=order,
+            )
+            if engine is not None
+            else []
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="comments.html",
+            context={
+                "feed": feed,
+                "authors": unique_authors(feed),
+                "status": status,
+                "q": author_query,
+                "is_history": True,
+                "route": "/comments",
+                "date_from": parsed_date_from.isoformat() if parsed_date_from else "",
+                "date_to": parsed_date_to.isoformat() if parsed_date_to else "",
+                "order": order,
             },
         )
 
@@ -122,6 +156,20 @@ def _get_engine(app: FastAPI) -> Engine | None:
         engine = create_engine(app.state.settings.DATABASE_URL)
         app.state.engine = engine
     return engine
+
+
+def _feed_filters(request: Request) -> tuple[str, str]:
+    status = request.query_params.get("status") or ""
+    if status not in STATUS_CATEGORIES:
+        status = ""
+    return status, request.query_params.get("q") or ""
+
+
+def _parse_date(value: str) -> date | None:
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
 
 
 def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:

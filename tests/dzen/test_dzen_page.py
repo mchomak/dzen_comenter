@@ -135,7 +135,7 @@ def test_fetch_comments_two_level_parse():
         assert c.id is None
         assert c.publication_id == 0
         assert isinstance(c.fetched_at, datetime)
-        assert c.fetched_at.tzinfo is not None
+        assert c.fetched_at.tzinfo is None
         assert c.author == f"author{i}"
         assert c.text == f"text{i}"
 
@@ -272,6 +272,27 @@ def test_fetch_comments_accepts_absolute_post_href():
     )
 
     assert page.fetch_comments()[0].post_url == "https://dzen.ru/a/absolute-post"
+
+
+@pytest.mark.parametrize(
+    ("href", "expected"),
+    [
+        ("/a/fallback-post", "https://dzen.ru/a/fallback-post"),
+        ("https://dzen.ru/a/fallback-post", "https://dzen.ru/a/fallback-post"),
+    ],
+)
+def test_fetch_comments_uses_safe_fallback_post_link(href, expected):
+    class FallbackGroup(FakeGroup):
+        def query_selector(self, selector: str):
+            if selector == selectors.POST_LINK:
+                return None
+            if selector == selectors.POST_LINK_FALLBACK:
+                return self._post_link
+            return super().query_selector(selector)
+
+    page = DzenStudioPage(FakePage([FallbackGroup(href, [make_node(0)])]))
+
+    assert page.fetch_comments()[0].post_url == expected
 
 
 def test_fetch_comments_sets_publication_title_per_group():

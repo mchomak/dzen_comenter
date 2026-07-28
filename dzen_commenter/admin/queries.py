@@ -77,9 +77,12 @@ def _row_category(row: FeedRow) -> str:
 
 def fetch_feed(
     engine: Engine,
-    limit: int = 100,
+    limit: int | None = 100,
     status: str | None = None,
     author_query: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    order: str = "desc",
 ) -> list[FeedRow]:
     """Лента: свежие комментарии сверху (по fetched_at desc), до `limit` записей.
 
@@ -90,7 +93,7 @@ def fetch_feed(
     - `author_query` — регистронезависимая подстрока по `author`; пустая строка
       или `None` не фильтрует.
     """
-    feed = _load_feed(engine, limit)
+    feed = _load_feed(engine, limit, date_from, date_to, order)
 
     if status:
         feed = [row for row in feed if _row_category(row) == status]
@@ -112,26 +115,39 @@ def fetch_status_counts(engine: Engine, limit: int = 100) -> dict[str, int]:
     Сумма значений равна числу строк ленты.
     """
     counts = {category: 0 for category in STATUS_CATEGORIES}
-    for row in _load_feed(engine, limit):
+    for row in _load_feed(engine, limit, None, None, "desc"):
         counts[_row_category(row)] += 1
     return counts
 
 
-def _load_feed(engine: Engine, limit: int) -> list[FeedRow]:
+def _load_feed(
+    engine: Engine,
+    limit: int | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    order: str,
+) -> list[FeedRow]:
     with engine.connect() as conn:
-        comment_rows = conn.execute(
-            select(
-                CommentTable.id,
-                CommentTable.author,
-                CommentTable.text,
-                CommentTable.thread_text,
-                CommentTable.post_title,
-                CommentTable.post_url,
-                CommentTable.fetched_at,
-            )
-            .order_by(CommentTable.fetched_at.desc(), CommentTable.id.desc())
-            .limit(limit)
-        ).all()
+        stmt = select(
+            CommentTable.id,
+            CommentTable.author,
+            CommentTable.text,
+            CommentTable.thread_text,
+            CommentTable.post_title,
+            CommentTable.post_url,
+            CommentTable.fetched_at,
+        )
+        if date_from is not None:
+            stmt = stmt.where(CommentTable.fetched_at >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(CommentTable.fetched_at < date_to)
+        if order == "asc":
+            stmt = stmt.order_by(CommentTable.fetched_at.asc(), CommentTable.id.asc())
+        else:
+            stmt = stmt.order_by(CommentTable.fetched_at.desc(), CommentTable.id.desc())
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        comment_rows = conn.execute(stmt).all()
 
         comment_ids = [row.id for row in comment_rows]
         last_reply: dict[int, object] = {}

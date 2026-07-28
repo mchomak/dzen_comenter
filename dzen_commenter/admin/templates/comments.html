@@ -3,14 +3,17 @@
 {% block content %}
 <div class="page-head">
   <h1>Комментарии</h1>
-  <form class="refresh" action="/comments" method="get" data-pending="Обновляю…">
+  <form class="refresh" action="{{ route }}" method="get" data-pending="Обновляю…">
     {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
     {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+    {% if is_history and date_from %}<input type="hidden" name="date_from" value="{{ date_from }}">{% endif %}
+    {% if is_history and date_to %}<input type="hidden" name="date_to" value="{{ date_to }}">{% endif %}
+    {% if is_history %}<input type="hidden" name="order" value="{{ order }}">{% endif %}
     <button type="submit">Обновить</button>
   </form>
 </div>
 
-<form class="feed-filters" action="/comments" method="get">
+<form class="feed-filters" action="{{ route }}" method="get">
   <label>Статус
     <select name="status">
       <option value="" {% if not status %}selected{% endif %}>Все</option>
@@ -27,10 +30,28 @@
       {% for author in authors %}<option value="{{ author }}">{% endfor %}
     </datalist>
   </label>
+  {% if is_history %}
+  <label>С даты
+    <input type="date" name="date_from" value="{{ date_from }}">
+  </label>
+  <label>По дату
+    <input type="date" name="date_to" value="{{ date_to }}">
+  </label>
+  <label>Порядок
+    <select name="order">
+      <option value="desc" {% if order == "desc" %}selected{% endif %}>Сначала новые</option>
+      <option value="asc" {% if order == "asc" %}selected{% endif %}>Сначала старые</option>
+    </select>
+  </label>
+  {% endif %}
   <button type="submit">Применить</button>
 </form>
 
+{% if is_history %}
+<p class="feed-count">Найдено {{ feed | length }}</p>
+{% else %}
 <p class="feed-count">Показано {{ feed | length }} из последних 100</p>
+{% endif %}
 
 {% if feed %}
 <div class="table-scroll">

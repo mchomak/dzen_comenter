@@ -19,6 +19,7 @@ from dzen_commenter.contracts.interfaces import (
     SessionManager,
 )
 from dzen_commenter.contracts.models import Comment, Publication, Reply
+from dzen_commenter.time_utils import moscow_now
 
 
 class OrchestratorLoop:
@@ -149,10 +150,7 @@ class OrchestratorLoop:
         if posted_at is None:
             return False
 
-        if posted_at.tzinfo is None or posted_at.tzinfo.utcoffset(posted_at) is None:
-            now = datetime.now()
-        else:
-            now = datetime.now(posted_at.tzinfo)
+        now = moscow_now()
 
         max_age_days = self.runtime_config.get().settings.max_comment_age_days
         return (now - posted_at).days > max_age_days
@@ -274,5 +272,5 @@ class OrchestratorLoop:
             status=status,
             published_at=None,
             error_reason=error_reason,
-            created_at=datetime.now(),
+            created_at=moscow_now(),
         )

@@ -554,6 +554,45 @@ def test_fetch_feed_author_query_empty_no_filter(mixed_feed):
     assert len(fetch_feed(mixed_feed, author_query=None)) == 3
 
 
+def test_fetch_feed_history_filters_dates_orders_ascending_and_has_no_limit(engine):
+    for cid, fetched_at in enumerate(
+        (
+            datetime(2026, 1, 1, 23, 59, 59),
+            datetime(2026, 1, 2, 0, 0, 0),
+            datetime(2026, 1, 2, 12, 0, 0),
+            datetime(2026, 1, 3, 0, 0, 0),
+        ),
+        start=1,
+    ):
+        _add_comment(
+            engine,
+            cid=cid,
+            author=f"author-{cid}",
+            text="comment",
+            post_url="/a/post",
+            fetched_at=fetched_at,
+        )
+
+    assert [row.author for row in fetch_feed(
+        engine,
+        limit=None,
+        date_from=datetime(2026, 1, 2, 0, 0, 0),
+        date_to=datetime(2026, 1, 3, 0, 0, 0),
+        order="asc",
+    )] == ["author-2", "author-3"]
+    assert [row.author for row in fetch_feed(
+        engine,
+        limit=None,
+        date_from=datetime(2026, 1, 2, 0, 0, 0),
+    )] == ["author-4", "author-3", "author-2"]
+    assert [row.author for row in fetch_feed(
+        engine,
+        limit=None,
+        date_to=datetime(2026, 1, 2, 0, 0, 0),
+    )] == ["author-1"]
+    assert len(fetch_feed(engine, limit=None)) == 4
+
+
 # --- fetch_status_counts ---
 
 
@@ -651,7 +690,7 @@ def test_comments_compact_thread_styles_center_every_table_header():
 def test_comments_count_matches_rendered_rows(client, mixed_feed):
     body = client.get("/comments?q=ali").text
     assert _tbody_row_count(body) == 2
-    assert "Показано 2 из последних 100" in body
+    assert "Найдено 2" in body
 
 
 def test_comments_error_rows_get_attention_class(client, mixed_feed):
@@ -659,13 +698,13 @@ def test_comments_error_rows_get_attention_class(client, mixed_feed):
     assert 'class="row-attention"' in body
 
 
-# --- home ---
+# --- main feed ---
 
 
-def test_home_renders_counts_and_links(client, mixed_feed):
+def test_main_page_renders_limited_feed_and_navigation(client, mixed_feed):
     body = client.get("/").text
-    assert "Ошибок" in body
-    assert "Без ответа" in body
+    assert "Показано 3 из последних 100" in body
+    assert 'href="/" aria-current="page"' in body
     assert 'href="/comments"' in body
     assert 'href="/settings"' in body
 

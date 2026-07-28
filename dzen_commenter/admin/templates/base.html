@@ -11,6 +11,7 @@
     <nav class="sidebar">
       <div class="brand">Dzen Commenter</div>
       <ul class="nav">
+        <li><a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Главная</a></li>
         <li><a href="/comments" {% if request.url.path == '/comments' %}aria-current="page"{% endif %}>Комментарии</a></li>
         <li><a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>Настройки</a></li>
       </ul>

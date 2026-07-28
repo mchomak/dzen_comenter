@@ -1,10 +1,12 @@
 import hashlib
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 from dzen_commenter.contracts.enums import CommentStatus
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import selectors
+from dzen_commenter.time_utils import moscow_now
 
 _MINUTES_RE = re.compile(
     r"(\d+)\s*(мин\.?|минуту|минуты|минут|м)\b",
@@ -17,10 +19,31 @@ def synthetic_id(post_href: str, author_href: str, text: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _post_url(post_href: str) -> str:
-    if post_href.startswith("/"):
+def _post_url(post_href: str) -> str | None:
+    if post_href.startswith("/a/"):
         return f"https://dzen.ru{post_href}"
-    return post_href
+    try:
+        parsed = urlsplit(post_href)
+    except ValueError:
+        return None
+    if (
+        parsed.scheme == "https"
+        and parsed.hostname in {"dzen.ru", "www.dzen.ru"}
+        and parsed.path.startswith("/a/")
+    ):
+        suffix = f"?{parsed.query}" if parsed.query else ""
+        return f"https://dzen.ru{parsed.path}{suffix}"
+    return None
+
+
+def _post_href(group) -> str:
+    post_link = group.query_selector(selectors.POST_LINK)
+    post_href = post_link.get_attribute("href") or "" if post_link else ""
+    if _post_url(post_href) is not None:
+        return post_href
+    fallback = group.query_selector(selectors.POST_LINK_FALLBACK)
+    fallback_href = fallback.get_attribute("href") or "" if fallback else ""
+    return fallback_href if _post_url(fallback_href) is not None else ""
 
 
 def parse_relative_time(text: str | None, now: datetime) -> datetime | None:
@@ -40,10 +63,9 @@ class DzenStudioPage:
 
     def fetch_comments(self) -> list[Comment]:
         comments: list[Comment] = []
-        now = datetime.now(timezone.utc)
+        now = moscow_now()
         for group in self._page.query_selector_all(selectors.POST_GROUP):
-            post_link = group.query_selector(selectors.POST_LINK)
-            post_href = post_link.get_attribute("href") or "" if post_link else ""
+            post_href = _post_href(group)
             title_el = group.query_selector(selectors.POST_TITLE)
             publication_title = title_el.inner_text().strip() if title_el else ""
             previous_messages: list[str] = []
@@ -131,7 +153,6 @@ class DzenStudioPage:
 
     def _iter_comment_nodes(self):
         for group in self._page.query_selector_all(selectors.POST_GROUP):
-            post_link = group.query_selector(selectors.POST_LINK)
-            post_href = post_link.get_attribute("href") or "" if post_link else ""
+            post_href = _post_href(group)
             for node in group.query_selector_all(selectors.COMMENT_NODE):
                 yield node, post_href

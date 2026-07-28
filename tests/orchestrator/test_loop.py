@@ -522,6 +522,24 @@ def test_auto_publish_change_applies_next_cycle_without_restart(
     assert reply2.status == ReplyStatus.PUBLISHED
 
 
+def test_generated_reply_uses_naive_moscow_time(loop_factory, monkeypatch):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    expected = datetime(2026, 1, 2, 3, 4, 5)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: expected)
+    harness = loop_factory(comments=[])
+
+    reply = harness.loop._make_reply(
+        comment_id=1,
+        text="answer",
+        status=ReplyStatus.GENERATED,
+        error_reason=None,
+    )
+
+    assert reply.created_at == expected
+    assert reply.created_at.tzinfo is None
+
+
 def test_max_comment_age_days_read_from_runtime_config(
     loop_factory,
     comment_factory,
