@@ -24,6 +24,7 @@ class VncFirewall:
 
     def set_enabled(self, enabled: bool) -> bool:
         for firewall in FIREWALLS:
+            self._remove_legacy_drop_rule(firewall)
             self._ensure_chain(firewall)
             self._run([firewall, "-F", CHAIN])
             if not enabled:
@@ -35,6 +36,22 @@ class VncFirewall:
             self._run([firewall, "-C", CHAIN, "-j", "DROP"]) != 0
             for firewall in FIREWALLS
         )
+
+    def _remove_legacy_drop_rule(self, firewall: str) -> None:
+        rule = [
+            firewall,
+            "DOCKER-USER",
+            "-p",
+            "tcp",
+            "-m",
+            "multiport",
+            "--dports",
+            PORTS,
+            "-j",
+            "DROP",
+        ]
+        while self._run([rule[0], "-C", *rule[1:]]) == 0:
+            self._run([rule[0], "-D", *rule[1:]])
 
     def _ensure_chain(self, firewall: str) -> None:
         self._run([firewall, "-N", CHAIN])
