@@ -350,6 +350,22 @@ def test_fetch_comments_sets_post_url_per_group():
     ]
 
 
+def test_fetch_comments_skips_group_without_a_resolvable_post_link():
+    """A failed link extraction must not fabricate a comment with an unstable id:
+    dzen_comment_id hashes post_href, so processing it with an empty href here
+    would mint a different id than a later successful scrape of the same real
+    comment — a phantom duplicate with no post_url, and a duplicate reply."""
+    groups = [
+        FakeGroup("", [make_node(0)]),
+        FakeGroup("/a/post2", [make_node(1)]),
+    ]
+    page = DzenStudioPage(FakePage(groups))
+
+    comments = page.fetch_comments()
+
+    assert [c.post_url for c in comments] == ["https://dzen.ru/a/post2"]
+
+
 def test_fetch_comments_accepts_absolute_post_href():
     page = DzenStudioPage(
         FakePage([FakeGroup("https://dzen.ru/a/absolute-post", [make_node(0)])])

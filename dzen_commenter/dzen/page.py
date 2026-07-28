@@ -103,6 +103,12 @@ class DzenStudioPage:
         now = moscow_now()
         for group in self._page.query_selector_all(selectors.POST_GROUP):
             post_href = _post_href(group)
+            if not post_href:
+                # dzen_comment_id hashes in post_href, so a comment scraped once
+                # with a real link and once with a failed extraction would get two
+                # different ids — a phantom duplicate with no post_url, potentially
+                # a duplicate reply. Skip the group; a later cycle retries it.
+                continue
             title_el = group.query_selector(selectors.POST_TITLE)
             publication_title = title_el.inner_text().strip() if title_el else ""
             previous_messages: list[str] = []
