@@ -29,7 +29,7 @@
 - `dzen_commenter/orchestrator/loop.py` — obtain article context, build the enriched prompt, and persist the marker.
 - `dzen_commenter/prompt/builder.py` — add the article URL/text block and explicit read-before-answer instruction.
 - `dzen_commenter/prompt/config_loader.py`, `config/runtime_config.json`, `prompt_config.example.json` — extend only `anti_rules` with the requested topic blocklist.
-- `dzen_commenter/db/models.py`, `dzen_commenter/db/repository.py`, `dzen_commenter/db/migrations/versions/0005_add_reply_article_context_status.py` — persist the marker while leaving old rows as `NULL`.
+- `dzen_commenter/db/models.py`, `dzen_commenter/db/repository.py`, `dzen_commenter/db/migrations/versions/0006_add_reply_article_context_status.py` — persist the marker while leaving old rows as `NULL`.
 - `dzen_commenter/admin/queries.py`, `dzen_commenter/admin/templates/comments.html` — load and display article-context information in the feed.
 - `tests/dzen/test_dzen_page.py`, `tests/prompt/test_builder.py`, `tests/orchestrator/test_loop.py`, `tests/db/test_repository.py`, `tests/admin/test_comments.py` — regression coverage for each boundary.
 
@@ -214,7 +214,7 @@ Expected: PASS.
 - Modify: `dzen_commenter/orchestrator/loop.py`
 - Modify: `dzen_commenter/db/models.py`
 - Modify: `dzen_commenter/db/repository.py`
-- Create: `dzen_commenter/db/migrations/versions/0005_add_reply_article_context_status.py`
+- Create: `dzen_commenter/db/migrations/versions/0006_add_reply_article_context_status.py`
 - Modify: `tests/orchestrator/conftest.py`
 - Modify: `tests/orchestrator/test_loop.py`
 - Modify: `tests/db/test_repository.py`
@@ -279,7 +279,7 @@ article_context_status = "article_text_used" if article_text else "without_artic
 
 Pass `post_url=comment.post_url` and `article_text=article_text or ""` into `PromptContext`. Extend `_make_reply` to accept and set `article_context_status`, and pass the same local marker for generated and error replies created in this path.
 
-Add `ReplyTable.article_context_status: Mapped[str | None] = mapped_column(Text)` and include it in `save_reply` values. Create migration revision `0005_add_reply_article_context_status`, with `down_revision = "0004_add_comment_post_title"`, that adds a nullable `Text` column to `replies`; downgrade drops it.
+Add `ReplyTable.article_context_status: Mapped[str | None] = mapped_column(Text)` and include it in `save_reply` values. Create migration revision `0006_add_reply_article_context_status`, with `down_revision = "0005_store_moscow_time"`, that adds a nullable `Text` column to `replies`; downgrade drops it. This preserves one linear Alembic head after stage-21's existing `0005_store_moscow_time` migration.
 
 - [ ] **Step 4: Run the focused tests to verify they pass**
 
