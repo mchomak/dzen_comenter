@@ -44,12 +44,21 @@ class DameoPromptBuilder:
                 f"Тема публикации: {context.publication_title}\n"
                 f"Ветка обсуждения: {context.thread_text}"
             )
+        article_block = ""
+        if context.article_text:
+            article_block = (
+                "КОНТЕКСТ СТАТЬИ:\n"
+                f"Ссылка на статью: {context.post_url or 'недоступна'}\n"
+                "Перед ответом внимательно прочитай текст статьи и отвечай с опорой на него.\n"
+                f"Текст статьи:\n{context.article_text}"
+            )
         blocks = [
             config.role,
             config.tone_of_voice,
             config.anti_rules,
             context_block,
+            article_block,
             task,
         ]
-        text = "\n\n".join(blocks)
+        text = "\n\n".join(block for block in blocks if block)
         return text.replace("{cta_link}", config.cta_link)

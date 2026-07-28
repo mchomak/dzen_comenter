@@ -126,6 +126,35 @@ def test_run_cycle_skips_old_comments_but_processes_missing_posted_at(
     assert len(harness.ai_provider.calls) == 1
 
 
+def test_run_cycle_passes_article_text_and_marks_reply_as_article_text_used(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    comment.post_url = "https://dzen.ru/a/post"
+    harness = loop_factory(comments=[comment])
+    harness.page.article_text_by_url[comment.post_url] = "Article body"
+
+    harness.loop.run_cycle()
+
+    assert harness.prompt_builder.contexts[0].article_text == "Article body"
+    assert harness.prompt_builder.contexts[0].post_url == comment.post_url
+    assert next(iter(harness.repository.replies.values())).article_context_status == "article_text_used"
+
+
+def test_run_cycle_falls_back_and_marks_reply_without_article_text(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    comment.post_url = "https://dzen.ru/a/post"
+    harness = loop_factory(comments=[comment])
+    harness.page.article_text_by_url[comment.post_url] = None
+
+    harness.loop.run_cycle()
+
+    assert harness.prompt_builder.contexts[0].article_text == ""
+    assert next(iter(harness.repository.replies.values())).article_context_status == "without_article_text"
+
+
 def test_run_cycle_skips_comment_with_published_reply(
     loop_factory,
     comment_factory,

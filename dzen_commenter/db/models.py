@@ -50,3 +50,4 @@ class ReplyTable(Base):
     published_at: Mapped[datetime | None] = mapped_column()
     error_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column()
+    article_context_status: Mapped[str | None] = mapped_column(Text)

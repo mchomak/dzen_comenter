@@ -1,4 +1,5 @@
 import ast
+import json
 from pathlib import Path
 
 import pytest
@@ -118,6 +119,54 @@ def test_explicit_comment_context_has_separate_input_fields():
     assert "Тема статьи: article" in result
     assert "Ветка комментариев (предыдущие сообщения): previous message" in result
     assert "Комментарий, на который нужно ответить: target comment" in result
+
+
+def test_article_text_context_instructs_model_to_read_article_before_reply():
+    result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title="article",
+            thread_text="thread",
+            comment_text="comment",
+            reply_type="engage",
+            post_url="https://dzen.ru/a/post",
+            article_text="Article details",
+        )
+    )
+
+    assert "https://dzen.ru/a/post" in result
+    assert "Article details" in result
+    assert "Перед ответом внимательно прочитай текст статьи" in result
+
+
+def test_default_anti_rules_skip_every_requested_restricted_topic():
+    for topic in (
+        "политика", "власть", "политические деятели", "секс", "наркотики",
+        "медицинские препараты", "государственные органы", "зарплаты", "пенсии",
+    ):
+        assert topic in DEFAULT_ANTI_RULES.lower()
+    assert "тип: пропуск" in DEFAULT_ANTI_RULES.lower()
+    assert "пуст" in DEFAULT_ANTI_RULES.lower()
+
+
+def test_file_anti_rules_skip_every_requested_restricted_topic():
+    repo_root = Path(__file__).resolve().parents[2]
+    payloads = (
+        json.loads(
+            (repo_root / "config" / "runtime_config.json").read_text(encoding="utf-8")
+        )["prompt"]["anti_rules"],
+        json.loads(
+            (repo_root / "prompt_config.example.json").read_text(encoding="utf-8")
+        )["anti_rules"],
+    )
+
+    for anti_rules in payloads:
+        for topic in (
+            "политика", "власть", "политические деятели", "секс", "наркотики",
+            "медицинские препараты", "государственные органы", "зарплаты", "пенсии",
+        ):
+            assert topic in anti_rules.lower()
+        assert "тип: пропуск" in anti_rules.lower()
+        assert "пуст" in anti_rules.lower()
 
 
 @pytest.mark.parametrize("reply_type", ["lead", "engage"])

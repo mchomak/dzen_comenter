@@ -39,3 +39,4 @@ class Reply:
     published_at: datetime | None
     error_reason: str | None
     created_at: datetime | None
+    article_context_status: str | None = None

@@ -53,7 +53,16 @@ def _add_comment(
         )
 
 
-def _add_reply(engine, *, rid, comment_id, generated_text, status, error_reason=None):
+def _add_reply(
+    engine,
+    *,
+    rid,
+    comment_id,
+    generated_text,
+    status,
+    error_reason=None,
+    article_context_status=None,
+):
     with engine.begin() as conn:
         conn.execute(
             insert(ReplyTable).values(
@@ -62,8 +71,56 @@ def _add_reply(engine, *, rid, comment_id, generated_text, status, error_reason=
                 generated_text=generated_text,
                 status=status,
                 error_reason=error_reason,
+                article_context_status=article_context_status,
             )
         )
+
+
+def test_feed_exposes_article_context_status(engine):
+    _add_comment(
+        engine, cid=1, author="alice", text="hi", post_url="/a/p", fetched_at=datetime.now()
+    )
+    _add_reply(
+        engine,
+        rid=1,
+        comment_id=1,
+        generated_text="reply",
+        status="generated",
+        article_context_status="without_article_text",
+    )
+
+    assert fetch_feed(engine)[0].article_context_status == "without_article_text"
+
+
+def test_comments_page_shows_article_context_status(client, engine):
+    _add_comment(
+        engine, cid=1, author="alice", text="hi", post_url="/a/p", fetched_at=datetime.now()
+    )
+    _add_reply(
+        engine,
+        rid=1,
+        comment_id=1,
+        generated_text="reply",
+        status="generated",
+        article_context_status="article_text_used",
+    )
+
+    assert "Учтён текст статьи" in client.get("/comments").text
+
+
+def test_comments_page_shows_no_article_context_data_for_historical_reply(client, engine):
+    _add_comment(
+        engine, cid=1, author="alice", text="hi", post_url="/a/p", fetched_at=datetime.now()
+    )
+    _add_reply(
+        engine,
+        rid=1,
+        comment_id=1,
+        generated_text="reply",
+        status="generated",
+    )
+
+    assert "Нет данных" in client.get("/comments").text
 
 
 @pytest.fixture

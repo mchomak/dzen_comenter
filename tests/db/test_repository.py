@@ -54,6 +54,7 @@ def _make_reply(comment_id, status=ReplyStatus.GENERATED) -> Reply:
         published_at=None,
         error_reason=None,
         created_at=datetime(2026, 1, 1, 12, 10, 0),
+        article_context_status="article_text_used",
     )
 
 
@@ -94,7 +95,22 @@ def test_tables_exist_with_columns(engine):
         "published_at",
         "error_reason",
         "created_at",
+        "article_context_status",
     } <= rep_cols
+
+
+def test_save_reply_stores_article_context_status(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+
+    reply_id = repo.save_reply(_make_reply(comment_id))
+
+    with engine.begin() as conn:
+        stored = conn.execute(
+            text("SELECT article_context_status FROM replies WHERE id = :id"),
+            {"id": reply_id},
+        ).scalar_one()
+    assert stored == "article_text_used"
 
 
 # --- Acceptance 2: UNIQUE constraints ---

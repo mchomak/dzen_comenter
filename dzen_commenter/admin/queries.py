@@ -21,6 +21,7 @@ class FeedRow:
     reply_text: str | None
     reply_status: str | None  # None → ответа ещё нет
     error_reason: str | None
+    article_context_status: str | None
 
 
 def parse_thread_messages(thread_text: str | None) -> list[tuple[str, str]]:
@@ -158,6 +159,7 @@ def _load_feed(
                     ReplyTable.generated_text,
                     ReplyTable.status,
                     ReplyTable.error_reason,
+                    ReplyTable.article_context_status,
                 )
                 .where(ReplyTable.comment_id.in_(comment_ids))
                 .order_by(ReplyTable.id.asc())
@@ -180,6 +182,7 @@ def _load_feed(
                 reply_text=reply.generated_text if reply else None,
                 reply_status=reply.status if reply else None,
                 error_reason=reply.error_reason if reply else None,
+                article_context_status=reply.article_context_status if reply else None,
             )
         )
     return feed

@@ -13,6 +13,8 @@ class PromptContext:
     thread_text: str
     reply_type: ReplyType
     comment_text: str = ""
+    post_url: str | None = None
+    article_text: str = ""
 
 
 class CommentRepository(Protocol):
@@ -46,6 +48,7 @@ class SessionManager(Protocol):
 
 class DzenPage(Protocol):
     def fetch_comments(self) -> list[Comment]: ...
+    def fetch_article_text(self, post_url: str) -> str | None: ...
     def publish_reply(
         self, comment: Comment, text: str, *, auto_publish: bool
     ) -> None: ...

@@ -90,6 +90,7 @@ class FakePage:
     def __init__(self, groups: list[FakeGroup]) -> None:
         self._groups = groups
         self.waited_ms: list[float] = []
+        self.context = FakeBrowserContext()
 
     def query_selector_all(self, selector: str):
         if selector == selectors.POST_GROUP:
@@ -98,6 +99,42 @@ class FakePage:
 
     def wait_for_timeout(self, timeout_ms: float) -> None:
         self.waited_ms.append(timeout_ms)
+
+
+class FakeBrowserContext:
+    def __init__(self) -> None:
+        self.article_pages: list["FakeArticlePage"] = []
+        self.new_page_calls = 0
+
+    def new_page(self) -> "FakeArticlePage":
+        self.new_page_calls += 1
+        return self.article_pages.pop(0)
+
+
+class FakeArticlePage:
+    def __init__(
+        self,
+        *,
+        article_text: str = "",
+        goto_error: Exception | None = None,
+    ) -> None:
+        self.article_text = article_text
+        self.goto_error = goto_error
+        self.goto_calls: list[tuple[str, str]] = []
+        self.close_calls = 0
+
+    def goto(self, url: str, *, wait_until: str) -> None:
+        self.goto_calls.append((url, wait_until))
+        if self.goto_error is not None:
+            raise self.goto_error
+
+    def query_selector(self, selector: str):
+        if selector == "article" and self.article_text:
+            return FakeText(self.article_text)
+        return None
+
+    def close(self) -> None:
+        self.close_calls += 1
 
 
 def make_node(i: int, date: str | None = None) -> FakeCommentNode:
@@ -111,10 +148,33 @@ def make_node(i: int, date: str | None = None) -> FakeCommentNode:
 
 # Acceptance 2 — структурное соответствие контракту DzenPage.
 def test_implements_dzen_page_contract():
-    for name in ("fetch_comments", "publish_reply"):
+    for name in ("fetch_comments", "fetch_article_text", "publish_reply"):
         proto_sig = inspect.signature(getattr(DzenPage, name))
         impl_sig = inspect.signature(getattr(DzenStudioPage, name))
         assert list(proto_sig.parameters) == list(impl_sig.parameters)
+
+
+def test_fetch_article_text_uses_article_body_and_closes_temporary_tab():
+    browser = FakePage([FakeGroup("/a/post", [])])
+    article_page = FakeArticlePage(article_text="Article body")
+    browser.context.article_pages = [article_page]
+    page = DzenStudioPage(browser)
+
+    assert page.fetch_article_text("https://dzen.ru/a/post") == "Article body"
+    assert article_page.goto_calls == [("https://dzen.ru/a/post", "domcontentloaded")]
+    assert article_page.close_calls == 1
+
+
+def test_fetch_article_text_closes_failed_temporary_tab_and_caches_none():
+    browser = FakePage([FakeGroup("/a/post", [])])
+    failed = FakeArticlePage(goto_error=RuntimeError("unavailable"))
+    browser.context.article_pages = [failed]
+    page = DzenStudioPage(browser)
+
+    assert page.fetch_article_text("https://dzen.ru/a/post") is None
+    assert page.fetch_article_text("https://dzen.ru/a/post") is None
+    assert failed.close_calls == 1
+    assert browser.context.new_page_calls == 1
 
 
 # Acceptance 3 — двухуровневый разбор: 2 группы (2 + 1 комментарий) → 3 Comment.

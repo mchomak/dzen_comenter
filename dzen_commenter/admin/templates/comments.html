@@ -119,6 +119,13 @@
         {% else %}
           {{ row.reply_status }}
         {% endif %}
+        {% if row.article_context_status == "article_text_used" %}
+          <span class="status-badge">Учтён текст статьи</span>
+        {% elif row.article_context_status == "without_article_text" %}
+          <span class="status-badge">Сгенерирован без текста статьи</span>
+        {% elif row.reply_status is not none %}
+          <span class="status-badge">Нет данных</span>
+        {% endif %}
       </td>
       <td>
         {% if row.post_url %}

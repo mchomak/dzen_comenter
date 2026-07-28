@@ -160,6 +160,10 @@ class OrchestratorLoop:
         max_reply_length = runtime_settings.max_reply_length
         auto_publish = runtime_settings.auto_publish
         publication_title = comment.publication_title or self.settings.COMMENTS_URL
+        article_text = self.page.fetch_article_text(comment.post_url) if comment.post_url else None
+        article_context_status = (
+            "article_text_used" if article_text else "without_article_text"
+        )
         classifier_text = "\n".join(
             part for part in (comment.thread_text, comment.text) if part
         )
@@ -173,6 +177,8 @@ class OrchestratorLoop:
                 thread_text=comment.thread_text,
                 reply_type=reply_type,
                 comment_text=comment.text,
+                post_url=comment.post_url,
+                article_text=article_text or "",
             )
         )
         text = self._extract_reply_text(
@@ -207,6 +213,7 @@ class OrchestratorLoop:
                     text=text,
                     status=ReplyStatus.ERROR,
                     error_reason=reason,
+                    article_context_status=article_context_status,
                 )
             )
             self.repository.set_comment_status(comment_id, CommentStatus.ERROR)
@@ -219,6 +226,7 @@ class OrchestratorLoop:
                 text=text,
                 status=ReplyStatus.GENERATED,
                 error_reason=None,
+                article_context_status=article_context_status,
             )
         )
         self.repository.set_comment_status(comment_id, CommentStatus.ANSWERED)
@@ -262,6 +270,7 @@ class OrchestratorLoop:
         text: str,
         status: ReplyStatus,
         error_reason: str | None,
+        article_context_status: str | None = None,
     ) -> Reply:
         return Reply(
             id=None,
@@ -273,4 +282,5 @@ class OrchestratorLoop:
             published_at=None,
             error_reason=error_reason,
             created_at=moscow_now(),
+            article_context_status=article_context_status,
         )

@@ -199,10 +199,16 @@ class FakeDzenPage:
         self.comments = list(comments or [])
         self.fetch_calls = 0
         self.publish_calls: list[tuple[Comment, str, bool]] = []
+        self.article_text_by_url: dict[str, str | None] = {}
+        self.article_text_urls: list[str] = []
 
     def fetch_comments(self) -> list[Comment]:
         self.fetch_calls += 1
         return list(self.comments)
+
+    def fetch_article_text(self, post_url: str) -> str | None:
+        self.article_text_urls.append(post_url)
+        return self.article_text_by_url.get(post_url)
 
     def publish_reply(
         self, comment: Comment, text: str, *, auto_publish: bool

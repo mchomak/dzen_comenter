@@ -87,6 +87,7 @@ class PostgresCommentRepository:
                 published_at=reply.published_at,
                 error_reason=reply.error_reason,
                 created_at=reply.created_at,
+                article_context_status=reply.article_context_status,
             )
             .returning(ReplyTable.id)
         )

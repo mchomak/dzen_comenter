@@ -60,6 +60,25 @@ class DzenStudioPage:
 
     def __init__(self, page) -> None:
         self._page = page
+        self._article_text_by_url: dict[str, str | None] = {}
+
+    def fetch_article_text(self, post_url: str) -> str | None:
+        if not post_url:
+            return None
+        if post_url in self._article_text_by_url:
+            return self._article_text_by_url[post_url]
+
+        article_page = self._page.context.new_page()
+        try:
+            article_page.goto(post_url, wait_until="domcontentloaded")
+            article = article_page.query_selector("article") or article_page.query_selector("main")
+            text = article.inner_text().strip() if article else ""
+        except Exception:
+            text = ""
+        finally:
+            article_page.close()
+        self._article_text_by_url[post_url] = text or None
+        return self._article_text_by_url[post_url]
 
     def fetch_comments(self) -> list[Comment]:
         comments: list[Comment] = []
