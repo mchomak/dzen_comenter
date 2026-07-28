@@ -1,7 +1,7 @@
 """add replies.article_context_status
 
-Revision ID: 0005_add_reply_article_context_status
-Revises: 0004_add_comment_post_title
+Revision ID: 0006_add_reply_article_context_status
+Revises: 0005_store_moscow_time
 Create Date: 2026-07-28
 
 """
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "0005_add_reply_article_context_status"
-down_revision: Union[str, None] = "0004_add_comment_post_title"
+revision: str = "0006_add_reply_article_context_status"
+down_revision: Union[str, None] = "0005_store_moscow_time"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
