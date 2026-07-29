@@ -279,6 +279,26 @@ def test_upsert_comment_stores_and_updates_post_title(repo, engine):
         ).scalar_one() == "Новый заголовок"
 
 
+def test_upsert_comment_keeps_prior_post_title_when_rescrape_fails_to_capture_it(
+    repo, engine
+):
+    """Ре-скрейп с несработавшим захватом заголовка (publication_title="") не должен
+    затирать ранее сохранённый заголовок — иначе в столбце «Диалог» вместо названия
+    поста внезапно появляется запасное «Открыть пост»."""
+    pub_id = repo.upsert_publication(_make_publication())
+    cid = repo.upsert_comment(
+        _make_comment(pub_id, publication_title="Известный заголовок")
+    )
+
+    repo.upsert_comment(_make_comment(pub_id, publication_title=""))
+
+    with engine.begin() as conn:
+        stored = conn.execute(
+            text("SELECT post_title FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one()
+    assert stored == "Известный заголовок"
+
+
 def test_upsert_comment_stores_thread_text_and_keeps_legacy_null(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     comment_id = repo.upsert_comment(
