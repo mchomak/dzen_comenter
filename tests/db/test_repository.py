@@ -165,6 +165,7 @@ def test_repository_fulfils_contract(repo):
         "set_reply_status",
         "has_generated_reply",
         "has_published_reply",
+        "is_own_reply",
     ):
         assert callable(getattr(repo, method))
 
@@ -415,3 +416,28 @@ def test_has_generated_reply_ignores_errors(repo):
     repo.set_reply_status(rid, ReplyStatus.ERROR, error_reason="x")
 
     assert repo.has_generated_reply(cid) is False
+
+
+# --- Acceptance 10: is_own_reply detects our own reply re-scraped as a comment ---
+
+
+def test_is_own_reply_matches_published_reply_text_under_its_parent(repo):
+    pub_id = repo.upsert_publication(_make_publication())
+    parent_id = repo.upsert_comment(_make_comment(pub_id, dzen_id="parent-1"))
+    rid = repo.save_reply(_make_reply(parent_id, status=ReplyStatus.GENERATED))
+
+    assert repo.is_own_reply("parent-1", "reply text") is False
+
+    repo.set_reply_status(rid, ReplyStatus.PUBLISHED)
+
+    assert repo.is_own_reply("parent-1", "reply text") is True
+
+
+def test_is_own_reply_ignores_unrelated_text_or_parent(repo):
+    pub_id = repo.upsert_publication(_make_publication())
+    parent_id = repo.upsert_comment(_make_comment(pub_id, dzen_id="parent-1"))
+    repo.save_reply(_make_reply(parent_id, status=ReplyStatus.PUBLISHED))
+
+    assert repo.is_own_reply("parent-1", "someone else's comment") is False
+    assert repo.is_own_reply("other-parent", "reply text") is False
+    assert repo.is_own_reply(None, "reply text") is False

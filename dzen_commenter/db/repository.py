@@ -150,3 +150,25 @@ class PostgresCommentRepository:
         )
         with self._engine.begin() as conn:
             return bool(conn.execute(stmt).scalar_one())
+
+    def is_own_reply(self, parent_comment_id: str | None, text: str) -> bool:
+        """True if `text` is a reply we already published under this parent.
+
+        Dzen re-renders our own published replies as regular comment nodes on
+        the next scrape, so without this check the bot would treat its own
+        reply as a fresh comment from someone else and reply to itself.
+        """
+        if not parent_comment_id:
+            return False
+        stmt = select(
+            select(ReplyTable.id)
+            .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+            .where(
+                CommentTable.dzen_comment_id == parent_comment_id,
+                ReplyTable.generated_text == text,
+                ReplyTable.status == ReplyStatus.PUBLISHED.value,
+            )
+            .exists()
+        )
+        with self._engine.begin() as conn:
+            return bool(conn.execute(stmt).scalar_one())

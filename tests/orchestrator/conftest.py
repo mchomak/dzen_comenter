@@ -118,6 +118,19 @@ class FakeCommentRepository:
             for reply in self.replies.values()
         )
 
+    def is_own_reply(self, parent_comment_id: str | None, text: str) -> bool:
+        if not parent_comment_id:
+            return False
+        parent_id = self.comment_ids_by_dzen_id.get(parent_comment_id)
+        if parent_id is None:
+            return False
+        return any(
+            reply.comment_id == parent_id
+            and reply.status == ReplyStatus.PUBLISHED
+            and reply.generated_text == text
+            for reply in self.replies.values()
+        )
+
 
 class FakeAIProvider:
     def __init__(self, responses: list[str] | None = None) -> None:

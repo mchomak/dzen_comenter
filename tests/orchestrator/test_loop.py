@@ -4,6 +4,7 @@ import pathlib
 from datetime import datetime, timedelta
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
+from dzen_commenter.contracts.models import Reply
 from dzen_commenter.orchestrator import OrchestratorLoop
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -172,6 +173,43 @@ def test_run_cycle_skips_comment_with_published_reply(
     assert harness.repository.comments[1].status == CommentStatus.SKIPPED
     assert harness.ai_provider.calls == []
     assert harness.repository.replies == {}
+
+
+def test_run_cycle_skips_comment_that_repeats_own_published_reply_text(
+    loop_factory,
+    comment_factory,
+):
+    """A published reply re-appears in the next scrape as a plain comment node
+    (Dzen renders it like any other reply in the thread). Without this check
+    the bot would treat its own reply as a new comment and answer itself."""
+    from tests.orchestrator.conftest import FakeCommentRepository
+
+    repository = FakeCommentRepository()
+    parent_id = repository.upsert_comment(comment_factory(1))
+    repository.save_reply(
+        Reply(
+            id=None,
+            comment_id=parent_id,
+            generated_text="our own reply text",
+            ai_provider="fake",
+            ai_model="fake",
+            status=ReplyStatus.PUBLISHED,
+            published_at=None,
+            error_reason=None,
+            created_at=datetime.now(),
+        )
+    )
+
+    own_reply_echo = comment_factory(2, text="our own reply text")
+    own_reply_echo.parent_comment_id = "comment-1"
+
+    harness = loop_factory(comments=[own_reply_echo], repository=repository)
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[2].status == CommentStatus.SKIPPED
+    assert harness.ai_provider.calls == []
+    assert len(harness.repository.replies) == 1
 
 
 def test_safe_mode_does_not_regenerate_an_existing_reply(loop_factory, comment_factory):
