@@ -701,6 +701,27 @@ def test_failed_target_publication_does_not_advance_cta_interval(loop_factory, c
     assert "Рассчитать стоимость ремонта" in harness.repository.replies[8].generated_text
 
 
+def test_cta_applies_in_draft_mode_without_auto_publish(loop_factory, comment_factory):
+    comments = [comment_factory(index) for index in range(1, 8)]
+    for comment in comments:
+        comment.publication_title = "Ремонт квартиры"
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides={
+            "AUTO_PUBLISH": False,
+            "CTA_EVERY_N_COMMENTS": 7,
+        },
+    )
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+
+    harness.loop.run_cycle()
+
+    cta = "Рассчитать стоимость ремонта можно здесь: https://saved.example/remont"
+    reply = harness.repository.replies[7]
+    assert cta in reply.generated_text
+    assert reply.status == ReplyStatus.GENERATED
+
+
 def test_hourly_limit_leaves_next_comment_unprocessed(loop_factory, comment_factory, monkeypatch):
     from dzen_commenter.orchestrator import loop as loop_module
 

@@ -141,9 +141,11 @@ class PostgresCommentRepository:
         with self._engine.begin() as conn:
             return int(conn.execute(stmt).scalar_one())
 
-    def count_published_cta_candidates(self) -> int:
+    def count_cta_candidates_produced(self) -> int:
         stmt = select(func.count()).select_from(ReplyTable).where(
-            ReplyTable.status == ReplyStatus.PUBLISHED.value,
+            ReplyTable.status.in_(
+                [ReplyStatus.GENERATED.value, ReplyStatus.PUBLISHED.value]
+            ),
             ReplyTable.is_cta_candidate.is_(True),
         )
         with self._engine.begin() as conn:

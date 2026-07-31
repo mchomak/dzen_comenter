@@ -127,6 +127,7 @@ def test_published_reply_counters_ignore_errors_and_old_replies(repo):
     now = datetime(2026, 7, 31, 12, 0, 0)
     recent_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="recent"))
     old_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="old"))
+    draft_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="draft"))
     failed_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="failed"))
 
     repo.save_reply(
@@ -147,6 +148,13 @@ def test_published_reply_counters_ignore_errors_and_old_replies(repo):
     )
     repo.save_reply(
         _make_reply(
+            draft_candidate,
+            status=ReplyStatus.GENERATED,
+            is_cta_candidate=True,
+        )
+    )
+    repo.save_reply(
+        _make_reply(
             failed_candidate,
             status=ReplyStatus.ERROR,
             published_at=now,
@@ -155,7 +163,7 @@ def test_published_reply_counters_ignore_errors_and_old_replies(repo):
     )
 
     assert repo.count_published_replies_since(now - timedelta(hours=1)) == 1
-    assert repo.count_published_cta_candidates() == 2
+    assert repo.count_cta_candidates_produced() == 3
 
 
 # --- Acceptance 2: UNIQUE constraints ---
@@ -212,7 +220,7 @@ def test_repository_fulfils_contract(repo):
         "has_published_reply",
         "is_own_reply",
         "count_published_replies_since",
-        "count_published_cta_candidates",
+        "count_cta_candidates_produced",
     ):
         assert callable(getattr(repo, method))
 

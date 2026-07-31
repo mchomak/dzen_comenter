@@ -178,9 +178,9 @@ class OrchestratorLoop:
         publication_title = comment.publication_title or self.settings.COMMENTS_URL
         is_cta_candidate = self.is_cta_candidate_title(publication_title)
         cta_suffix = ""
-        if is_cta_candidate and auto_publish:
-            published_candidates = self.repository.count_published_cta_candidates()
-            if (published_candidates + 1) % runtime_settings.cta_every_n_comments == 0:
+        if is_cta_candidate:
+            produced_candidates = self.repository.count_cta_candidates_produced()
+            if (produced_candidates + 1) % runtime_settings.cta_every_n_comments == 0:
                 candidate_cta_suffix = "\n\n" + CTA_TEXT_TEMPLATE.format(
                     cta_link=self.runtime_config.get().prompt.cta_link
                 )

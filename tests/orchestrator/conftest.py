@@ -117,9 +117,10 @@ class FakeCommentRepository:
             for reply in self.replies.values()
         )
 
-    def count_published_cta_candidates(self) -> int:
+    def count_cta_candidates_produced(self) -> int:
         return sum(
-            reply.status == ReplyStatus.PUBLISHED and reply.is_cta_candidate
+            reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED)
+            and reply.is_cta_candidate
             for reply in self.replies.values()
         )
 
