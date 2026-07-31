@@ -97,7 +97,7 @@ class OrchestratorLoop:
                 self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
                 continue
 
-            if self.repository.is_own_reply(comment.parent_comment_id, comment.text):
+            if self.repository.is_own_reply(comment.post_url, comment.text):
                 self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
                 continue
 

@@ -186,7 +186,9 @@ def test_run_cycle_skips_comment_that_repeats_own_published_reply_text(
     from tests.orchestrator.conftest import FakeCommentRepository
 
     repository = FakeCommentRepository()
-    parent_id = repository.upsert_comment(comment_factory(1))
+    original = comment_factory(1)
+    original.post_url = "https://dzen.ru/a/post1"
+    parent_id = repository.upsert_comment(original)
     repository.save_reply(
         Reply(
             id=None,
@@ -202,7 +204,7 @@ def test_run_cycle_skips_comment_that_repeats_own_published_reply_text(
     )
 
     own_reply_echo = comment_factory(2, text="our own reply text")
-    own_reply_echo.parent_comment_id = "comment-1"
+    own_reply_echo.post_url = "https://dzen.ru/a/post1"
 
     harness = loop_factory(comments=[own_reply_echo], repository=repository)
 

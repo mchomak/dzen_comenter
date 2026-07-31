@@ -135,16 +135,14 @@ class FakeCommentRepository:
             for reply in self.replies.values()
         )
 
-    def is_own_reply(self, parent_comment_id: str | None, text: str) -> bool:
-        if not parent_comment_id:
-            return False
-        parent_id = self.comment_ids_by_dzen_id.get(parent_comment_id)
-        if parent_id is None:
+    def is_own_reply(self, post_url: str | None, text: str) -> bool:
+        if not post_url:
             return False
         return any(
-            reply.comment_id == parent_id
-            and reply.status == ReplyStatus.PUBLISHED
+            reply.status == ReplyStatus.PUBLISHED
             and reply.generated_text == text
+            and self.comments.get(reply.comment_id) is not None
+            and self.comments[reply.comment_id].post_url == post_url
             for reply in self.replies.values()
         )
 
