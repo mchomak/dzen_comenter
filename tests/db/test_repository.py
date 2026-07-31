@@ -26,6 +26,7 @@ def _make_comment(
     post_url="http://post/1",
     publication_title="",
     thread_text="",
+    fetched_at=datetime(2026, 1, 1, 12, 5, 0),
 ) -> Comment:
     return Comment(
         id=None,
@@ -35,7 +36,7 @@ def _make_comment(
         text=text,
         parent_comment_id=None,
         posted_at=datetime(2026, 1, 1, 12, 0, 0),
-        fetched_at=datetime(2026, 1, 1, 12, 5, 0),
+        fetched_at=fetched_at,
         status=status,
         publication_title=publication_title,
         post_url=post_url,
@@ -266,6 +267,25 @@ def test_upsert_comment_updates(repo, engine):
     assert row.text == "new"
     assert row.status == CommentStatus.ANSWERED.value
     assert count == 1
+
+
+def test_upsert_comment_keeps_first_seen_fetched_at_on_rescrape(repo, engine):
+    """fetched_at фиксируется на моменте первого скрейпа и не обновляется на
+    повторных скрейпах — иначе уже отвеченные комментарии в админке выглядят
+    так, будто это происходит прямо сейчас."""
+    pub_id = repo.upsert_publication(_make_publication())
+    first_seen = datetime(2026, 1, 1, 12, 0, 0)
+    cid = repo.upsert_comment(_make_comment(pub_id, fetched_at=first_seen))
+
+    repo.upsert_comment(
+        _make_comment(pub_id, fetched_at=datetime(2026, 1, 1, 15, 0, 0))
+    )
+
+    with engine.begin() as conn:
+        stored = conn.execute(
+            text("SELECT fetched_at FROM comments WHERE id = :id"), {"id": cid}
+        ).scalar_one()
+    assert stored == first_seen
 
 
 # --- Acceptance 09: upsert stores and updates post_url ---

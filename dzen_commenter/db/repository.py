@@ -58,7 +58,6 @@ class PostgresCommentRepository:
                     "text": comment.text,
                     "parent_comment_id": comment.parent_comment_id,
                     "posted_at": comment.posted_at,
-                    "fetched_at": comment.fetched_at,
                     "status": comment.status.value,
                     "post_title": case(
                         (
