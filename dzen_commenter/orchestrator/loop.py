@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dzen_commenter.config.runtime_config import RuntimeConfig
 from dzen_commenter.config.settings import Settings
@@ -22,6 +22,9 @@ from dzen_commenter.contracts.models import Comment, Publication, Reply
 from dzen_commenter.time_utils import moscow_now
 
 
+CTA_TEXT_TEMPLATE = "Рассчитать стоимость ремонта можно здесь: {cta_link}"
+
+
 class OrchestratorLoop:
     def __init__(
         self,
@@ -35,6 +38,7 @@ class OrchestratorLoop:
         notifier: Notifier,
         auth_assistant: AuthAssistant,
         classify_reply_type: Callable[[str, str], ReplyType],
+        is_cta_candidate_title: Callable[[str], bool],
         runtime_config: RuntimeConfig,
         sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -47,6 +51,7 @@ class OrchestratorLoop:
         self.notifier = notifier
         self.auth_assistant = auth_assistant
         self.classify_reply_type = classify_reply_type
+        self.is_cta_candidate_title = is_cta_candidate_title
         self.runtime_config = runtime_config
         self.sleep_fn = sleep_fn
         self._authorization_not_confirmed_notified = False
@@ -79,6 +84,13 @@ class OrchestratorLoop:
         generated_replies = 0
         for comment_id, comment in indexed_comments:
             if generated_replies >= self.settings.MAX_REPLIES_PER_CYCLE:
+                break
+
+            runtime_settings = self.runtime_config.get().settings
+            published_since = self.repository.count_published_replies_since(
+                moscow_now() - timedelta(hours=1)
+            )
+            if published_since >= runtime_settings.max_comments_per_hour:
                 break
 
             if self.repository.has_generated_reply(comment_id):
@@ -164,6 +176,17 @@ class OrchestratorLoop:
         max_reply_length = runtime_settings.max_reply_length
         auto_publish = runtime_settings.auto_publish
         publication_title = comment.publication_title or self.settings.COMMENTS_URL
+        is_cta_candidate = self.is_cta_candidate_title(publication_title)
+        cta_suffix = ""
+        if is_cta_candidate and auto_publish:
+            published_candidates = self.repository.count_published_cta_candidates()
+            if (published_candidates + 1) % runtime_settings.cta_every_n_comments == 0:
+                candidate_cta_suffix = "\n\n" + CTA_TEXT_TEMPLATE.format(
+                    cta_link=self.runtime_config.get().prompt.cta_link
+                )
+                if len(candidate_cta_suffix) < max_reply_length:
+                    cta_suffix = candidate_cta_suffix
+        model_reply_length = max_reply_length - len(cta_suffix)
         article_text = self.page.fetch_article_text(comment.post_url) if comment.post_url else None
         article_context_status = (
             "article_text_used" if article_text else "without_article_text"
@@ -185,6 +208,8 @@ class OrchestratorLoop:
                 article_text=article_text or "",
             )
         )
+        if cta_suffix:
+            prompt += f"\n\nДлина ответа: не более {model_reply_length} символов."
         text = self._extract_reply_text(
             self.ai_provider.generate(
                 prompt,
@@ -196,7 +221,7 @@ class OrchestratorLoop:
             self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
             return
 
-        if len(text) > max_reply_length:
+        if len(text) > model_reply_length:
             text = self._extract_reply_text(
                 self.ai_provider.generate(
                     prompt,
@@ -209,7 +234,7 @@ class OrchestratorLoop:
             self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
             return
 
-        if len(text) > max_reply_length:
+        if len(text) > model_reply_length:
             reason = "reply too long after regeneration"
             self.repository.save_reply(
                 self._make_reply(
@@ -218,11 +243,15 @@ class OrchestratorLoop:
                     status=ReplyStatus.ERROR,
                     error_reason=reason,
                     article_context_status=article_context_status,
+                    is_cta_candidate=is_cta_candidate,
                 )
             )
             self.repository.set_comment_status(comment_id, CommentStatus.ERROR)
             self.notifier.notify_error(reason)
             return
+
+        if cta_suffix:
+            text += cta_suffix
 
         reply_id = self.repository.save_reply(
             self._make_reply(
@@ -231,6 +260,7 @@ class OrchestratorLoop:
                 status=ReplyStatus.GENERATED,
                 error_reason=None,
                 article_context_status=article_context_status,
+                is_cta_candidate=is_cta_candidate,
             )
         )
         self.repository.set_comment_status(comment_id, CommentStatus.ANSWERED)
@@ -252,7 +282,11 @@ class OrchestratorLoop:
             return
 
         if auto_publish:
-            self.repository.set_reply_status(reply_id, ReplyStatus.PUBLISHED)
+            self.repository.set_reply_status(
+                reply_id,
+                ReplyStatus.PUBLISHED,
+                published_at=moscow_now(),
+            )
 
     @staticmethod
     def _extract_reply_text(raw_text: str) -> str:
@@ -275,6 +309,7 @@ class OrchestratorLoop:
         status: ReplyStatus,
         error_reason: str | None,
         article_context_status: str | None = None,
+        is_cta_candidate: bool = False,
     ) -> Reply:
         return Reply(
             id=None,
@@ -287,4 +322,5 @@ class OrchestratorLoop:
             error_reason=error_reason,
             created_at=moscow_now(),
             article_context_status=article_context_status,
+            is_cta_candidate=is_cta_candidate,
         )

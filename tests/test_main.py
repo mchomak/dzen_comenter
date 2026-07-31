@@ -188,6 +188,7 @@ def test_build_app_wires_layers(monkeypatch):
         "notifier",
         "auth_assistant",
         "classify_reply_type",
+        "is_cta_candidate_title",
         "runtime_config",
     }
     assert loop_kwargs["runtime_config"] is runtime_config
@@ -203,6 +204,7 @@ def test_build_app_wires_layers(monkeypatch):
     assert auth_assistant.kwargs["chat_id"] == "chat"
     assert loop_kwargs["auth_assistant"] is auth_assistant
     assert loop_kwargs["classify_reply_type"] is main.classify_reply_type
+    assert loop_kwargs["is_cta_candidate_title"] is main.is_cta_candidate_title
 
     # Возврат — те же объекты.
     assert loop is _first(rec, "loop")[1]

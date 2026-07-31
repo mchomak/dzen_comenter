@@ -34,6 +34,8 @@ def _runtime_data() -> RuntimeConfigData:
             auto_publish=True,
             max_comment_age_days=14,
             max_reply_length=450,
+            cta_every_n_comments=7,
+            max_comments_per_hour=100,
             developer_telegram_chat_ids="123,456",
             error_email_list="ops@example.com,dev@example.com",
         ),
@@ -79,6 +81,8 @@ def _form() -> dict[str, object]:
         "auto_publish": "on",
         "max_comment_age_days": "21",
         "max_reply_length": "600",
+        "cta_every_n_comments": "7",
+        "max_comments_per_hour": "100",
         "developer_telegram_chat_ids": ["111", "222"],
         "error_email_list": ["one@example.com", "two@example.com"],
         "role": "new role",
@@ -170,6 +174,35 @@ def test_settings_page_renders_cta_link_input(client):
     assert 'name="cta_link"' in response.text
     assert 'type="url"' in response.text
     assert 'value="https://saved.example/remont"' in response.text
+
+
+def test_cta_interval_and_hourly_limit_persist_through_hot_reload(client, settings):
+    data = _form()
+    data["cta_every_n_comments"] = "7"
+    data["max_comments_per_hour"] = "100"
+
+    response = client.post("/settings", data=data)
+
+    assert response.status_code == 302
+    saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
+    assert saved["settings"]["cta_every_n_comments"] == 7
+    assert saved["settings"]["max_comments_per_hour"] == 100
+    reloaded = client.get("/settings")
+    assert "Интервал CTA в комментариях" in reloaded.text
+    assert "Максимум комментариев в час" in reloaded.text
+    assert 'name="cta_every_n_comments" value="7"' in reloaded.text
+    assert 'name="max_comments_per_hour" value="100"' in reloaded.text
+
+
+@pytest.mark.parametrize("field", ("cta_every_n_comments", "max_comments_per_hour"))
+@pytest.mark.parametrize("value", ("0", "-1", "1.5"))
+def test_cta_interval_and_hourly_limit_reject_non_positive_integers(field, value):
+    form = _form()
+    form[field] = value
+
+    _, errors = validate_settings_form(form)
+
+    assert field in errors
 
 
 def test_settings_prompt_fields_split_into_two_columns(client):

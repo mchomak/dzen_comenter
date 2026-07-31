@@ -3,6 +3,8 @@
     "auto_publish": false,
     "max_comment_age_days": 30,
     "max_reply_length": 1000,
+    "cta_every_n_comments": 7,
+    "max_comments_per_hour": 100,
     "developer_telegram_chat_ids": "123456789,987654321",
     "error_email_list": "dev1@example.com,dev2@example.com"
   },

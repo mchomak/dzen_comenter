@@ -1,4 +1,4 @@
-from dzen_commenter.prompt import classify_reply_type
+from dzen_commenter.prompt import classify_reply_type, is_cta_candidate_title
 
 # Размеченные фикстуры: (publication_title, thread_text, expected_label).
 # >=3 lead (ремонтная тематика) + >=3 engage (оффтоп/спор/шутка) + граничные.
@@ -38,3 +38,17 @@ def test_classifier_accuracy_is_100_percent():
 def test_returns_literal_values():
     for title, thread, _ in FIXTURES:
         assert classify_reply_type(title, thread) in ("lead", "engage")
+
+
+def test_cta_candidate_topic_depends_only_on_article_title():
+    for title in (
+        "Ремонт кухни",
+        "Дизайн квартиры",
+        "Идеи для интерьера",
+        "Варианты отделки стен",
+        "Планировка студии",
+    ):
+        assert is_cta_candidate_title(title) is True
+
+    assert is_cta_candidate_title("Лучшие фильмы года") is False
+    assert is_cta_candidate_title("") is False

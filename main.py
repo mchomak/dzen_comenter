@@ -18,7 +18,7 @@ from dzen_commenter.monitoring.telegram_notifier import TelegramNotifier
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
 from dzen_commenter.orchestrator.loop import OrchestratorLoop
 from dzen_commenter.prompt.builder import DameoPromptBuilder
-from dzen_commenter.prompt.classifier import classify_reply_type
+from dzen_commenter.prompt.classifier import classify_reply_type, is_cta_candidate_title
 from dzen_commenter.prompt.config_loader import load_brand_config
 
 
@@ -87,6 +87,7 @@ def build_app(
         notifier=notifier,
         auth_assistant=auth_assistant,
         classify_reply_type=classify_reply_type,
+        is_cta_candidate_title=is_cta_candidate_title,
         runtime_config=runtime_config,
     )
 

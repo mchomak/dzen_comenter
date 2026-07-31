@@ -33,6 +33,8 @@ class RuntimeSettings:
     auto_publish: bool = False
     max_comment_age_days: int = 30
     max_reply_length: int = 1000
+    cta_every_n_comments: int = 7
+    max_comments_per_hour: int = 100
     developer_telegram_chat_ids: str = ""
     error_email_list: str = ""
 
@@ -66,6 +68,12 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
         auto_publish=bool(raw.get("auto_publish", base.auto_publish)),
         max_comment_age_days=int(raw.get("max_comment_age_days", base.max_comment_age_days)),
         max_reply_length=int(raw.get("max_reply_length", base.max_reply_length)),
+        cta_every_n_comments=int(
+            raw.get("cta_every_n_comments", base.cta_every_n_comments)
+        ),
+        max_comments_per_hour=int(
+            raw.get("max_comments_per_hour", base.max_comments_per_hour)
+        ),
         developer_telegram_chat_ids=str(
             raw.get("developer_telegram_chat_ids", base.developer_telegram_chat_ids)
         ),

@@ -41,7 +41,7 @@ def _list_values(form: Mapping[str, object], name: str) -> list[str]:
 
 
 def _integer(
-    form: Mapping[str, object], name: str, *, minimum: int, maximum: int, errors: dict[str, str]
+    form: Mapping[str, object], name: str, *, minimum: int, maximum: int | None, errors: dict[str, str]
 ) -> int | None:
     raw = _value(form, name)
     try:
@@ -49,7 +49,7 @@ def _integer(
     except ValueError:
         errors[name] = "Введите целое число."
         return None
-    if value < minimum or value > maximum:
+    if value < minimum or (maximum is not None and value > maximum):
         errors[name] = "Введите число в допустимом диапазоне."
         return None
     return value
@@ -71,6 +71,20 @@ def validate_settings_form(
         "max_reply_length",
         minimum=1,
         maximum=MAX_REPLY_LENGTH,
+        errors=errors,
+    )
+    cta_every_n_comments = _integer(
+        form,
+        "cta_every_n_comments",
+        minimum=1,
+        maximum=None,
+        errors=errors,
+    )
+    max_comments_per_hour = _integer(
+        form,
+        "max_comments_per_hour",
+        minimum=1,
+        maximum=None,
         errors=errors,
     )
 
@@ -100,6 +114,8 @@ def validate_settings_form(
                 auto_publish=_value(form, "auto_publish").lower() in {"on", "true", "1", "yes"},
                 max_comment_age_days=max_comment_age_days,
                 max_reply_length=max_reply_length,
+                cta_every_n_comments=cta_every_n_comments,
+                max_comments_per_hour=max_comments_per_hour,
                 developer_telegram_chat_ids=", ".join(telegram_ids),
                 error_email_list=", ".join(emails),
             ),

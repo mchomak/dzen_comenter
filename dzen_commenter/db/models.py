@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import Boolean, ForeignKey, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -51,3 +51,4 @@ class ReplyTable(Base):
     error_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column()
     article_context_status: Mapped[str | None] = mapped_column(Text)
+    is_cta_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

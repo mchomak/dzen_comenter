@@ -98,13 +98,30 @@ class FakeCommentRepository:
         reply_id: int,
         status: ReplyStatus,
         error_reason: str | None = None,
+        published_at: datetime | None = None,
     ) -> None:
         self.set_reply_status_calls.append((reply_id, status, error_reason))
         reply = self.replies[reply_id]
         reply.status = status
         reply.error_reason = error_reason
+        if published_at is not None:
+            reply.published_at = published_at
         if status == ReplyStatus.PUBLISHED:
             self.published_reply_comment_ids.add(reply.comment_id)
+
+    def count_published_replies_since(self, since: datetime) -> int:
+        return sum(
+            reply.status == ReplyStatus.PUBLISHED
+            and reply.published_at is not None
+            and reply.published_at >= since
+            for reply in self.replies.values()
+        )
+
+    def count_published_cta_candidates(self) -> int:
+        return sum(
+            reply.status == ReplyStatus.PUBLISHED and reply.is_cta_candidate
+            for reply in self.replies.values()
+        )
 
     def has_published_reply(self, comment_id: int) -> bool:
         self.has_published_reply_calls.append(comment_id)
@@ -288,6 +305,14 @@ class FakeReplyClassifier:
         return self.reply_type
 
 
+class FakeCtaCandidateClassifier:
+    def __call__(self, publication_title: str) -> bool:
+        return any(
+            keyword in publication_title.lower()
+            for keyword in ("ремонт", "дизайн", "интерьер", "отделк", "планировк")
+        )
+
+
 @dataclass
 class LoopHarness:
     loop: OrchestratorLoop
@@ -300,6 +325,7 @@ class LoopHarness:
     notifier: FakeNotifier
     auth_assistant: FakeAuthAssistant
     classify_reply_type: FakeReplyClassifier
+    is_cta_candidate_title: FakeCtaCandidateClassifier
     runtime_config: FakeRuntimeConfig
     sleep_calls: list[float]
 
@@ -392,6 +418,7 @@ def loop_factory(
         notifier = FakeNotifier()
         auth_assistant = auth_assistant or FakeAuthAssistant()
         classifier = classifier or FakeReplyClassifier()
+        cta_candidate_classifier = FakeCtaCandidateClassifier()
         sleep_calls: list[float] = []
 
         runtime_config = FakeRuntimeConfig(
@@ -400,6 +427,8 @@ def loop_factory(
                     auto_publish=runtime_overrides.get("AUTO_PUBLISH", False),
                     max_comment_age_days=runtime_overrides.get("MAX_COMMENT_AGE_DAYS", 30),
                     max_reply_length=runtime_overrides.get("MAX_REPLY_LENGTH", 1000),
+                    cta_every_n_comments=runtime_overrides.get("CTA_EVERY_N_COMMENTS", 7),
+                    max_comments_per_hour=runtime_overrides.get("MAX_COMMENTS_PER_HOUR", 100),
                     developer_telegram_chat_ids=runtime_overrides.get(
                         "DEVELOPER_TELEGRAM_CHAT_ID_LIST", ""
                     ),
@@ -419,6 +448,7 @@ def loop_factory(
             notifier=notifier,
             auth_assistant=auth_assistant,
             classify_reply_type=classifier,
+            is_cta_candidate_title=cta_candidate_classifier,
             runtime_config=runtime_config,
             sleep_fn=sleep_calls.append,
         )
@@ -434,6 +464,7 @@ def loop_factory(
             notifier=notifier,
             auth_assistant=auth_assistant,
             classify_reply_type=classifier,
+            is_cta_candidate_title=cta_candidate_classifier,
             runtime_config=runtime_config,
             sleep_calls=sleep_calls,
         )

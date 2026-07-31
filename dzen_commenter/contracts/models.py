@@ -40,3 +40,4 @@ class Reply:
     error_reason: str | None
     created_at: datetime | None
     article_context_status: str | None = None
+    is_cta_candidate: bool = False

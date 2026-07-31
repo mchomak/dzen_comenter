@@ -152,6 +152,13 @@ def test_ensure_creates_from_settings_and_prompt(tmp_path):
     assert raw["prompt"]["role"] == config_loader.DEFAULT_ROLE
 
 
+def test_runtime_settings_default_cta_interval_and_hourly_limit(tmp_path):
+    data = RuntimeConfig(str(tmp_path / "missing.json")).get()
+
+    assert data.settings.cta_every_n_comments == 7
+    assert data.settings.max_comments_per_hour == 100
+
+
 def test_ensure_does_not_overwrite_existing(tmp_path):
     path = tmp_path / "rc.json"
     path.write_text(json.dumps({"settings": {"max_reply_length": 42}}), encoding="utf-8")

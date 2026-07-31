@@ -27,6 +27,12 @@
         <label>Максимальная длина ответа
           <input type="number" name="max_reply_length" value="{{ values.max_reply_length }}" min="1">
         </label>
+        <label>Интервал CTA в комментариях
+          <input type="number" name="cta_every_n_comments" value="{{ values.cta_every_n_comments }}" min="1">
+        </label>
+        <label>Максимум комментариев в час
+          <input type="number" name="max_comments_per_hour" value="{{ values.max_comments_per_hour }}" min="1">
+        </label>
         <div class="repeatable" data-repeatable="developer_telegram_chat_ids">
           <span class="repeatable-label">Telegram ID разработчиков</span>
           <div class="repeatable-list">

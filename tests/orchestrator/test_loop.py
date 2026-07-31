@@ -24,6 +24,7 @@ def test_orchestrator_loop_import_and_di_signature():
         "notifier",
         "auth_assistant",
         "classify_reply_type",
+        "is_cta_candidate_title",
         "runtime_config",
         "sleep_fn",
     ]
@@ -638,6 +639,159 @@ def test_max_reply_length_read_from_runtime_config(
     reply = next(iter(harness.repository.replies.values()))
     assert reply.status == ReplyStatus.ERROR
     assert reply.error_reason == "reply too long after regeneration"
+
+
+def test_cta_is_added_to_each_seventh_published_target_reply(loop_factory, comment_factory):
+    comments = [comment_factory(index) for index in range(1, 15)]
+    for comment in comments:
+        comment.publication_title = "Ремонт квартиры"
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides={
+            "AUTO_PUBLISH": True,
+            "CTA_EVERY_N_COMMENTS": 7,
+            "MAX_REPLIES_PER_CYCLE": 14,
+        },
+    )
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+
+    harness.loop.run_cycle()
+
+    texts = [reply.generated_text for reply in harness.repository.replies.values()]
+    cta = "Рассчитать стоимость ремонта можно здесь: https://saved.example/remont"
+    assert sum(cta in text for text in texts) == 2
+    assert cta in texts[6]
+    assert cta in texts[13]
+
+
+def test_non_target_article_does_not_advance_cta_interval(loop_factory, comment_factory):
+    comments = [comment_factory(index) for index in range(1, 8)]
+    for comment in comments[:-1]:
+        comment.publication_title = "Лучшие фильмы года"
+    comments[-1].publication_title = "Дизайн кухни"
+    harness = loop_factory(comments=comments, settings_overrides={"AUTO_PUBLISH": True})
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+
+    harness.loop.run_cycle()
+
+    assert "Рассчитать стоимость ремонта" not in harness.repository.replies[7].generated_text
+
+
+def test_failed_target_publication_does_not_advance_cta_interval(loop_factory, comment_factory):
+    comments = [comment_factory(index) for index in range(1, 8)]
+    for comment in comments:
+        comment.publication_title = "Ремонт кухни"
+    harness = loop_factory(comments=comments, settings_overrides={"AUTO_PUBLISH": True})
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+
+    def publish_reply(comment, text, *, auto_publish):
+        if comment.dzen_comment_id == "comment-7":
+            raise RuntimeError("publication failed")
+
+    harness.page.publish_reply = publish_reply
+    harness.loop.run_cycle()
+
+    retry = comment_factory(8)
+    retry.publication_title = "Ремонт кухни"
+    harness.page.comments = [retry]
+    harness.loop.run_cycle()
+
+    assert "Рассчитать стоимость ремонта" in harness.repository.replies[8].generated_text
+
+
+def test_hourly_limit_leaves_next_comment_unprocessed(loop_factory, comment_factory, monkeypatch):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 7, 31, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        settings_overrides={"AUTO_PUBLISH": True, "MAX_COMMENTS_PER_HOUR": 100},
+    )
+    for index in range(100):
+        reply = harness.loop._make_reply(
+            comment_id=index + 1000,
+            text="published",
+            status=ReplyStatus.PUBLISHED,
+            error_reason=None,
+        )
+        reply.published_at = now
+        harness.repository.save_reply(reply)
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[1].status == CommentStatus.NEW
+    assert harness.ai_provider.calls == []
+
+
+def test_cta_does_not_overflow_or_attach_to_empty_reply(loop_factory, comment_factory):
+    target = comment_factory(1)
+    target.publication_title = "Ремонт кухни"
+    harness = loop_factory(
+        comments=[target],
+        settings_overrides={"AUTO_PUBLISH": True, "MAX_REPLY_LENGTH": 5},
+        ai_responses=["Тип: пропуск"],
+    )
+    harness.runtime_config.data.settings.cta_every_n_comments = 1
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[1].status == CommentStatus.SKIPPED
+    assert harness.repository.replies == {}
+
+
+def test_cta_reserves_reply_length_before_generation(loop_factory, comment_factory, monkeypatch):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 7, 31, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    cta = "Рассчитать стоимость ремонта можно здесь: https://saved.example/remont"
+    answer = "brief"
+    target = comment_factory(7)
+    target.publication_title = "Ремонт кухни"
+    harness = loop_factory(
+        comments=[target],
+        settings_overrides={"AUTO_PUBLISH": True},
+        ai_responses=[answer],
+    )
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+    harness.runtime_config.data.settings.max_reply_length = len(answer + "\n\n" + cta)
+    for index in range(6):
+        reply = harness.loop._make_reply(
+            comment_id=index + 1000,
+            text="published",
+            status=ReplyStatus.PUBLISHED,
+            error_reason=None,
+            is_cta_candidate=True,
+        )
+        reply.published_at = now
+        harness.repository.save_reply(reply)
+
+    harness.loop.run_cycle()
+
+    text = harness.repository.replies[7].generated_text
+    assert text == answer + "\n\n" + cta
+    assert len(text) == harness.runtime_config.data.settings.max_reply_length
+    assert f"Длина ответа: не более {len(answer)} символов." in harness.ai_provider.calls[0][0]
+
+
+def test_cta_is_omitted_when_its_text_cannot_fit_nonempty_reply(loop_factory, comment_factory):
+    target = comment_factory(1)
+    target.publication_title = "Ремонт кухни"
+    harness = loop_factory(
+        comments=[target],
+        settings_overrides={"AUTO_PUBLISH": True, "MAX_REPLY_LENGTH": 5},
+        ai_responses=["brief"],
+    )
+    harness.runtime_config.data.settings.cta_every_n_comments = 1
+    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+
+    harness.loop.run_cycle()
+
+    reply = harness.repository.replies[1]
+    assert reply.status == ReplyStatus.PUBLISHED
+    assert reply.generated_text == "brief"
 
 
 def test_run_forever_uses_max_cycles_and_injected_sleep(

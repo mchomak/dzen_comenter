@@ -1,4 +1,6 @@
-from sqlalchemy import case, select, update
+from datetime import datetime
+
+from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -100,6 +102,7 @@ class PostgresCommentRepository:
                 error_reason=reply.error_reason,
                 created_at=reply.created_at,
                 article_context_status=reply.article_context_status,
+                is_cta_candidate=reply.is_cta_candidate,
             )
             .returning(ReplyTable.id)
         )
@@ -116,14 +119,36 @@ class PostgresCommentRepository:
             conn.execute(stmt)
 
     def set_reply_status(
-        self, reply_id: int, status: ReplyStatus, error_reason: str | None = None
+        self,
+        reply_id: int,
+        status: ReplyStatus,
+        error_reason: str | None = None,
+        published_at: datetime | None = None,
     ) -> None:
         values: dict[str, object] = {"status": status.value}
         if error_reason is not None:
             values["error_reason"] = error_reason
+        if published_at is not None:
+            values["published_at"] = published_at
         stmt = update(ReplyTable).where(ReplyTable.id == reply_id).values(**values)
         with self._engine.begin() as conn:
             conn.execute(stmt)
+
+    def count_published_replies_since(self, since: datetime) -> int:
+        stmt = select(func.count()).select_from(ReplyTable).where(
+            ReplyTable.status == ReplyStatus.PUBLISHED.value,
+            ReplyTable.published_at >= since,
+        )
+        with self._engine.begin() as conn:
+            return int(conn.execute(stmt).scalar_one())
+
+    def count_published_cta_candidates(self) -> int:
+        stmt = select(func.count()).select_from(ReplyTable).where(
+            ReplyTable.status == ReplyStatus.PUBLISHED.value,
+            ReplyTable.is_cta_candidate.is_(True),
+        )
+        with self._engine.begin() as conn:
+            return int(conn.execute(stmt).scalar_one())
 
     def has_published_reply(self, comment_id: int) -> bool:
         stmt = select(

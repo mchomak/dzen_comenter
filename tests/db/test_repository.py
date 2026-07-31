@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import inspect, text
@@ -43,7 +43,13 @@ def _make_comment(
     )
 
 
-def _make_reply(comment_id, status=ReplyStatus.GENERATED) -> Reply:
+def _make_reply(
+    comment_id,
+    status=ReplyStatus.GENERATED,
+    *,
+    published_at=None,
+    is_cta_candidate=False,
+) -> Reply:
     return Reply(
         id=None,
         comment_id=comment_id,
@@ -51,10 +57,11 @@ def _make_reply(comment_id, status=ReplyStatus.GENERATED) -> Reply:
         ai_provider="openai",
         ai_model="gpt-4o-mini",
         status=status,
-        published_at=None,
+        published_at=published_at,
         error_reason=None,
         created_at=datetime(2026, 1, 1, 12, 10, 0),
         article_context_status="article_text_used",
+        is_cta_candidate=is_cta_candidate,
     )
 
 
@@ -96,6 +103,7 @@ def test_tables_exist_with_columns(engine):
         "error_reason",
         "created_at",
         "article_context_status",
+        "is_cta_candidate",
     } <= rep_cols
 
 
@@ -111,6 +119,42 @@ def test_save_reply_stores_article_context_status(repo, engine):
             {"id": reply_id},
         ).scalar_one()
     assert stored == "article_text_used"
+
+
+def test_published_reply_counters_ignore_errors_and_old_replies(repo):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 7, 31, 12, 0, 0)
+    recent_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="recent"))
+    old_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="old"))
+    failed_candidate = repo.upsert_comment(_make_comment(publication_id, dzen_id="failed"))
+
+    repo.save_reply(
+        _make_reply(
+            recent_candidate,
+            status=ReplyStatus.PUBLISHED,
+            published_at=now,
+            is_cta_candidate=True,
+        )
+    )
+    repo.save_reply(
+        _make_reply(
+            old_candidate,
+            status=ReplyStatus.PUBLISHED,
+            published_at=now - timedelta(hours=1, microseconds=1),
+            is_cta_candidate=True,
+        )
+    )
+    repo.save_reply(
+        _make_reply(
+            failed_candidate,
+            status=ReplyStatus.ERROR,
+            published_at=now,
+            is_cta_candidate=True,
+        )
+    )
+
+    assert repo.count_published_replies_since(now - timedelta(hours=1)) == 1
+    assert repo.count_published_cta_candidates() == 2
 
 
 # --- Acceptance 2: UNIQUE constraints ---
@@ -166,6 +210,8 @@ def test_repository_fulfils_contract(repo):
         "has_generated_reply",
         "has_published_reply",
         "is_own_reply",
+        "count_published_replies_since",
+        "count_published_cta_candidates",
     ):
         assert callable(getattr(repo, method))
 
