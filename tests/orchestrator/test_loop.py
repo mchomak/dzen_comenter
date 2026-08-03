@@ -95,8 +95,8 @@ def test_run_cycle_enters_drafts_without_auto_publish(
         for reply in harness.repository.replies.values()
     )
     assert harness.page.publish_calls == [
-        (harness.repository.comments[1], "generated reply", False),
-        (harness.repository.comments[2], "generated reply", False),
+        (harness.repository.comments[1], "author-1, generated reply", False),
+        (harness.repository.comments[2], "author-2, generated reply", False),
     ]
     assert len(harness.prompt_builder.contexts) == 2
     assert harness.classify_reply_type.calls == [
@@ -232,7 +232,7 @@ def test_run_cycle_regenerates_once_when_reply_is_too_long(
 ):
     harness = loop_factory(
         comments=[comment_factory(1)],
-        settings_overrides={"MAX_REPLY_LENGTH": 10},
+        settings_overrides={"MAX_REPLY_LENGTH": len("author-1, short")},
         ai_responses=["this text is too long", "short"],
     )
 
@@ -241,7 +241,7 @@ def test_run_cycle_regenerates_once_when_reply_is_too_long(
     assert len(harness.ai_provider.calls) == 2
     assert len(harness.repository.replies) == 1
     reply = next(iter(harness.repository.replies.values()))
-    assert reply.generated_text == "short"
+    assert reply.generated_text == "author-1, short"
     assert reply.status == ReplyStatus.GENERATED
     assert harness.repository.comments[1].status == CommentStatus.ANSWERED
 
@@ -283,7 +283,7 @@ def test_run_cycle_publishes_only_when_auto_publish_enabled(
     harness.loop.run_cycle()
 
     assert harness.page.publish_calls == [
-        (harness.repository.comments[1], "ready to publish", True)
+        (harness.repository.comments[1], "author-1, ready to publish", True)
     ]
     reply = next(iter(harness.repository.replies.values()))
     assert reply.status == ReplyStatus.PUBLISHED
@@ -643,7 +643,42 @@ def test_max_reply_length_read_from_runtime_config(
     assert reply.error_reason == "reply too long after regeneration"
 
 
-def test_cta_is_added_to_each_seventh_published_target_reply(loop_factory, comment_factory):
+def test_generated_reply_prefixes_author_and_lowercases_ai_text(
+    loop_factory,
+    comment_factory,
+):
+    comment = comment_factory(1)
+    comment.author = "Ольга Иванова"
+    harness = loop_factory(comments=[comment], ai_responses=["Салфетки — простая деталь"])
+
+    harness.loop.run_cycle()
+
+    reply = next(iter(harness.repository.replies.values()))
+    assert reply.generated_text == "Ольга Иванова, салфетки — простая деталь"
+
+
+def test_cta_candidate_asks_ai_to_integrate_plain_cta_text(
+    loop_factory,
+    comment_factory,
+):
+    comment = comment_factory(1)
+    comment.publication_title = "Ремонт кухни"
+    harness = loop_factory(
+        comments=[comment],
+        ai_responses=["Можно обратиться на сайт domeo ru"],
+        settings_overrides={"CTA_EVERY_N_COMMENTS": 1},
+    )
+    harness.runtime_config.data.prompt.cta_link = "domeo ru"
+
+    harness.loop.run_cycle()
+
+    reply = next(iter(harness.repository.replies.values()))
+    assert reply.generated_text == "author-1, можно обратиться на сайт domeo ru"
+    assert "domeo ru" in harness.ai_provider.calls[0][0]
+    assert "отдельной строкой" in harness.ai_provider.calls[0][0]
+
+
+def test_cta_instruction_is_added_to_each_seventh_target_reply(loop_factory, comment_factory):
     comments = [comment_factory(index) for index in range(1, 15)]
     for comment in comments:
         comment.publication_title = "Ремонт квартиры"
@@ -655,15 +690,14 @@ def test_cta_is_added_to_each_seventh_published_target_reply(loop_factory, comme
             "MAX_REPLIES_PER_CYCLE": 14,
         },
     )
-    harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
+    harness.runtime_config.data.prompt.cta_link = "domeo ru"
 
     harness.loop.run_cycle()
 
-    texts = [reply.generated_text for reply in harness.repository.replies.values()]
-    cta = "Рассчитать стоимость ремонта можно здесь: https://saved.example/remont"
-    assert sum(cta in text for text in texts) == 2
-    assert cta in texts[6]
-    assert cta in texts[13]
+    prompts = [call[0] for call in harness.ai_provider.calls]
+    assert sum("Текст CTA для этого ответа" in prompt for prompt in prompts) == 2
+    assert "domeo ru" in prompts[6]
+    assert "domeo ru" in prompts[13]
 
 
 def test_non_target_article_does_not_advance_cta_interval(loop_factory, comment_factory):
@@ -698,10 +732,10 @@ def test_failed_target_publication_does_not_advance_cta_interval(loop_factory, c
     harness.page.comments = [retry]
     harness.loop.run_cycle()
 
-    assert "Рассчитать стоимость ремонта" in harness.repository.replies[8].generated_text
+    assert "Текст CTA для этого ответа" in harness.ai_provider.calls[-1][0]
 
 
-def test_cta_applies_in_draft_mode_without_auto_publish(loop_factory, comment_factory):
+def test_cta_instruction_applies_in_draft_mode_without_auto_publish(loop_factory, comment_factory):
     comments = [comment_factory(index) for index in range(1, 8)]
     for comment in comments:
         comment.publication_title = "Ремонт квартиры"
@@ -716,9 +750,8 @@ def test_cta_applies_in_draft_mode_without_auto_publish(loop_factory, comment_fa
 
     harness.loop.run_cycle()
 
-    cta = "Рассчитать стоимость ремонта можно здесь: https://saved.example/remont"
     reply = harness.repository.replies[7]
-    assert cta in reply.generated_text
+    assert "Текст CTA для этого ответа" in harness.ai_provider.calls[6][0]
     assert reply.status == ReplyStatus.GENERATED
 
 
@@ -764,12 +797,11 @@ def test_cta_does_not_overflow_or_attach_to_empty_reply(loop_factory, comment_fa
     assert harness.repository.replies == {}
 
 
-def test_cta_reserves_reply_length_before_generation(loop_factory, comment_factory, monkeypatch):
+def test_author_prefix_reserves_reply_length_before_generation(loop_factory, comment_factory, monkeypatch):
     from dzen_commenter.orchestrator import loop as loop_module
 
     now = datetime(2026, 7, 31, 12, 0, 0)
     monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
-    cta = "Рассчитать стоимость ремонта можно здесь: https://saved.example/remont"
     answer = "brief"
     target = comment_factory(7)
     target.publication_title = "Ремонт кухни"
@@ -779,7 +811,7 @@ def test_cta_reserves_reply_length_before_generation(loop_factory, comment_facto
         ai_responses=[answer],
     )
     harness.runtime_config.data.prompt.cta_link = "https://saved.example/remont"
-    harness.runtime_config.data.settings.max_reply_length = len(answer + "\n\n" + cta)
+    harness.runtime_config.data.settings.max_reply_length = len("author-7, " + answer)
     for index in range(6):
         reply = harness.loop._make_reply(
             comment_id=index + 1000,
@@ -794,12 +826,13 @@ def test_cta_reserves_reply_length_before_generation(loop_factory, comment_facto
     harness.loop.run_cycle()
 
     text = harness.repository.replies[7].generated_text
-    assert text == answer + "\n\n" + cta
+    assert text == "author-7, " + answer
     assert len(text) == harness.runtime_config.data.settings.max_reply_length
     assert f"Длина ответа: не более {len(answer)} символов." in harness.ai_provider.calls[0][0]
+    assert "Текст CTA для этого ответа" in harness.ai_provider.calls[0][0]
 
 
-def test_cta_is_omitted_when_its_text_cannot_fit_nonempty_reply(loop_factory, comment_factory):
+def test_reply_is_marked_error_when_author_prefix_does_not_fit(loop_factory, comment_factory):
     target = comment_factory(1)
     target.publication_title = "Ремонт кухни"
     harness = loop_factory(
@@ -813,8 +846,7 @@ def test_cta_is_omitted_when_its_text_cannot_fit_nonempty_reply(loop_factory, co
     harness.loop.run_cycle()
 
     reply = harness.repository.replies[1]
-    assert reply.status == ReplyStatus.PUBLISHED
-    assert reply.generated_text == "brief"
+    assert reply.status == ReplyStatus.ERROR
 
 
 def test_run_forever_uses_max_cycles_and_injected_sleep(

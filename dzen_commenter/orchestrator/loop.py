@@ -22,7 +22,12 @@ from dzen_commenter.contracts.models import Comment, Publication, Reply
 from dzen_commenter.time_utils import moscow_now
 
 
-CTA_TEXT_TEMPLATE = "Рассчитать стоимость ремонта можно здесь: {cta_link}"
+CTA_PROMPT_TEMPLATE = (
+    "Текст CTA для этого ответа: {cta_text}\n"
+    "Обязательно органично вплети этот текст в основную мысль ответа. "
+    "Не выводи его отдельной строкой и не делай отдельным рекламным предложением. "
+    "Не добавляй URL, Markdown-ссылки или другой текст ссылки помимо указанного CTA."
+)
 
 
 class OrchestratorLoop:
@@ -177,16 +182,15 @@ class OrchestratorLoop:
         auto_publish = runtime_settings.auto_publish
         publication_title = comment.publication_title or self.settings.COMMENTS_URL
         is_cta_candidate = self.is_cta_candidate_title(publication_title)
-        cta_suffix = ""
+        cta_instruction = ""
         if is_cta_candidate:
             produced_candidates = self.repository.count_cta_candidates_produced()
             if (produced_candidates + 1) % runtime_settings.cta_every_n_comments == 0:
-                candidate_cta_suffix = "\n\n" + CTA_TEXT_TEMPLATE.format(
-                    cta_link=self.runtime_config.get().prompt.cta_link
+                cta_instruction = CTA_PROMPT_TEMPLATE.format(
+                    cta_text=self.runtime_config.get().prompt.cta_link
                 )
-                if len(candidate_cta_suffix) < max_reply_length:
-                    cta_suffix = candidate_cta_suffix
-        model_reply_length = max_reply_length - len(cta_suffix)
+        author_prefix = f"{comment.author.strip()}, " if comment.author.strip() else ""
+        model_reply_length = max_reply_length - len(author_prefix)
         article_text = self.page.fetch_article_text(comment.post_url) if comment.post_url else None
         article_context_status = (
             "article_text_used" if article_text else "without_article_text"
@@ -208,7 +212,8 @@ class OrchestratorLoop:
                 article_text=article_text or "",
             )
         )
-        if cta_suffix:
+        if cta_instruction:
+            prompt += f"\n\n{cta_instruction}"
             prompt += f"\n\nДлина ответа: не более {model_reply_length} символов."
         text = self._extract_reply_text(
             self.ai_provider.generate(
@@ -221,7 +226,9 @@ class OrchestratorLoop:
             self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
             return
 
-        if len(text) > model_reply_length:
+        text = self._format_reply_text(text, author_prefix)
+
+        if len(text) > max_reply_length:
             text = self._extract_reply_text(
                 self.ai_provider.generate(
                     prompt,
@@ -230,11 +237,13 @@ class OrchestratorLoop:
                 )
             )
 
-        if not text:
-            self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
-            return
+            if not text:
+                self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
+                return
 
-        if len(text) > model_reply_length:
+            text = self._format_reply_text(text, author_prefix)
+
+        if len(text) > max_reply_length:
             reason = "reply too long after regeneration"
             self.repository.save_reply(
                 self._make_reply(
@@ -249,9 +258,6 @@ class OrchestratorLoop:
             self.repository.set_comment_status(comment_id, CommentStatus.ERROR)
             self.notifier.notify_error(reason)
             return
-
-        if cta_suffix:
-            text += cta_suffix
 
         reply_id = self.repository.save_reply(
             self._make_reply(
@@ -300,6 +306,14 @@ class OrchestratorLoop:
             if line.strip().lower().startswith("ответ:"):
                 return line.split(":", 1)[1].strip()
         return raw_text
+
+    @staticmethod
+    def _format_reply_text(text: str, author_prefix: str) -> str:
+        for index, character in enumerate(text):
+            if character.isalpha():
+                text = text[:index] + character.lower() + text[index + 1 :]
+                break
+        return f"{author_prefix}{text}"
 
     def _make_reply(
         self,
