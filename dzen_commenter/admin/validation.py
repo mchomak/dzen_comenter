@@ -101,10 +101,6 @@ def validate_settings_form(
         if not value:
             errors[name] = "Поле обязательно."
 
-    cta_link = prompt_values["cta_link"]
-    if cta_link and not cta_link.startswith(("http://", "https://")):
-        errors["cta_link"] = "Введите ссылку (http:// или https://)."
-
     if errors:
         return None, errors
 

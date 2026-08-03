@@ -87,9 +87,9 @@ def test_cta_only_in_lead():
     assert DEFAULT_CTA_MARKER not in engage
 
 
-def test_default_cta_link_token_substituted_in_lead():
+def test_default_lead_does_not_include_cta_text_without_cadence():
     lead = DameoPromptBuilder().build(make_context("lead"))
-    assert DEFAULT_CTA_LINK in lead
+    assert DEFAULT_CTA_LINK not in lead
     assert "{cta_link}" not in lead
 
 

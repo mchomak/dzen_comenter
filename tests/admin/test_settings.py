@@ -168,11 +168,10 @@ def test_settings_page_renders_runtime_values_and_only_readonly_vnc(client):
     assert "DATABASE_URL" not in response.text
 
 
-def test_settings_page_renders_cta_link_input(client):
+def test_settings_page_renders_cta_text_input(client):
     response = client.get("/settings")
 
-    assert 'name="cta_link"' in response.text
-    assert 'type="url"' in response.text
+    assert '<input type="text" name="cta_link"' in response.text
     assert 'value="https://saved.example/remont"' in response.text
 
 
@@ -279,22 +278,21 @@ def test_valid_cta_link_persists_through_hot_reload(client):
     assert 'value="https://persisted.example/remont"' in reloaded.text
 
 
-def test_validate_settings_form_cta_link():
+def test_validate_settings_form_requires_nonempty_cta_text():
     empty = _form()
     empty["cta_link"] = ""
     _, errors = validate_settings_form(empty)
     assert "cta_link" in errors
 
-    bad = _form()
-    bad["cta_link"] = "l.domeo.ru/remont"
-    _, errors = validate_settings_form(bad)
-    assert "cta_link" in errors
 
-    good = _form()
-    good["cta_link"] = "https://valid.example/remont"
-    data, errors = validate_settings_form(good)
+def test_validate_settings_form_accepts_plain_cta_text():
+    form = _form()
+    form["cta_link"] = "domeo ru"
+
+    data, errors = validate_settings_form(form)
+
     assert errors == {}
-    assert data.prompt.cta_link == "https://valid.example/remont"
+    assert data.prompt.cta_link == "domeo ru"
 
 
 def test_settings_page_has_responsive_layout_hooks(client):
