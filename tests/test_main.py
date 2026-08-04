@@ -315,6 +315,29 @@ def test_run_supervised_survives_exception():
     assert len(notifier.errors) == 1
 
 
+def test_run_supervised_throttles_duplicate_error_notifications():
+    class FailingLoop:
+        def run_cycle(self):
+            raise RuntimeError("GigaChat is unavailable")
+
+    loop = FailingLoop()
+    session = FakeSession()
+    notifier = FakeNotifier()
+
+    main.run_supervised(
+        loop,
+        session,
+        notifier,
+        poll_interval=1,
+        keepalive_interval=1000,
+        sleep_fn=lambda s: None,
+        time_fn=lambda: 0.0,
+        max_cycles=3,
+    )
+
+    assert len(notifier.errors) == 1
+
+
 # Acceptance 6 — keep-alive срабатывает по таймеру, не на каждой итерации.
 def test_run_supervised_keepalive_by_timer():
     loop = FakeLoop()

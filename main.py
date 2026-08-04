@@ -22,6 +22,9 @@ from dzen_commenter.prompt.classifier import classify_reply_type, is_cta_candida
 from dzen_commenter.prompt.config_loader import load_brand_config
 
 
+_ERROR_NOTIFICATION_COOLDOWN = 15 * 60
+
+
 def build_app(
     settings: Settings,
 ) -> tuple[OrchestratorLoop, PlaywrightSessionManager, Notifier]:
@@ -106,12 +109,23 @@ def run_supervised(
     max_cycles: int | None = None,
 ) -> None:
     last_keepalive = time_fn()
+    last_error_signature: tuple[type[Exception], str] | None = None
+    last_error_notification_at: float | None = None
     cycles = 0
     while max_cycles is None or cycles < max_cycles:
         try:
             loop.run_cycle()
         except Exception as exc:
-            notifier.notify_error("Unhandled error in main loop", exc)
+            now = time_fn()
+            error_signature = (type(exc), str(exc))
+            if (
+                error_signature != last_error_signature
+                or last_error_notification_at is None
+                or now - last_error_notification_at >= _ERROR_NOTIFICATION_COOLDOWN
+            ):
+                notifier.notify_error("Unhandled error in main loop", exc)
+                last_error_signature = error_signature
+                last_error_notification_at = now
         now = time_fn()
         if now - last_keepalive >= keepalive_interval:
             try:
