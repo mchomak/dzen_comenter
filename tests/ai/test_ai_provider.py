@@ -288,3 +288,31 @@ def test_gigachat_retries_connect_timeout(monkeypatch):
 
     assert provider.generate("prompt", temperature=0.1, max_tokens=8) == "ok"
     assert attempts == 3
+
+
+def test_gigachat_retries_bad_gateway(monkeypatch):
+    completion_attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal completion_attempts
+        if request.url.path.endswith("/oauth"):
+            return httpx.Response(
+                200, json={"access_token": "token-1", "expires_at": 4102444800}
+            )
+        completion_attempts += 1
+        if completion_attempts < 3:
+            return httpx.Response(502, json={"error": "bad gateway"})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "recovered"}}]}
+        )
+
+    monkeypatch.setattr("dzen_commenter.ai.gigachat.time.sleep", lambda _: None)
+    provider = GigaChatProvider(
+        api_key="authorization-key",
+        base_url="https://gigachat.example/api",
+        model="GigaChat-Pro",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert provider.generate("prompt", temperature=0.1, max_tokens=8) == "recovered"
+    assert completion_attempts == 3

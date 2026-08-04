@@ -106,10 +106,15 @@ class GigaChatProvider:
     def _post(self, url: str, **kwargs) -> httpx.Response:
         for attempt in range(_CONNECT_RETRY_COUNT):
             try:
-                return self._client.post(url, **kwargs)
+                response = self._client.post(url, **kwargs)
             except httpx.ConnectTimeout:
                 if attempt == _CONNECT_RETRY_COUNT - 1:
                     raise
                 time.sleep(_CONNECT_RETRY_DELAYS[attempt])
+                continue
+            if response.status_code != 502 or attempt == _CONNECT_RETRY_COUNT - 1:
+                return response
+            response.close()
+            time.sleep(_CONNECT_RETRY_DELAYS[attempt])
 
         raise RuntimeError("unreachable")
