@@ -54,6 +54,7 @@ def configure_logging(
     """
     root = logging.getLogger()
     root.setLevel(level)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     for handler in list(root.handlers):
         if getattr(handler, _HANDLER_MARKER, False):

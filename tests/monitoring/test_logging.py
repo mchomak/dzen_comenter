@@ -96,6 +96,17 @@ def _imported_modules(tree):
     return names
 
 
+def test_configure_logging_suppresses_http_client_request_urls():
+    httpx_logger = logging.getLogger("httpx")
+    original_level = httpx_logger.level
+    try:
+        configure_logging("INFO")
+
+        assert httpx_logger.level == logging.WARNING
+    finally:
+        httpx_logger.setLevel(original_level)
+
+
 def test_monitoring_layer_is_pure():
     pkg_dir = Path(dzen_commenter.monitoring.__file__).parent
     for py_file in pkg_dir.glob("*.py"):
