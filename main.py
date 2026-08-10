@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 import sqlalchemy
@@ -23,6 +24,7 @@ from dzen_commenter.prompt.config_loader import load_brand_config
 
 
 _ERROR_NOTIFICATION_COOLDOWN = 15 * 60
+logger = logging.getLogger(__name__)
 
 
 def build_app(
@@ -53,7 +55,7 @@ def build_app(
 
     session = PlaywrightSessionManager(settings, auth_assistant=auth_assistant)
     session.start()
-    page = DzenStudioPage(session.page)
+    page = DzenStudioPage(lambda: session.page)
 
     if settings.SMTP_HOST:
         email_fallback = EmailFallbackNotifier(
@@ -116,6 +118,16 @@ def run_supervised(
         try:
             loop.run_cycle()
         except Exception as exc:
+            logger.warning(
+                "Comment-processing cycle failed; retrying after the poll interval",
+                exc_info=True,
+                extra={
+                    "event": "main_loop_cycle_failed",
+                    "cycle": cycles + 1,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+            )
             now = time_fn()
             error_signature = (type(exc), str(exc))
             if (
@@ -123,7 +135,10 @@ def run_supervised(
                 or last_error_notification_at is None
                 or now - last_error_notification_at >= _ERROR_NOTIFICATION_COOLDOWN
             ):
-                notifier.notify_error("Unhandled error in main loop", exc)
+                notifier.notify_error(
+                    "Comment-processing cycle failed; retrying after the poll interval",
+                    exc,
+                )
                 last_error_signature = error_signature
                 last_error_notification_at = now
         now = time_fn()

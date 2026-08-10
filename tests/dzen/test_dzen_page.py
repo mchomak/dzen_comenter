@@ -333,6 +333,19 @@ def test_fetch_comments_empty_page():
     assert page.fetch_comments() == []
 
 
+def test_fetch_comments_uses_page_replaced_after_browser_restart():
+    stale_browser = FakePage([])
+    recovered_browser = FakePage([FakeGroup("/a/recovered", [make_node(0)])])
+    current_browser = {"page": stale_browser}
+    page = DzenStudioPage(lambda: current_browser["page"])
+
+    current_browser["page"] = recovered_browser
+
+    assert [comment.post_url for comment in page.fetch_comments()] == [
+        "https://dzen.ru/a/recovered"
+    ]
+
+
 # Acceptance 09.1 — post_url каждого Comment равен post_href своей группы.
 def test_fetch_comments_sets_post_url_per_group():
     groups = [

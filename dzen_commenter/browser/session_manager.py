@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -9,6 +10,9 @@ from dzen_commenter.auth import DzenLoginAuthenticator, DzenSmsRestartRequested
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import AuthAssistant
 from dzen_commenter.dzen import selectors
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlaywrightSessionManager:
@@ -122,8 +126,20 @@ class PlaywrightSessionManager:
         except PlaywrightError as exc:
             if not self._is_browser_crash_error(exc):
                 raise
+            logger.warning(
+                "Playwright browser session became unavailable; restarting it",
+                extra={
+                    "event": "playwright_session_restart_started",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+            )
             try:
                 self._restart_browser_session()
+                logger.info(
+                    "Playwright browser session restarted",
+                    extra={"event": "playwright_session_restarted"},
+                )
             except Exception:
                 raise exc
 
@@ -155,6 +171,7 @@ class PlaywrightSessionManager:
             for marker in (
                 "page crashed",
                 "browser has been closed",
+                "event loop is closed",
                 "target page, context or browser has been closed",
             )
         )

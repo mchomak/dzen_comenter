@@ -150,7 +150,8 @@ def test_build_app_wires_layers(monkeypatch):
 
     # DzenStudioPage сконструирован с session.page (идентичность).
     dzen_ev = _first(rec, "dzen_page")
-    assert dzen_ev[2] is session.page
+    assert callable(dzen_ev[2])
+    assert dzen_ev[2]() is session.page
 
     # create_provider вызван с тем же объектом settings.
     provider_ev = _first(rec, "create_provider")
@@ -313,6 +314,30 @@ def test_run_supervised_survives_exception():
 
     assert loop.cycle_calls == 2
     assert len(notifier.errors) == 1
+
+
+def test_run_supervised_logs_context_for_a_failed_cycle(caplog):
+    loop = FakeLoop(raise_on=(1,))
+    session = FakeSession()
+    notifier = FakeNotifier()
+
+    with caplog.at_level("WARNING", logger="main"):
+        main.run_supervised(
+            loop,
+            session,
+            notifier,
+            poll_interval=1,
+            keepalive_interval=1000,
+            sleep_fn=lambda s: None,
+            time_fn=lambda: 0.0,
+            max_cycles=1,
+        )
+
+    record = next(record for record in caplog.records if record.name == "main")
+    assert record.event == "main_loop_cycle_failed"
+    assert record.cycle == 1
+    assert record.error_type == "RuntimeError"
+    assert record.error_message == "boom on cycle 1"
 
 
 def test_run_supervised_throttles_duplicate_error_notifications():

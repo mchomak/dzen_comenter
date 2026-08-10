@@ -1,6 +1,8 @@
 import hashlib
 import re
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any
 from urllib.parse import urlsplit
 
 from dzen_commenter.contracts.enums import CommentStatus
@@ -71,9 +73,15 @@ def parse_relative_time(text: str | None, now: datetime) -> datetime | None:
 class DzenStudioPage:
     """Read Dzen Studio comments and publish a reply to a matching node."""
 
-    def __init__(self, page) -> None:
-        self._page = page
+    def __init__(self, page: Any | Callable[[], Any]) -> None:
+        self._page_source = page
         self._article_text_by_url: dict[str, str | None] = {}
+
+    @property
+    def _page(self) -> Any:
+        if callable(self._page_source):
+            return self._page_source()
+        return self._page_source
 
     def fetch_article_text(self, post_url: str) -> str | None:
         if not post_url or is_video_post_url(post_url):
