@@ -154,8 +154,11 @@ class PlaywrightSessionManager:
             if not login.strip() or not password:
                 return False
             self._close_browser_session()
+            try:
+                self._remove_user_profile()
+            except OSError:
+                return False
             Path(self._settings.STORAGE_STATE_PATH).unlink(missing_ok=True)
-            self._remove_user_profile()
             self._start()
             return self._login(login, password)
 
@@ -209,7 +212,8 @@ class PlaywrightSessionManager:
         profile_path = Path(self._settings.USER_DATA_DIR).resolve()
         if profile_path in {Path(profile_path.anchor), Path.cwd().resolve()}:
             raise RuntimeError("USER_DATA_DIR must identify a browser profile directory")
-        shutil.rmtree(profile_path, ignore_errors=True)
+        if profile_path.exists():
+            shutil.rmtree(profile_path)
 
     @staticmethod
     def _is_browser_crash_error(exc: PlaywrightError) -> bool:
