@@ -228,14 +228,35 @@ def test_notify_uses_fallback_on_httpx_error():
     assert fallback.notify_calls == ["hello"]
 
 
-def test_notify_error_includes_exception_text_and_falls_back():
+def test_notify_error_sends_to_telegram_and_email():
     requests = []
     fallback = FallbackSpy()
 
     def handler(request):
         requests.append(request)
-        if len(requests) == 1:
-            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(200, json={"ok": True})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifier = TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id=CHAT_ID,
+        proxy_url=PROXY_URL,
+        fallback=fallback,
+        client=client,
+    )
+    error = RuntimeError("boom")
+
+    notifier.notify_error("broken", error)
+
+    assert b"RuntimeError" in requests[0].read()
+    assert b"boom" in requests[0].read()
+    assert fallback.notify_error_calls == [("broken", error)]
+
+
+def test_notify_error_attempts_email_when_telegram_delivery_fails():
+    fallback = FallbackSpy()
+
+    def handler(request):
         raise httpx.ConnectError("proxy unavailable", request=request)
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
@@ -249,11 +270,36 @@ def test_notify_error_includes_exception_text_and_falls_back():
     error = RuntimeError("boom")
 
     notifier.notify_error("broken", error)
-    notifier.notify_error("broken", error)
 
-    assert b"RuntimeError" in requests[0].read()
-    assert b"boom" in requests[0].read()
     assert fallback.notify_error_calls == [("broken", error)]
+
+
+def test_notify_error_still_sends_to_telegram_when_email_delivery_fails():
+    requests = []
+
+    class FailingFallback:
+        def notify(self, message):
+            raise RuntimeError("email unavailable")
+
+        def notify_error(self, message, error=None):
+            raise RuntimeError("email unavailable")
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifier = TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id=CHAT_ID,
+        proxy_url=PROXY_URL,
+        fallback=FailingFallback(),
+        client=client,
+    )
+
+    notifier.notify_error("broken", RuntimeError("boom"))
+
+    assert len(requests) == 1
 
 
 def test_chat_ids_read_from_provider_at_send_time():
