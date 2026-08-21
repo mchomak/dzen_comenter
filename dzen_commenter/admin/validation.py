@@ -1,5 +1,6 @@
 import re
 from collections.abc import Mapping
+from urllib.parse import urlparse
 
 from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
 from dzen_commenter.prompt.config_loader import PromptBrandConfig
@@ -19,6 +20,8 @@ _PROMPT_FIELDS = (
 )
 _EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
 _TELEGRAM_ID_RE = re.compile(r"\d+")
+_COOLDOWN_RE = re.compile(r"([1-9]\d*)([mh])")
+_PROXY_SCHEMES = {"http", "https", "socks5", "socks5h"}
 
 
 def split_csv_items(value: str) -> list[str]:
@@ -55,6 +58,26 @@ def _integer(
     return value
 
 
+def _notification_cooldown(form: Mapping[str, object], errors: dict[str, str]) -> int | None:
+    match = _COOLDOWN_RE.fullmatch(_value(form, "error_notification_cooldown"))
+    if match is None:
+        errors["error_notification_cooldown"] = "Введите положительное целое число с m или h."
+        return None
+    value = int(match.group(1)) * (60 if match.group(2) == "m" else 3600)
+    if value > 24 * 3600:
+        errors["error_notification_cooldown"] = "Интервал не может быть больше 24 часов."
+        return None
+    return value
+
+
+def _telegram_proxy_url(form: Mapping[str, object], errors: dict[str, str]) -> str:
+    value = _value(form, "telegram_proxy_url")
+    parsed = urlparse(value)
+    if value and (parsed.scheme not in _PROXY_SCHEMES or not parsed.hostname):
+        errors["telegram_proxy_url"] = "Введите URL proxy с host и схемой http, https, socks5 или socks5h."
+    return value
+
+
 def validate_settings_form(
     form: Mapping[str, object],
 ) -> tuple[RuntimeConfigData | None, dict[str, str]]:
@@ -87,6 +110,8 @@ def validate_settings_form(
         maximum=None,
         errors=errors,
     )
+    error_notification_cooldown_seconds = _notification_cooldown(form, errors)
+    telegram_proxy_url = _telegram_proxy_url(form, errors)
 
     telegram_ids = _list_values(form, "developer_telegram_chat_ids")
     if any(not _TELEGRAM_ID_RE.fullmatch(item) for item in telegram_ids):
@@ -114,6 +139,8 @@ def validate_settings_form(
                 max_comments_per_hour=max_comments_per_hour,
                 developer_telegram_chat_ids=", ".join(telegram_ids),
                 error_email_list=", ".join(emails),
+                error_notification_cooldown_seconds=error_notification_cooldown_seconds,
+                telegram_proxy_url=telegram_proxy_url,
             ),
             prompt=PromptBrandConfig(**prompt_values),
         ),

@@ -33,6 +33,12 @@
         <label>Максимум комментариев в час
           <input type="number" name="max_comments_per_hour" value="{{ values.max_comments_per_hour }}" min="1">
         </label>
+        <label>Интервал повторных аварийных уведомлений
+          <input type="text" name="error_notification_cooldown" value="{{ values.error_notification_cooldown }}" placeholder="15m">
+        </label>
+        <label>Telegram proxy URL
+          <input type="text" name="telegram_proxy_url" value="{{ values.telegram_proxy_url }}">
+        </label>
         <div class="repeatable" data-repeatable="developer_telegram_chat_ids">
           <span class="repeatable-label">Telegram ID разработчиков</span>
           <div class="repeatable-list">

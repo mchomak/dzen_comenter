@@ -159,6 +159,21 @@ def test_runtime_settings_default_cta_interval_and_hourly_limit(tmp_path):
     assert data.settings.max_comments_per_hour == 100
 
 
+def test_runtime_settings_include_notification_cooldown_and_telegram_proxy_defaults(tmp_path):
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps({"settings": {}, "prompt": {}}), encoding="utf-8")
+
+    data = RuntimeConfig(str(path)).get()
+
+    assert data.settings.error_notification_cooldown_seconds == 900
+    assert data.settings.telegram_proxy_url == ""
+
+    RuntimeConfig(str(tmp_path / "initial.json")).save(data)
+    saved = json.loads((tmp_path / "initial.json").read_text(encoding="utf-8"))
+    assert saved["settings"]["error_notification_cooldown_seconds"] == 900
+    assert saved["settings"]["telegram_proxy_url"] == ""
+
+
 def test_ensure_does_not_overwrite_existing(tmp_path):
     path = tmp_path / "rc.json"
     path.write_text(json.dumps({"settings": {"max_reply_length": 42}}), encoding="utf-8")

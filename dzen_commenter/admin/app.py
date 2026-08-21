@@ -191,6 +191,12 @@ def _parse_date(value: str) -> date | None:
 
 
 def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
+    cooldown_seconds = data.settings.error_notification_cooldown_seconds
+    cooldown = (
+        f"{cooldown_seconds // 3600}h"
+        if cooldown_seconds % 3600 == 0
+        else f"{cooldown_seconds // 60}m"
+    )
     return {
         "auto_publish": "on" if data.settings.auto_publish else "",
         "max_comment_age_days": str(data.settings.max_comment_age_days),
@@ -199,6 +205,8 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
         "max_comments_per_hour": str(data.settings.max_comments_per_hour),
         "developer_telegram_chat_ids": split_csv_items(data.settings.developer_telegram_chat_ids),
         "error_email_list": split_csv_items(data.settings.error_email_list),
+        "error_notification_cooldown": cooldown,
+        "telegram_proxy_url": data.settings.telegram_proxy_url,
         "role": data.prompt.role,
         "tone_of_voice": data.prompt.tone_of_voice,
         "anti_rules": data.prompt.anti_rules,
@@ -219,6 +227,8 @@ def _form_values(form) -> dict[str, object]:
             "max_reply_length",
             "cta_every_n_comments",
             "max_comments_per_hour",
+            "error_notification_cooldown",
+            "telegram_proxy_url",
             "role",
             "tone_of_voice",
             "anti_rules",

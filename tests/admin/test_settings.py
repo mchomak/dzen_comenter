@@ -85,6 +85,8 @@ def _form() -> dict[str, object]:
         "max_comments_per_hour": "100",
         "developer_telegram_chat_ids": ["111", "222"],
         "error_email_list": ["one@example.com", "two@example.com"],
+        "error_notification_cooldown": "15m",
+        "telegram_proxy_url": "",
         "role": "new role",
         "tone_of_voice": "new tone",
         "anti_rules": "new rules",
@@ -94,6 +96,84 @@ def _form() -> dict[str, object]:
         "cta_link": "https://new.example/remont",
         "language": "ru",
     }
+
+
+@pytest.mark.parametrize(
+    ("interval", "expected_seconds"),
+    (("15m", 900), (" 15m ", 900), ("2h", 7200)),
+)
+def test_validate_settings_form_converts_notification_interval(interval, expected_seconds):
+    form = _form()
+    form["error_notification_cooldown"] = interval
+
+    data, errors = validate_settings_form(form)
+
+    assert errors == {}
+    assert data.settings.error_notification_cooldown_seconds == expected_seconds
+
+
+@pytest.mark.parametrize("interval", ("", "0m", "1.5h", "15d", "25h"))
+def test_validate_settings_form_rejects_invalid_notification_intervals(interval):
+    form = _form()
+    form["error_notification_cooldown"] = interval
+
+    _, errors = validate_settings_form(form)
+
+    assert "error_notification_cooldown" in errors
+
+
+@pytest.mark.parametrize(
+    "proxy_url",
+    ("", "http://proxy.example:8080", "https://proxy.example", "socks5://proxy.example", "socks5h://proxy.example"),
+)
+def test_validate_settings_form_accepts_supported_telegram_proxy_urls(proxy_url):
+    form = _form()
+    form["telegram_proxy_url"] = proxy_url
+
+    data, errors = validate_settings_form(form)
+
+    assert errors == {}
+    assert data.settings.telegram_proxy_url == proxy_url
+
+
+@pytest.mark.parametrize("proxy_url", ("proxy.example", "ftp://proxy.example", "http://:8080"))
+def test_validate_settings_form_rejects_invalid_telegram_proxy_urls(proxy_url):
+    form = _form()
+    form["telegram_proxy_url"] = proxy_url
+
+    _, errors = validate_settings_form(form)
+
+    assert "telegram_proxy_url" in errors
+
+
+def test_settings_saves_and_renders_notification_interval_and_telegram_proxy(client, settings):
+    data = _form()
+    data["error_notification_cooldown"] = "2h"
+    data["telegram_proxy_url"] = "socks5h://proxy.example:1080"
+
+    response = client.post("/settings", data=data)
+
+    assert response.status_code == 302
+    saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
+    assert saved["settings"]["error_notification_cooldown_seconds"] == 7200
+    assert saved["settings"]["telegram_proxy_url"] == "socks5h://proxy.example:1080"
+
+    reloaded = client.get("/settings")
+    assert 'name="error_notification_cooldown" value="2h"' in reloaded.text
+    assert 'name="telegram_proxy_url" value="socks5h://proxy.example:1080"' in reloaded.text
+
+
+def test_settings_rejects_invalid_proxy_without_losing_form_values(client):
+    data = _form()
+    data["error_notification_cooldown"] = "15m"
+    data["telegram_proxy_url"] = "ftp://proxy.example"
+
+    response = client.post("/settings", data=data)
+
+    assert response.status_code == 200
+    assert "Введите URL proxy" in response.text
+    assert 'name="error_notification_cooldown" value="15m"' in response.text
+    assert 'name="telegram_proxy_url" value="ftp://proxy.example"' in response.text
 
 
 def test_guest_settings_redirects_to_login(settings):

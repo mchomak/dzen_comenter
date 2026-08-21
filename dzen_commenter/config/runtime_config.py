@@ -37,6 +37,8 @@ class RuntimeSettings:
     max_comments_per_hour: int = 100
     developer_telegram_chat_ids: str = ""
     error_email_list: str = ""
+    error_notification_cooldown_seconds: int = 900
+    telegram_proxy_url: str = ""
 
 
 @dataclass
@@ -78,6 +80,13 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
             raw.get("developer_telegram_chat_ids", base.developer_telegram_chat_ids)
         ),
         error_email_list=str(raw.get("error_email_list", base.error_email_list)),
+        error_notification_cooldown_seconds=int(
+            raw.get(
+                "error_notification_cooldown_seconds",
+                base.error_notification_cooldown_seconds,
+            )
+        ),
+        telegram_proxy_url=str(raw.get("telegram_proxy_url", base.telegram_proxy_url)),
     )
 
 
