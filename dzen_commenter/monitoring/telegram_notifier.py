@@ -17,14 +17,17 @@ class TelegramNotifier:
         fallback: Notifier | None = None,
         client: object | None = None,
         chat_id_provider: Callable[[], str] | None = None,
+        proxy_url_provider: Callable[[], str] | None = None,
     ) -> None:
         self.bot_token = bot_token
         self.chat_id = chat_id
         self.chat_id_provider = chat_id_provider
         self.proxy_url = proxy_url.strip() if proxy_url else ""
+        self.proxy_url_provider = proxy_url_provider
         self.fallback = fallback
         self._httpx = import_module("httpx")
         self._client = client or self._make_client()
+        self._active_proxy_url = self.proxy_url
 
     def notify(self, message: str) -> None:
         try:
@@ -58,7 +61,24 @@ class TelegramNotifier:
             return self._httpx.Client(proxy=self.proxy_url)
         return self._httpx.Client()
 
+    def _refresh_client(self) -> None:
+        if self.proxy_url_provider is None:
+            return
+
+        proxy_url = self.proxy_url_provider().strip()
+        if proxy_url == self._active_proxy_url:
+            return
+
+        previous_client = self._client
+        self.proxy_url = proxy_url
+        self._client = self._make_client()
+        self._active_proxy_url = proxy_url
+        close = getattr(previous_client, "close", None)
+        if callable(close):
+            close()
+
     def _send(self, text: str) -> None:
+        self._refresh_client()
         raw_chat_ids = (
             self.chat_id_provider() if self.chat_id_provider is not None else self.chat_id
         )

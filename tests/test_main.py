@@ -60,6 +60,10 @@ def install_di_fakes(monkeypatch):
     class FakeRuntimeConfig:
         def __init__(self, path):
             self.path = path
+            self.settings = SimpleNamespace(
+                error_notification_cooldown_seconds=900,
+                telegram_proxy_url="http://runtime-proxy.example:8080",
+            )
             rec.events.append(("runtime_config", self))
 
         def get(self):
@@ -174,7 +178,12 @@ def test_build_app_wires_layers(monkeypatch):
     assert all(ev[0] != "email_fallback" for ev in rec.events)
     tg = _first(rec, "telegram_notifier")[1]
     assert tg.kwargs["fallback"] is None
+    assert tg.kwargs["proxy_url_provider"]() == "http://runtime-proxy.example:8080"
     auth_assistant = _first(rec, "auth_assistant")[1]
+    assert (
+        auth_assistant.kwargs["proxy_url_provider"]()
+        == "http://runtime-proxy.example:8080"
+    )
     assert session.kwargs["auth_assistant"] is auth_assistant
 
     # OrchestratorLoop — ровно 9 keyword-аргументов, каждый идентичен фейку.
@@ -361,6 +370,43 @@ def test_run_supervised_throttles_duplicate_error_notifications():
     )
 
     assert len(notifier.errors) == 1
+
+
+def test_run_supervised_uses_the_current_cooldown_for_duplicate_errors():
+    class FailingLoop:
+        def __init__(self):
+            self.calls = 0
+
+        def run_cycle(self):
+            self.calls += 1
+            if self.calls < 3:
+                raise RuntimeError("GigaChat is unavailable")
+            raise RuntimeError("database is unavailable")
+
+    loop = FailingLoop()
+    session = FakeSession()
+    notifier = FakeNotifier()
+    times = iter([0.0, 0.0, 0.0, 1.0, 1.0, 1.1, 1.1])
+    cooldown_calls = []
+
+    main.run_supervised(
+        loop,
+        session,
+        notifier,
+        poll_interval=1,
+        keepalive_interval=1000,
+        sleep_fn=lambda s: None,
+        time_fn=lambda: next(times),
+        error_notification_cooldown_provider=lambda: cooldown_calls.append(1) or 1,
+        max_cycles=3,
+    )
+
+    assert [str(error) for _, error in notifier.errors] == [
+        "GigaChat is unavailable",
+        "GigaChat is unavailable",
+        "database is unavailable",
+    ]
+    assert cooldown_calls == [1]
 
 
 # Acceptance 6 — keep-alive срабатывает по таймеру, не на каждой итерации.

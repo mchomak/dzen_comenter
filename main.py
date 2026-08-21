@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 
 import sqlalchemy
 
@@ -51,6 +52,7 @@ def build_app(
         bot_token=settings.TELEGRAM_BOT_TOKEN,
         chat_id=settings.TELEGRAM_CHAT_ID,
         proxy_url=settings.TELEGRAM_PROXY_URL,
+        proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
     )
 
     session = PlaywrightSessionManager(settings, auth_assistant=auth_assistant)
@@ -80,6 +82,7 @@ def build_app(
         proxy_url=settings.TELEGRAM_PROXY_URL,
         fallback=email_fallback,
         chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
+        proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
     ))
 
     loop = OrchestratorLoop(
@@ -108,6 +111,9 @@ def run_supervised(
     keepalive_interval: float,
     sleep_fn=time.sleep,
     time_fn=time.monotonic,
+    error_notification_cooldown_provider: Callable[[], int] = (
+        lambda: _ERROR_NOTIFICATION_COOLDOWN
+    ),
     max_cycles: int | None = None,
 ) -> None:
     last_keepalive = time_fn()
@@ -130,10 +136,14 @@ def run_supervised(
             )
             now = time_fn()
             error_signature = (type(exc), str(exc))
+            repeated_error = (
+                error_signature == last_error_signature
+                and last_error_notification_at is not None
+            )
             if (
-                error_signature != last_error_signature
-                or last_error_notification_at is None
-                or now - last_error_notification_at >= _ERROR_NOTIFICATION_COOLDOWN
+                not repeated_error
+                or now - last_error_notification_at
+                >= error_notification_cooldown_provider()
             ):
                 notifier.notify_error(
                     "Comment-processing cycle failed; retrying after the poll interval",
@@ -163,6 +173,9 @@ def main() -> None:
         notifier,
         poll_interval=settings.POLL_INTERVAL,
         keepalive_interval=settings.KEEPALIVE_INTERVAL,
+        error_notification_cooldown_provider=lambda: (
+            loop.runtime_config.get().settings.error_notification_cooldown_seconds
+        ),
     )
 
 

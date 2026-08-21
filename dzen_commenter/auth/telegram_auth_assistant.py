@@ -17,6 +17,7 @@ class TelegramAuthAssistant:
         poll_timeout: float = 30.0,
         poll_interval: float = 1.0,
         client: httpx.Client | None = None,
+        proxy_url_provider: Callable[[], str] | None = None,
         sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         self.bot_token = bot_token
@@ -24,9 +25,9 @@ class TelegramAuthAssistant:
         self.poll_timeout = poll_timeout
         self.poll_interval = poll_interval
         self.sleep_fn = sleep_fn
-        self._client = client or self._make_client(
-            proxy_url.strip() if proxy_url else ""
-        )
+        self.proxy_url_provider = proxy_url_provider
+        self._active_proxy_url = proxy_url.strip() if proxy_url else ""
+        self._client = client or self._make_client(self._active_proxy_url)
         self._ready_prompt_sent = False
         self._update_offset: int | None = None
 
@@ -134,7 +135,23 @@ class TelegramAuthAssistant:
             return httpx.Client(proxy=proxy_url)
         return httpx.Client()
 
+    def _refresh_client(self) -> None:
+        if self.proxy_url_provider is None:
+            return
+
+        proxy_url = self.proxy_url_provider().strip()
+        if proxy_url == self._active_proxy_url:
+            return
+
+        previous_client = self._client
+        self._client = self._make_client(proxy_url)
+        self._active_proxy_url = proxy_url
+        close = getattr(previous_client, "close", None)
+        if callable(close):
+            close()
+
     def _post(self, method: str, payload: dict) -> httpx.Response:
+        self._refresh_client()
         response = self._client.post(self._url(method), json=payload)
         response.raise_for_status()
         return response
