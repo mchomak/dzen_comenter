@@ -1,4 +1,16 @@
 from dzen_commenter.auth.dzen_login import DzenLoginAuthenticator, DzenSmsRestartRequested
+from dzen_commenter.auth.dzen_login_control import (
+    DzenLoginControlClient,
+    DzenLoginControlServer,
+    DzenLoginControlUnavailable,
+)
 from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
 
-__all__ = ["DzenLoginAuthenticator", "DzenSmsRestartRequested", "TelegramAuthAssistant"]
+__all__ = [
+    "DzenLoginAuthenticator",
+    "DzenSmsRestartRequested",
+    "DzenLoginControlClient",
+    "DzenLoginControlServer",
+    "DzenLoginControlUnavailable",
+    "TelegramAuthAssistant",
+]

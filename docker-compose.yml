@@ -14,10 +14,12 @@ services:
       VNC_PASSWORD: ${VNC_PASSWORD:-}
       NOVNC_PORT: ${NOVNC_PORT:-6080}
       RUNTIME_CONFIG_PATH: /app/config/runtime_config.json
+      DZEN_LOGIN_CONTROL_SOCKET: /run/dzen-login-control/dzen-login.sock
     volumes:
       - browser_data:/app/user_data
       - session_state:/app/session_state
       - config_data:/app/config
+      - dzen_login_control:/run/dzen-login-control
     ports:
       - "${VNC_PORT:-5900}:${VNC_PORT:-5900}"
       - "${NOVNC_PORT:-6080}:${NOVNC_PORT:-6080}"
@@ -43,8 +45,10 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://dzen:dzen@postgres:5432/dzen_commenter
       RUNTIME_CONFIG_PATH: /app/config/runtime_config.json
+      DZEN_LOGIN_CONTROL_SOCKET: /run/dzen-login-control/dzen-login.sock
     volumes:
       - config_data:/app/config
+      - dzen_login_control:/run/dzen-login-control
       - /run/dzen-vnc-control.sock:/run/dzen-vnc-control.sock
     ports:
       - "8080:8080"
@@ -74,3 +78,4 @@ volumes:
   browser_data:
   session_state:
   config_data:
+  dzen_login_control:

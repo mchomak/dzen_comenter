@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 
 from dzen_commenter.config.runtime_config import RuntimeConfig
@@ -63,11 +64,13 @@ class OrchestratorLoop:
 
     def run_cycle(self) -> None:
         if self.auth_assistant.poll_auth_command():
-            self.session.reset_authentication()
+            with self._browser_access():
+                self.session.reset_authentication()
             self.auth_assistant.reset_ready_prompt()
 
-        if not self._ensure_session():
-            return
+        with self._browser_access():
+            if not self._ensure_session():
+                return
 
         publication_id = self.repository.upsert_publication(
             Publication(
@@ -78,7 +81,8 @@ class OrchestratorLoop:
             )
         )
 
-        comments = self.page.fetch_comments()
+        with self._browser_access():
+            comments = self.page.fetch_comments()
         indexed_comments: list[tuple[int, Comment]] = []
         for comment in comments:
             comment.publication_id = publication_id
@@ -191,7 +195,10 @@ class OrchestratorLoop:
                 )
         author_prefix = f"{comment.author.strip()}, " if comment.author.strip() else ""
         model_reply_length = max_reply_length - len(author_prefix)
-        article_text = self.page.fetch_article_text(comment.post_url) if comment.post_url else None
+        with self._browser_access():
+            article_text = (
+                self.page.fetch_article_text(comment.post_url) if comment.post_url else None
+            )
         article_context_status = (
             "article_text_used" if article_text else "without_article_text"
         )
@@ -272,11 +279,12 @@ class OrchestratorLoop:
         self.repository.set_comment_status(comment_id, CommentStatus.ANSWERED)
 
         try:
-            self.page.publish_reply(
-                comment,
-                text,
-                auto_publish=auto_publish,
-            )
+            with self._browser_access():
+                self.page.publish_reply(
+                    comment,
+                    text,
+                    auto_publish=auto_publish,
+                )
         except Exception as exc:
             self.repository.set_reply_status(
                 reply_id,
@@ -293,6 +301,10 @@ class OrchestratorLoop:
                 ReplyStatus.PUBLISHED,
                 published_at=moscow_now(),
             )
+
+    def _browser_access(self):
+        browser_access = getattr(self.session, "browser_access", None)
+        return browser_access() if browser_access is not None else nullcontext()
 
     @staticmethod
     def _extract_reply_text(raw_text: str) -> str:

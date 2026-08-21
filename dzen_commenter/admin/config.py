@@ -18,3 +18,4 @@ class AdminSettings(BaseSettings):
     VNC_PORT: int = 5900
     VNC_PASSWORD: str = ""
     VNC_CONTROL_SOCKET: str = "/run/dzen-vnc-control.sock"
+    DZEN_LOGIN_CONTROL_SOCKET: str = "/run/dzen-login-control/dzen-login.sock"

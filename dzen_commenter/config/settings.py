@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     DZEN_LOGIN_PHONE: str = ""
     DZEN_LOGIN_PASSWORD: str = ""
     DZEN_LOGIN_TIMEOUT_MS: int = 30000
+    DZEN_LOGIN_CONTROL_SOCKET: str = "/run/dzen-login-control/dzen-login.sock"
 
     # Цикл
     POLL_INTERVAL: int

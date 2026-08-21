@@ -19,6 +19,7 @@ from dzen_commenter.admin.queries import (
 )
 from dzen_commenter.admin.validation import split_csv_items, validate_settings_form
 from dzen_commenter.admin.vnc_access import VncAccessClient, VncAccessUnavailable
+from dzen_commenter.auth import DzenLoginControlClient, DzenLoginControlUnavailable
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
 templates.env.filters["thread_messages"] = parse_thread_messages
@@ -28,6 +29,7 @@ def create_app(
     settings: AdminSettings | None = None,
     engine: Engine | None = None,
     vnc_access: VncAccessClient | None = None,
+    dzen_login_control: DzenLoginControlClient | None = None,
 ) -> FastAPI:
     settings = settings or AdminSettings()
     app = FastAPI(title="Dzen Commenter — админ-панель")
@@ -35,6 +37,9 @@ def create_app(
     app.state.engine = engine
     app.state.runtime_config = RuntimeConfig(settings.RUNTIME_CONFIG_PATH)
     app.state.vnc_access = vnc_access or VncAccessClient(settings.VNC_CONTROL_SOCKET)
+    app.state.dzen_login_control = dzen_login_control or DzenLoginControlClient(
+        settings.DZEN_LOGIN_CONTROL_SOCKET
+    )
 
     app.add_middleware(SessionMiddleware, secret_key=settings.ADMIN_SESSION_SECRET)
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -129,6 +134,7 @@ def create_app(
                 "vnc": _vnc_values(request.app.state.settings),
                 "errors": {},
                 "saved": request.query_params.get("saved") == "1",
+                "dzen_account_status": _dzen_account_status(request),
                 **_vnc_access_values(request.app.state.vnc_access),
             },
         )
@@ -146,12 +152,34 @@ def create_app(
                     "vnc": _vnc_values(request.app.state.settings),
                     "errors": errors,
                     "saved": False,
+                    "dzen_account_status": None,
                     **_vnc_access_values(request.app.state.vnc_access),
                 },
             )
 
         request.app.state.runtime_config.save(data)
         return RedirectResponse("/settings?saved=1", status_code=HTTP_302_FOUND)
+
+    @app.post("/settings/dzen-account")
+    async def dzen_account_submit(request: Request, _: None = Depends(require_login)):
+        form = await request.form()
+        login = str(form.get("login", "")).strip()
+        password = str(form.get("password", ""))
+        if not login or not password:
+            return _dzen_account_error_response(request, "Введите логин и пароль Дзена.")
+        try:
+            changed = request.app.state.dzen_login_control.login(login, password)
+        except DzenLoginControlUnavailable:
+            return RedirectResponse(
+                "/settings?dzen-account=unavailable", status_code=HTTP_302_FOUND
+            )
+        if not changed:
+            return RedirectResponse(
+                "/settings?dzen-account=failed", status_code=HTTP_302_FOUND
+            )
+        return RedirectResponse(
+            "/settings?dzen-account=changed", status_code=HTTP_302_FOUND
+        )
 
     @app.post("/settings/vnc-access")
     async def vnc_access_submit(request: Request, _: None = Depends(require_login)):
@@ -257,6 +285,31 @@ def _vnc_access_values(vnc_access: VncAccessClient) -> dict[str, object]:
         return {"vnc_access": {"enabled": vnc_access.status()}, "vnc_unavailable": False}
     except VncAccessUnavailable:
         return {"vnc_access": {"enabled": None}, "vnc_unavailable": True}
+
+
+def _dzen_account_error_response(request: Request, error: str):
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={
+            "values": _runtime_values(request.app.state.runtime_config.get()),
+            "vnc": _vnc_values(request.app.state.settings),
+            "errors": {},
+            "saved": False,
+            "dzen_account_status": {"error": error},
+            **_vnc_access_values(request.app.state.vnc_access),
+        },
+    )
+
+
+def _dzen_account_status(request: Request) -> dict[str, str] | None:
+    status = request.query_params.get("dzen-account")
+    messages = {
+        "changed": {"success": "Вход в новый аккаунт Дзена запущен."},
+        "failed": {"error": "Не удалось войти в новый аккаунт Дзена."},
+        "unavailable": {"error": "Рабочий процесс Дзена недоступен."},
+    }
+    return messages.get(status)
 
 
 app = create_app()

@@ -8,6 +8,7 @@ import sqlalchemy
 
 from dzen_commenter.ai.factory import create_provider
 from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
+from dzen_commenter.auth.dzen_login_control import DzenLoginControlServer
 from dzen_commenter.browser.session_manager import PlaywrightSessionManager
 from dzen_commenter.config.runtime_config import RuntimeConfig, ensure_runtime_config
 from dzen_commenter.config.settings import Settings
@@ -166,6 +167,7 @@ def main() -> None:
     configure_logging()
     settings = Settings()
     loop, session, notifier = build_app(settings)
+    DzenLoginControlServer(settings.DZEN_LOGIN_CONTROL_SOCKET, session).serve_in_thread()
     configure_logging(notifier=notifier)
     run_supervised(
         loop,
