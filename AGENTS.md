@@ -266,7 +266,7 @@ PASS, every number that gates a PASS was computed by code (not estimated), and
 
 | Команда | Назначение |
 |---|---|
-| `/tmp/dzen-commenter-test.3icCmB/bin/pytest` | Полный тестовый набор: проверено, `378 passed, 24 skipped`. |
+| `/tmp/dzen-commenter-test.3icCmB/bin/pytest` | Полный тестовый набор: проверено, `383 passed, 25 skipped`. |
 | `pip install -e '.[dev]'` | Установить пакет и тестовые зависимости в Python-окружение. |
 | `alembic upgrade head` | Применить миграции PostgreSQL. Docker entrypoint выполняет это перед стартом бота. |
 | `python main.py` | Запустить воркер комментариев; нужны переменные окружения и доступные PostgreSQL/Playwright. |
@@ -278,11 +278,11 @@ PASS, every number that gates a PASS was computed by code (not estimated), and
 ## Архитектура и точки входа
 
 - [main.py](main.py) собирает PostgreSQL-репозиторий, AI-провайдер, runtime-конфиг, Playwright-сессию, уведомления и `OrchestratorLoop`; поднимает Unix-socket для одноразовой смены аккаунта и supervision-цикл.
-- [dzen_commenter/orchestrator/loop.py](dzen_commenter/orchestrator/loop.py) восстанавливает либо получает авторизацию, читает и дедуплицирует комментарии, соблюдает ограничения по возрасту и числу публикаций в час, строит prompt, сохраняет reply и публикует его только при `auto_publish`.
+- [dzen_commenter/orchestrator/loop.py](dzen_commenter/orchestrator/loop.py) восстанавливает либо получает авторизацию, читает и дедуплицирует комментарии, соблюдает ограничения по возрасту и числу публикаций в час, строит prompt, сохраняет reply и публикует его только при `auto_publish`. Перед каждым AI-вызовом цикл сравнивает live `max_comments_per_hour` со счётчиком результатов AI за последний час Москвы; при достижении лимита прекращает обработку.
 - [dzen_commenter/dzen/page.py](dzen_commenter/dzen/page.py) — Playwright-адаптер Дзена: извлекает посты, ветки и относительное время, получает текст статьи и находит DOM-узел для ответа. Идентификатор комментария синтетический: хеш ссылки поста, автора и текста.
 - [dzen_commenter/browser/session_manager.py](dzen_commenter/browser/session_manager.py) владеет persistent Chromium-профилем, state сессии, keep-alive и заменой аккаунта. Доступ к браузеру сериализован `RLock`; `change_account` удаляет только заданный браузерный профиль, перезапускает контекст и передаёт новые учётные данные одноразово.
 - [dzen_commenter/db/models.py](dzen_commenter/db/models.py), [dzen_commenter/db/repository.py](dzen_commenter/db/repository.py) и [dzen_commenter/db/migrations](dzen_commenter/db/migrations) реализуют `publications` / `comments` / `replies`, PostgreSQL upsert, статусы ответов, контекст статьи и признак CTA-кандидата.
-- [dzen_commenter/prompt](dzen_commenter/prompt) формирует конфигурируемый брендовый prompt, классифицирует `lead`/`engage` по ключевым словам и выбирает публикации-кандидаты для CTA. [dzen_commenter/ai/factory.py](dzen_commenter/ai/factory.py) выбирает OpenAI-compatible, GigaChat или YandexGPT адаптер; в YandexGPT генерация пока не реализована.
+- [dzen_commenter/prompt](dzen_commenter/prompt) формирует конфигурируемый брендовый prompt, классифицирует `lead`/`engage` по ключевым словам и выбирает публикации-кандидаты для CTA. `DameoPromptBuilder` ограничивает только `PromptContext.thread_text`: для длинной ветки передаёт последние 400 символов; остальные поля контекста не обрезаются. [dzen_commenter/ai/factory.py](dzen_commenter/ai/factory.py) выбирает OpenAI-compatible, GigaChat или YandexGPT адаптер; в YandexGPT генерация пока не реализована.
 - [dzen_commenter/config/runtime_config.py](dzen_commenter/config/runtime_config.py) хранит несекретный JSON, атомарно сохраняет его и перечитывает по mtime. Панель пишет файл, воркер читает его в цикле; при отсутствующем или невалидном файле возвращаются последние валидные данные либо дефолты.
 - [dzen_commenter/admin/app.py](dzen_commenter/admin/app.py) — FastAPI/Jinja2-панель с сессионным входом, лентой и историей комментариев, настройками, сменой аккаунта и контролем VNC. Шаблоны и стили — в [dzen_commenter/admin/templates](dzen_commenter/admin/templates) и [dzen_commenter/admin/static/style.css](dzen_commenter/admin/static/style.css).
 - [dzen_commenter/auth/dzen_login_control.py](dzen_commenter/auth/dzen_login_control.py) передаёт логин и пароль от панели воркеру одной JSONL-командой по локальному Unix socket; данные не попадают в runtime JSON. [dzen_commenter/auth/telegram_auth_assistant.py](dzen_commenter/auth/telegram_auth_assistant.py) сопровождает интерактивный вход и коды через Telegram.
@@ -308,6 +308,8 @@ PASS, every number that gates a PASS was computed by code (not estimated), and
 ## Тесты и рабочие границы
 
 Тесты расположены в [tests](tests): контракты, цикл, БД/миграции, AI, prompt, Playwright session, Dzen page, auth, monitoring, runtime-config и admin-панель. Добавляйте новую логику за существующими Protocol/инъекционными швами из [dzen_commenter/contracts/interfaces.py](dzen_commenter/contracts/interfaces.py); тесты не должны поднимать реальный браузер или обращаться к внешним сервисам.
+
+Для защитного лимита используйте `CommentRepository.count_ai_attempts_since(since)`: SQL считает ответы со статусами `generated`, `published` и `error`, у которых `created_at >= since`, поэтому черновики и ошибки тоже расходуют лимит. Проверяйте его через `OrchestratorLoop.run_cycle` с fake repository/provider из [tests/orchestrator/conftest.py](tests/orchestrator/conftest.py); границу ветки — через `DameoPromptBuilder.build(PromptContext(...))` в [tests/prompt/test_builder.py](tests/prompt/test_builder.py). Полная проверенная команда: `/tmp/dzen-commenter-test.3icCmB/bin/pytest` (`383 passed, 25 skipped`).
 
 Сохраняйте границы модулей: runtime JSON — только для живых несекретных значений; панель не знает деталей Playwright и использует socket-клиенты для смены аккаунта и VNC; доступ к VNC меняется только через root-owned firewall controller. Не расширяйте изменения за текущую задачу и не удаляйте браузерный профиль вне штатного `change_account`.
 <!-- autopilot:end -->
