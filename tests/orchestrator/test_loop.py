@@ -780,6 +780,29 @@ def test_hourly_limit_leaves_next_comment_unprocessed(loop_factory, comment_fact
     assert harness.ai_provider.calls == []
 
 
+def test_hourly_limit_counts_draft_ai_attempts(loop_factory, comment_factory, monkeypatch):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 7, 31, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        settings_overrides={"AUTO_PUBLISH": False, "MAX_COMMENTS_PER_HOUR": 1},
+    )
+    draft = harness.loop._make_reply(
+        comment_id=1000,
+        text="generated draft",
+        status=ReplyStatus.GENERATED,
+        error_reason=None,
+    )
+    harness.repository.save_reply(draft)
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[1].status == CommentStatus.NEW
+    assert harness.ai_provider.calls == []
+
+
 def test_cta_does_not_overflow_or_attach_to_empty_reply(loop_factory, comment_factory):
     target = comment_factory(1)
     target.publication_title = "Ремонт кухни"

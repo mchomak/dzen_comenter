@@ -96,10 +96,10 @@ class OrchestratorLoop:
                 break
 
             runtime_settings = self.runtime_config.get().settings
-            published_since = self.repository.count_published_replies_since(
+            attempts_since = self.repository.count_ai_attempts_since(
                 moscow_now() - timedelta(hours=1)
             )
-            if published_since >= runtime_settings.max_comments_per_hour:
+            if attempts_since >= runtime_settings.max_comments_per_hour:
                 break
 
             if self.repository.has_generated_reply(comment_id):

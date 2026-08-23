@@ -166,6 +166,38 @@ def test_published_reply_counters_ignore_errors_and_old_replies(repo):
     assert repo.count_cta_candidates_produced() == 3
 
 
+def test_ai_attempt_counter_includes_recent_generated_published_and_errors(repo):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 7, 31, 12, 0, 0)
+    recent_statuses = (
+        ReplyStatus.GENERATED,
+        ReplyStatus.PUBLISHED,
+        ReplyStatus.ERROR,
+    )
+
+    for index, status in enumerate(recent_statuses):
+        comment_id = repo.upsert_comment(
+            _make_comment(publication_id, dzen_id=f"recent-{index}")
+        )
+        reply = _make_reply(comment_id, status=status)
+        reply.created_at = now
+        repo.save_reply(reply)
+
+    old_comment_id = repo.upsert_comment(_make_comment(publication_id, dzen_id="old"))
+    old_reply = _make_reply(old_comment_id)
+    old_reply.created_at = now - timedelta(hours=1, microseconds=1)
+    repo.save_reply(old_reply)
+
+    skipped_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="skipped")
+    )
+    skipped_reply = _make_reply(skipped_comment_id, status=ReplyStatus.SKIPPED)
+    skipped_reply.created_at = now
+    repo.save_reply(skipped_reply)
+
+    assert repo.count_ai_attempts_since(now - timedelta(hours=1)) == 3
+
+
 # --- Acceptance 2: UNIQUE constraints ---
 
 
@@ -220,6 +252,7 @@ def test_repository_fulfils_contract(repo):
         "has_published_reply",
         "is_own_reply",
         "count_published_replies_since",
+        "count_ai_attempts_since",
         "count_cta_candidates_produced",
     ):
         assert callable(getattr(repo, method))

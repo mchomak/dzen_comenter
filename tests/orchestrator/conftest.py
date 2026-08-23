@@ -117,6 +117,15 @@ class FakeCommentRepository:
             for reply in self.replies.values()
         )
 
+    def count_ai_attempts_since(self, since: datetime) -> int:
+        return sum(
+            reply.status
+            in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED, ReplyStatus.ERROR)
+            and reply.created_at is not None
+            and reply.created_at >= since
+            for reply in self.replies.values()
+        )
+
     def count_cta_candidates_produced(self) -> int:
         return sum(
             reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED)

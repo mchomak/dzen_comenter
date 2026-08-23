@@ -141,6 +141,20 @@ class PostgresCommentRepository:
         with self._engine.begin() as conn:
             return int(conn.execute(stmt).scalar_one())
 
+    def count_ai_attempts_since(self, since: datetime) -> int:
+        stmt = select(func.count()).select_from(ReplyTable).where(
+            ReplyTable.status.in_(
+                [
+                    ReplyStatus.GENERATED.value,
+                    ReplyStatus.PUBLISHED.value,
+                    ReplyStatus.ERROR.value,
+                ]
+            ),
+            ReplyTable.created_at >= since,
+        )
+        with self._engine.begin() as conn:
+            return int(conn.execute(stmt).scalar_one())
+
     def count_cta_candidates_produced(self) -> int:
         stmt = select(func.count()).select_from(ReplyTable).where(
             ReplyTable.status.in_(
