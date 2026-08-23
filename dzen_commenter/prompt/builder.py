@@ -3,6 +3,8 @@ from collections.abc import Callable
 from dzen_commenter.contracts.interfaces import PromptContext
 from dzen_commenter.prompt.config_loader import PromptBrandConfig, load_brand_config
 
+_THREAD_CONTEXT_LIMIT = 400
+
 
 class DameoPromptBuilder:
     """Build a complete Russian-language prompt for a Dzen comment reply."""
@@ -26,6 +28,8 @@ class DameoPromptBuilder:
             config = self._config_provider()
         else:
             config = self._config
+        thread_text = context.thread_text[-_THREAD_CONTEXT_LIMIT:]
+        thread_context = thread_text or "нет предыдущих сообщений"
         task = (
             config.task_lead
             if context.reply_type == "lead"
@@ -35,14 +39,14 @@ class DameoPromptBuilder:
             context_block = (
                 "ВХОДНЫЕ ДАННЫЕ:\n"
                 f"Тема статьи: {context.publication_title}\n"
-                f"Ветка комментариев (предыдущие сообщения): {context.thread_text or 'нет предыдущих сообщений'}\n"
+                f"Ветка комментариев (предыдущие сообщения): {thread_context}\n"
                 f"Комментарий, на который нужно ответить: {context.comment_text}"
             )
         else:
             context_block = (
                 "Контекст:\n"
                 f"Тема публикации: {context.publication_title}\n"
-                f"Ветка обсуждения: {context.thread_text}"
+                f"Ветка обсуждения: {thread_context}"
             )
         article_block = ""
         if context.article_text:

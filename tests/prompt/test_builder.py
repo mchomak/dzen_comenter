@@ -121,6 +121,67 @@ def test_explicit_comment_context_has_separate_input_fields():
     assert "Комментарий, на который нужно ответить: target comment" in result
 
 
+def test_thread_context_is_bounded_without_trimming_other_inputs():
+    short_thread = "short thread"
+    short_result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title="article",
+            thread_text=short_thread,
+            comment_text="comment",
+            reply_type="engage",
+        )
+    )
+    assert "Ветка комментариев (предыдущие сообщения): short thread" in short_result
+
+    thread_tail = "latest-" + "z" * 393
+    title = "title-" + "t" * 401
+    comment = "comment-" + "c" * 401
+    post_url = "https://dzen.ru/" + "u" * 401
+    article_text = "article-" + "a" * 401
+    result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title=title,
+            thread_text="discarded-thread-" + thread_tail,
+            comment_text=comment,
+            reply_type="engage",
+            post_url=post_url,
+            article_text=article_text,
+        )
+    )
+
+    assert f"Ветка комментариев (предыдущие сообщения): {thread_tail}" in result
+    assert "discarded-thread-" not in result
+    assert title in result
+    assert comment in result
+    assert post_url in result
+    assert article_text in result
+
+
+def test_empty_thread_keeps_human_readable_placeholder():
+    result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title="article",
+            thread_text="",
+            comment_text="comment",
+            reply_type="engage",
+        )
+    )
+
+    assert "Ветка комментариев (предыдущие сообщения): нет предыдущих сообщений" in result
+
+
+def test_empty_thread_keeps_human_readable_placeholder_without_comment_text():
+    result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title="article",
+            thread_text="",
+            reply_type="engage",
+        )
+    )
+
+    assert "Ветка обсуждения: нет предыдущих сообщений" in result
+
+
 def test_article_text_context_instructs_model_to_read_article_before_reply():
     result = DameoPromptBuilder().build(
         PromptContext(
