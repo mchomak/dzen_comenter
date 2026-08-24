@@ -116,9 +116,11 @@ class FakeArticlePage:
         self,
         *,
         article_text: str = "",
+        article_content: dict | None = None,
         goto_error: Exception | None = None,
     ) -> None:
         self.article_text = article_text
+        self.article_content = article_content
         self.goto_error = goto_error
         self.goto_calls: list[tuple[str, str]] = []
         self.close_calls = 0
@@ -132,6 +134,9 @@ class FakeArticlePage:
         if selector == "article" and self.article_text:
             return FakeText(self.article_text)
         return None
+
+    def evaluate(self, _script: str):
+        return self.article_content
 
     def close(self) -> None:
         self.close_calls += 1
@@ -165,20 +170,41 @@ def test_fetch_article_text_uses_article_body_and_closes_temporary_tab():
     assert article_page.close_calls == 1
 
 
-def test_fetch_article_text_uses_dzen_article_class_when_semantic_elements_are_empty():
-    class ClassOnlyArticlePage(FakeArticlePage):
+def test_fetch_article_text_does_not_fall_back_to_the_page_main_element():
+    class MainOnlyArticlePage(FakeArticlePage):
         def query_selector(self, selector: str):
-            if selector == '[class*="article"]':
-                return FakeText("Dzen article body")
+            if selector == "main":
+                return FakeText("Page chrome and recommendations")
             return None
 
     browser = FakePage([FakeGroup("/a/post", [])])
-    article_page = ClassOnlyArticlePage()
+    article_page = MainOnlyArticlePage()
     browser.context.article_pages = [article_page]
     page = DzenStudioPage(browser)
 
-    assert page.fetch_article_text("https://dzen.ru/a/post") == "Dzen article body"
+    assert page.fetch_article_text("https://dzen.ru/a/post") is None
     assert article_page.close_calls == 1
+
+
+def test_fetch_article_text_keeps_content_blocks_and_removes_promotional_noise():
+    browser = FakePage([FakeGroup("/a/post", [])])
+    article_page = FakeArticlePage(
+        article_content={
+            "title": "Article title",
+            "blocks": [
+                {"tag": "P", "text": "Useful article detail"},
+                {"tag": "FIGCAPTION", "text": "Designed by Example"},
+                {"tag": "P", "text": "Calculate with Domeo"},
+                {"tag": "BLOCKQUOTE", "text": "Important conclusion"},
+            ],
+        }
+    )
+    browser.context.article_pages = [article_page]
+    page = DzenStudioPage(browser)
+
+    assert page.fetch_article_text("https://dzen.ru/a/post") == (
+        "Article title\n\nUseful article detail\n\nImportant conclusion"
+    )
 
 
 def test_fetch_article_text_skips_video_posts_without_opening_a_tab():

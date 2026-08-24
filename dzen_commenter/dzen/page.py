@@ -22,6 +22,22 @@ def synthetic_id(post_href: str, author_href: str, text: str) -> str:
 
 
 _POST_PATH_PREFIXES = ("/a/", "/video/watch/")
+_ARTICLE_CONTENT_SELECTOR = '[class*="article-render__container"]'
+_PROMOTIONAL_ARTICLE_MARKERS = (
+    "domeo",
+    "domeo.ru",
+    "калькулятор",
+    "подписывайтесь",
+    "подпишитесь",
+    "читайте ещё",
+    "читайте еще",
+    "рекомендую эти статьи",
+    "читайте больше на канале",
+    "бесплатно рассчита",
+    "посмотрите проект",
+    "посмотреть больше работ",
+    "советует начать свой ремонт",
+)
 
 
 def _post_url(post_href: str) -> str | None:
@@ -92,19 +108,65 @@ class DzenStudioPage:
         article_page = self._page.context.new_page()
         try:
             article_page.goto(post_url, wait_until="domcontentloaded")
-            text = ""
-            for selector in ("article", "main", '[class*="article"]'):
-                article = article_page.query_selector(selector)
-                candidate = article.inner_text().strip() if article else ""
-                if candidate:
-                    text = candidate
-                    break
+            text = self._extract_article_text(article_page)
         except Exception:
             text = ""
         finally:
             article_page.close()
         self._article_text_by_url[post_url] = text or None
         return self._article_text_by_url[post_url]
+
+    @staticmethod
+    def _extract_article_text(article_page: Any) -> str:
+        wait_for_selector = getattr(article_page, "wait_for_selector", None)
+        if wait_for_selector is not None:
+            try:
+                wait_for_selector(_ARTICLE_CONTENT_SELECTOR, timeout=5_000)
+            except Exception:
+                pass
+
+        try:
+            article_content = article_page.evaluate(
+                """
+            () => {
+                const root = document.querySelector('[class*="article-render__container"]');
+                if (!root) return null;
+                const text = (node) => (node.innerText || '').trim();
+                const title = text(document.querySelector('h1'));
+                const blocks = [];
+                for (const node of root.children) {
+                    if (!node.matches('p, h2, h3, h4, li, blockquote, figcaption')) continue;
+                    const value = text(node);
+                    if (value) blocks.push({ tag: node.tagName, text: value });
+                }
+                return { title, blocks };
+            }
+            """
+            )
+        except Exception:
+            article_content = None
+        if not article_content:
+            article = article_page.query_selector("article")
+            return article.inner_text().strip() if article else ""
+
+        parts = []
+        title = article_content.get("title", "")
+        if title:
+            parts.append(title)
+        for block in article_content.get("blocks", []):
+            text = block.get("text", "").strip()
+            if text and not DzenStudioPage._is_article_noise_block(
+                text, block.get("tag", "")
+            ):
+                parts.append(text)
+        return "\n\n".join(parts)
+
+    @staticmethod
+    def _is_article_noise_block(text: str, tag: str) -> bool:
+        if tag.upper() == "FIGCAPTION":
+            return True
+        normalized = text.casefold()
+        return any(marker in normalized for marker in _PROMOTIONAL_ARTICLE_MARKERS)
 
     def fetch_comments(self) -> list[Comment]:
         comments: list[Comment] = []
