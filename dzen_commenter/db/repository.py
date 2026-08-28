@@ -1,12 +1,26 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
-from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
-from dzen_commenter.contracts.models import Comment, Publication, Reply
-from dzen_commenter.db.models import CommentTable, PublicationTable, ReplyTable
+from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.models import (
+    BatchItem,
+    BatchOutcome,
+    ClaimedBatch,
+    Comment,
+    Publication,
+    Reply,
+)
+from dzen_commenter.db.models import (
+    CommentBatchQueueTable,
+    CommentTable,
+    PublicationTable,
+    ReplyBatchItemTable,
+    ReplyBatchTable,
+    ReplyTable,
+)
 
 
 class PostgresCommentRepository:
@@ -148,12 +162,286 @@ class PostgresCommentRepository:
                     ReplyStatus.GENERATED.value,
                     ReplyStatus.PUBLISHED.value,
                     ReplyStatus.ERROR.value,
+                    ReplyStatus.SKIPPED.value,
                 ]
             ),
             ReplyTable.created_at >= since,
         )
         with self._engine.begin() as conn:
             return int(conn.execute(stmt).scalar_one())
+
+    def enqueue_batch_comment(
+        self,
+        comment_id: int,
+        post_url: str,
+        *,
+        queued_at: datetime,
+        cutover_at: datetime,
+    ) -> bool:
+        """Queue a fresh, eligible comment once without reviving historical rows."""
+        successful_reply = exists(
+            select(ReplyTable.id).where(
+                ReplyTable.comment_id == CommentTable.id,
+                ReplyTable.status.in_(
+                    [ReplyStatus.GENERATED.value, ReplyStatus.PUBLISHED.value]
+                ),
+            )
+        )
+        eligible = select(CommentTable.id).where(
+            CommentTable.id == comment_id,
+            CommentTable.post_url == post_url,
+            CommentTable.status == CommentStatus.NEW.value,
+            CommentTable.fetched_at >= cutover_at,
+            ~successful_reply,
+        )
+        stmt = (
+            insert(CommentBatchQueueTable)
+            .from_select(
+                ["comment_id", "post_url", "queued_at", "state", "attempt_count"],
+                select(
+                    CommentTable.id,
+                    CommentTable.post_url,
+                    queued_at,
+                    "queued",
+                    0,
+                ).where(CommentTable.id.in_(eligible)),
+            )
+            .on_conflict_do_nothing(index_elements=[CommentBatchQueueTable.comment_id])
+            .returning(CommentBatchQueueTable.comment_id)
+        )
+        with self._engine.begin() as conn:
+            return conn.execute(stmt).scalar_one_or_none() is not None
+
+    def claim_next_batch(
+        self,
+        now: datetime,
+        *,
+        max_comments: int,
+        wait_hours: int,
+        quota_remaining: int,
+    ) -> ClaimedBatch | None:
+        """Claim one post-local batch under row locks in a stable item order."""
+        limit = min(max_comments, quota_remaining)
+        if limit <= 0:
+            return None
+
+        ready = (
+            (CommentBatchQueueTable.state == "queued")
+            & (CommentBatchQueueTable.claimed_batch_id.is_(None))
+            & (
+                (CommentBatchQueueTable.next_attempt_at.is_(None))
+                | (CommentBatchQueueTable.next_attempt_at <= now)
+            )
+        )
+        with self._engine.begin() as conn:
+            first_post_url = conn.execute(
+                select(CommentBatchQueueTable.post_url)
+                .where(ready)
+                .order_by(
+                    CommentBatchQueueTable.queued_at,
+                    CommentBatchQueueTable.comment_id,
+                )
+                .limit(1)
+                .with_for_update(skip_locked=True, of=CommentBatchQueueTable)
+            ).scalar_one_or_none()
+            if first_post_url is None:
+                return None
+
+            rows = conn.execute(
+                select(CommentBatchQueueTable, CommentTable)
+                .join(
+                    CommentTable,
+                    CommentTable.id == CommentBatchQueueTable.comment_id,
+                )
+                .where(ready, CommentBatchQueueTable.post_url == first_post_url)
+                .order_by(
+                    CommentBatchQueueTable.queued_at,
+                    CommentBatchQueueTable.comment_id,
+                )
+                .limit(limit)
+                .with_for_update(skip_locked=True, of=CommentBatchQueueTable)
+            ).all()
+            if not rows:
+                return None
+            oldest = rows[0][0].queued_at
+            if len(rows) < limit and oldest > now - timedelta(hours=wait_hours):
+                return None
+
+            batch_id = conn.execute(
+                insert(ReplyBatchTable)
+                .values(
+                    post_url=first_post_url,
+                    created_at=now,
+                    status="claimed",
+                    item_count=len(rows),
+                )
+                .returning(ReplyBatchTable.id)
+            ).scalar_one()
+            items = tuple(
+                BatchItem(
+                    batch_id=batch_id,
+                    comment_id=comment.id,
+                    item_no=index,
+                    post_url=first_post_url,
+                    publication_title=comment.post_title or "",
+                    thread_text=comment.thread_text or "",
+                    author=comment.author or "",
+                    comment_text=comment.text or "",
+                )
+                for index, (_, comment) in enumerate(rows, start=1)
+            )
+            conn.execute(
+                insert(ReplyBatchItemTable),
+                [
+                    {
+                        "batch_id": batch_id,
+                        "comment_id": item.comment_id,
+                        "item_no": item.item_no,
+                        "status": "claimed",
+                    }
+                    for item in items
+                ],
+            )
+            comment_ids = [item.comment_id for item in items]
+            conn.execute(
+                update(CommentBatchQueueTable)
+                .where(CommentBatchQueueTable.comment_id.in_(comment_ids))
+                .values(
+                    state="claimed",
+                    claimed_batch_id=batch_id,
+                    attempt_count=CommentBatchQueueTable.attempt_count + 1,
+                )
+            )
+            return ClaimedBatch(
+                id=batch_id,
+                post_url=first_post_url,
+                created_at=now,
+                items=items,
+            )
+
+    def save_batch_outcomes(
+        self,
+        batch_id: int,
+        outcomes: tuple[BatchOutcome, ...],
+        *,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        created_at: datetime,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        retry_cooldown_minutes: int,
+        max_attempts_per_comment: int,
+    ) -> tuple[int, ...]:
+        """Persist every item outcome in one transaction or persist none of them."""
+        with self._engine.begin() as conn:
+            items = conn.execute(
+                select(ReplyBatchItemTable)
+                .where(ReplyBatchItemTable.batch_id == batch_id)
+                .order_by(ReplyBatchItemTable.item_no)
+                .with_for_update()
+            ).scalars().all()
+            expected = [(item.comment_id, item.item_no) for item in items]
+            actual = [(outcome.comment_id, outcome.item_no) for outcome in outcomes]
+            if not items or actual != expected:
+                raise ValueError("Batch outcomes do not match the claimed item order")
+            if any(
+                outcome.kind not in set(BatchOutcomeKind) for outcome in outcomes
+            ):
+                raise ValueError("Unknown batch outcome kind")
+
+            queue_rows = conn.execute(
+                select(CommentBatchQueueTable)
+                .where(
+                    CommentBatchQueueTable.comment_id.in_(
+                        [outcome.comment_id for outcome in outcomes]
+                    ),
+                    CommentBatchQueueTable.claimed_batch_id == batch_id,
+                    CommentBatchQueueTable.state == "claimed",
+                )
+                .with_for_update()
+            ).scalars().all()
+            queues = {queue.comment_id: queue for queue in queue_rows}
+            if len(queues) != len(outcomes):
+                raise ValueError("Batch queue claim is no longer active")
+
+            reply_ids: list[int] = []
+            has_error = False
+            batch_error_reason: str | None = None
+            for item, outcome in zip(items, outcomes, strict=True):
+                if outcome.kind is BatchOutcomeKind.REPLY:
+                    reply_status = ReplyStatus.GENERATED
+                    comment_status = CommentStatus.ANSWERED
+                elif outcome.kind is BatchOutcomeKind.SKIP:
+                    reply_status = ReplyStatus.SKIPPED
+                    comment_status = CommentStatus.SKIPPED
+                else:
+                    reply_status = ReplyStatus.ERROR
+                    comment_status = CommentStatus.ERROR
+                    has_error = True
+                    batch_error_reason = batch_error_reason or outcome.error_reason
+
+                reply_id = conn.execute(
+                    insert(ReplyTable)
+                    .values(
+                        comment_id=outcome.comment_id,
+                        generated_text=outcome.text,
+                        ai_provider=ai_provider,
+                        ai_model=ai_model,
+                        status=reply_status.value,
+                        error_reason=outcome.error_reason,
+                        created_at=created_at,
+                        article_context_status=article_context_status,
+                        is_cta_candidate=False,
+                    )
+                    .returning(ReplyTable.id)
+                ).scalar_one()
+                reply_ids.append(reply_id)
+                conn.execute(
+                    update(ReplyBatchItemTable)
+                    .where(
+                        ReplyBatchItemTable.batch_id == batch_id,
+                        ReplyBatchItemTable.comment_id == outcome.comment_id,
+                    )
+                    .values(status=reply_status.value, reply_id=reply_id)
+                )
+                conn.execute(
+                    update(CommentTable)
+                    .where(CommentTable.id == outcome.comment_id)
+                    .values(status=comment_status.value)
+                )
+
+                queue = queues[outcome.comment_id]
+                retry = (
+                    outcome.kind is BatchOutcomeKind.ERROR
+                    and queue.attempt_count < max_attempts_per_comment
+                )
+                conn.execute(
+                    update(CommentBatchQueueTable)
+                    .where(CommentBatchQueueTable.comment_id == outcome.comment_id)
+                    .values(
+                        state="queued" if retry else "completed",
+                        claimed_batch_id=None if retry else batch_id,
+                        next_attempt_at=(
+                            created_at + timedelta(minutes=retry_cooldown_minutes)
+                            if retry
+                            else None
+                        ),
+                    )
+                )
+
+            conn.execute(
+                update(ReplyBatchTable)
+                .where(ReplyBatchTable.id == batch_id)
+                .values(
+                    status="error" if has_error else "completed",
+                    article_context_status=article_context_status,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    error_reason=batch_error_reason,
+                )
+            )
+            return tuple(reply_ids)
 
     def count_cta_candidates_produced(self) -> int:
         stmt = select(func.count()).select_from(ReplyTable).where(

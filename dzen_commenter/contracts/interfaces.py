@@ -4,7 +4,13 @@ from contextlib import AbstractContextManager
 from typing import Literal, Protocol
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
-from dzen_commenter.contracts.models import Comment, Publication, Reply
+from dzen_commenter.contracts.models import (
+    BatchOutcome,
+    ClaimedBatch,
+    Comment,
+    Publication,
+    Reply,
+)
 
 ReplyType = Literal["lead", "engage"]
 
@@ -33,6 +39,36 @@ class CommentRepository(Protocol):
     ) -> None: ...
     def count_published_replies_since(self, since: datetime) -> int: ...
     def count_ai_attempts_since(self, since: datetime) -> int: ...
+    def enqueue_batch_comment(
+        self,
+        comment_id: int,
+        post_url: str,
+        *,
+        queued_at: datetime,
+        cutover_at: datetime,
+    ) -> bool: ...
+    def claim_next_batch(
+        self,
+        now: datetime,
+        *,
+        max_comments: int,
+        wait_hours: int,
+        quota_remaining: int,
+    ) -> ClaimedBatch | None: ...
+    def save_batch_outcomes(
+        self,
+        batch_id: int,
+        outcomes: tuple[BatchOutcome, ...],
+        *,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        created_at: datetime,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        retry_cooldown_minutes: int,
+        max_attempts_per_comment: int,
+    ) -> tuple[int, ...]: ...
     def count_cta_candidates_produced(self) -> int: ...
     def has_generated_reply(self, comment_id: int) -> bool: ...
     def has_published_reply(self, comment_id: int) -> bool: ...

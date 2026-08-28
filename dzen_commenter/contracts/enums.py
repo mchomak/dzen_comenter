@@ -13,3 +13,9 @@ class ReplyStatus(str, Enum):
     PUBLISHED = "published"
     ERROR = "error"
     SKIPPED = "skipped"
+
+
+class BatchOutcomeKind(str, Enum):
+    REPLY = "reply"
+    SKIP = "skip"
+    ERROR = "error"

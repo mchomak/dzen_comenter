@@ -10,8 +10,15 @@ import dzen_commenter.contracts  # noqa: F401
 from dzen_commenter.config.runtime_config import RuntimeSettings
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts import interfaces
-from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
-from dzen_commenter.contracts.models import Comment, Publication, Reply  # noqa: F401
+from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.models import (  # noqa: F401
+    BatchItem,
+    BatchOutcome,
+    ClaimedBatch,
+    Comment,
+    Publication,
+    Reply,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = REPO_ROOT / ".env.example"
@@ -81,6 +88,7 @@ def test_enum_values():
         "error",
         "skipped",
     }
+    assert {s.value for s in BatchOutcomeKind} == {"reply", "skip", "error"}
 
 
 def test_interfaces_exported():
@@ -124,6 +132,17 @@ def test_settings_fields_match_model():
 
 def test_runtime_auto_publish_defaults_false():
     assert RuntimeSettings().auto_publish is False
+
+
+def test_runtime_batching_defaults_are_disabled_and_safe():
+    settings = RuntimeSettings()
+
+    assert settings.batch_replies_enabled is False
+    assert settings.batch_cutover_at is None
+    assert settings.batch_max_comments == 3
+    assert settings.batch_wait_hours == 12
+    assert settings.batch_retry_cooldown_minutes == 60
+    assert settings.batch_max_attempts_per_comment == 2
 
 
 def _parse_env_keys(path: pathlib.Path) -> set[str]:

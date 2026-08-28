@@ -39,6 +39,12 @@ class RuntimeSettings:
     error_email_list: str = ""
     error_notification_cooldown_seconds: int = 900
     telegram_proxy_url: str = ""
+    batch_replies_enabled: bool = False
+    batch_cutover_at: str | None = None
+    batch_max_comments: int = 3
+    batch_wait_hours: int = 12
+    batch_retry_cooldown_minutes: int = 60
+    batch_max_attempts_per_comment: int = 2
 
 
 @dataclass
@@ -87,6 +93,26 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
             )
         ),
         telegram_proxy_url=str(raw.get("telegram_proxy_url", base.telegram_proxy_url)),
+        batch_replies_enabled=bool(
+            raw.get("batch_replies_enabled", base.batch_replies_enabled)
+        ),
+        batch_cutover_at=(
+            str(raw["batch_cutover_at"])
+            if raw.get("batch_cutover_at") is not None
+            else None
+        ),
+        batch_max_comments=int(raw.get("batch_max_comments", base.batch_max_comments)),
+        batch_wait_hours=int(raw.get("batch_wait_hours", base.batch_wait_hours)),
+        batch_retry_cooldown_minutes=int(
+            raw.get(
+                "batch_retry_cooldown_minutes", base.batch_retry_cooldown_minutes
+            )
+        ),
+        batch_max_attempts_per_comment=int(
+            raw.get(
+                "batch_max_attempts_per_comment", base.batch_max_attempts_per_comment
+            )
+        ),
     )
 
 

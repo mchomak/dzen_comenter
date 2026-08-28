@@ -9,6 +9,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _drop_all(engine) -> None:
     with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS reply_batch_items CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS comment_batch_queue CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS reply_batches CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS replies CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS comments CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS publications CASCADE"))
@@ -44,6 +47,9 @@ def clean_rows(engine):
     """Truncate data between tests so each test sees an empty schema."""
     with engine.begin() as conn:
         conn.execute(
-            text("TRUNCATE replies, comments, publications RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE reply_batch_items, comment_batch_queue, reply_batches, "
+                "replies, comments, publications RESTART IDENTITY CASCADE"
+            )
         )
     yield

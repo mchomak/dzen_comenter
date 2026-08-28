@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -52,3 +52,45 @@ class ReplyTable(Base):
     created_at: Mapped[datetime | None] = mapped_column()
     article_context_status: Mapped[str | None] = mapped_column(Text)
     is_cta_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ReplyBatchTable(Base):
+    __tablename__ = "reply_batches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_url: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    item_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    article_context_status: Mapped[str | None] = mapped_column(Text)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer)
+    error_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class CommentBatchQueueTable(Base):
+    __tablename__ = "comment_batch_queue"
+
+    comment_id: Mapped[int] = mapped_column(
+        ForeignKey("comments.id"), primary_key=True
+    )
+    post_url: Mapped[str] = mapped_column(Text, nullable=False)
+    queued_at: Mapped[datetime] = mapped_column(nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column()
+    claimed_batch_id: Mapped[int | None] = mapped_column(ForeignKey("reply_batches.id"))
+
+
+class ReplyBatchItemTable(Base):
+    __tablename__ = "reply_batch_items"
+
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("reply_batches.id"), primary_key=True
+    )
+    comment_id: Mapped[int] = mapped_column(
+        ForeignKey("comments.id"), primary_key=True
+    )
+    item_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    reply_id: Mapped[int | None] = mapped_column(ForeignKey("replies.id"))
