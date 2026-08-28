@@ -192,6 +192,29 @@ def test_batch_uses_no_article_fallback(loop_factory, comment_factory):
     } == {"without_article_text"}
 
 
+def test_batch_continues_when_article_extraction_raises(loop_factory, comment_factory):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=["C01\tREPLY\tПервый\nC02\tREPLY\tВторой\nC03\tREPLY\tТретий"],
+    )
+
+    def fail_article_extraction(post_url):
+        raise RuntimeError("article extraction failed")
+
+    harness.page.fetch_article_text = fail_article_extraction
+
+    harness.loop.run_cycle()
+
+    assert harness.batch_prompt_builder.calls[0][1] == ""
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert {row["state"] for row in harness.repository.batch_queue.values()} == {
+        "completed"
+    }
+    assert harness.page.publish_calls
+
+
 def test_batch_continues_after_one_publication_failure(loop_factory, comment_factory):
     comments = _batch_comments(comment_factory, 3)
     harness = loop_factory(

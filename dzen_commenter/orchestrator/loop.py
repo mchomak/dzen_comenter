@@ -205,8 +205,12 @@ class OrchestratorLoop:
         comments_by_id: dict[int, Comment],
         runtime_settings,
     ) -> None:
-        with self._browser_access():
-            article_text = self.page.fetch_article_text(batch.post_url)
+        try:
+            with self._browser_access():
+                article_text = self.page.fetch_article_text(batch.post_url)
+        except Exception as exc:
+            article_text = None
+            self.notifier.notify_error("Dzen article text extraction failed", exc)
         article_context_status = (
             "article_text_used" if article_text else "without_article_text"
         )
