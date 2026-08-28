@@ -11,9 +11,9 @@ def test_migrations_have_one_linear_head():
     config = Config(str(REPO_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == ["0007_cta_candidate"]
-    assert script.get_revision("0007_cta_candidate").down_revision == (
-        "0006_reply_article_context"
+    assert script.get_heads() == ["0008_reply_batches"]
+    assert script.get_revision("0008_reply_batches").down_revision == (
+        "0007_cta_candidate"
     )
 
 
