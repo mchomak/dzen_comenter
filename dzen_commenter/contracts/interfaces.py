@@ -1,10 +1,12 @@
+from collections.abc import Sequence
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
-from contextlib import AbstractContextManager
 from typing import Literal, Protocol
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.models import (
+    BatchItem,
     BatchOutcome,
     ClaimedBatch,
     Comment,
@@ -81,6 +83,10 @@ class AIProvider(Protocol):
 
 class PromptBuilder(Protocol):
     def build(self, context: PromptContext) -> str: ...
+
+
+class BatchPromptBuilder(Protocol):
+    def build_batch(self, items: Sequence[BatchItem], *, article_text: str) -> str: ...
 
 
 class SessionManager(Protocol):
