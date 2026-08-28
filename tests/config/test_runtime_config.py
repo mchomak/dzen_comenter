@@ -174,6 +174,41 @@ def test_runtime_settings_include_notification_cooldown_and_telegram_proxy_defau
     assert saved["settings"]["telegram_proxy_url"] == ""
 
 
+def test_batching_requires_a_timezone_aware_cutover_timestamp(tmp_path):
+    path = tmp_path / "runtime.json"
+
+    for raw_cutover in (None, "", "not-a-date", "2026-08-28T12:00:00"):
+        path.write_text(
+            json.dumps(
+                {
+                    "settings": {
+                        "batch_replies_enabled": True,
+                        "batch_cutover_at": raw_cutover,
+                    },
+                    "prompt": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert RuntimeConfig(str(path)).get().settings.batch_replies_enabled is False
+
+    path.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    "batch_replies_enabled": True,
+                    "batch_cutover_at": "2026-08-28T12:00:00+03:00",
+                },
+                "prompt": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = RuntimeConfig(str(path)).get().settings
+    assert settings.batch_replies_enabled is True
+    assert settings.batch_cutover_at == "2026-08-28T12:00:00+03:00"
+
+
 def test_ensure_does_not_overwrite_existing(tmp_path):
     path = tmp_path / "rc.json"
     path.write_text(json.dumps({"settings": {"max_reply_length": 42}}), encoding="utf-8")

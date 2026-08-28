@@ -12,6 +12,7 @@ import logging
 import os
 import tempfile
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 from dzen_commenter.prompt.config_loader import (
@@ -70,8 +71,22 @@ def _defaults() -> RuntimeConfigData:
     return RuntimeConfigData(settings=RuntimeSettings(), prompt=_default_prompt())
 
 
+def _parse_batch_cutover(value: object) -> str | None:
+    if value is None:
+        return None
+    cutover_at = str(value).strip()
+    if not cutover_at:
+        return None
+    try:
+        parsed = datetime.fromisoformat(cutover_at)
+    except ValueError:
+        return None
+    return cutover_at if parsed.tzinfo is not None else None
+
+
 def _parse_settings(raw: dict) -> RuntimeSettings:
     base = RuntimeSettings()
+    batch_cutover_at = _parse_batch_cutover(raw.get("batch_cutover_at"))
     return RuntimeSettings(
         auto_publish=bool(raw.get("auto_publish", base.auto_publish)),
         max_comment_age_days=int(raw.get("max_comment_age_days", base.max_comment_age_days)),
@@ -93,14 +108,11 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
             )
         ),
         telegram_proxy_url=str(raw.get("telegram_proxy_url", base.telegram_proxy_url)),
-        batch_replies_enabled=bool(
-            raw.get("batch_replies_enabled", base.batch_replies_enabled)
+        batch_replies_enabled=(
+            bool(raw.get("batch_replies_enabled", base.batch_replies_enabled))
+            and batch_cutover_at is not None
         ),
-        batch_cutover_at=(
-            str(raw["batch_cutover_at"])
-            if raw.get("batch_cutover_at") is not None
-            else None
-        ),
+        batch_cutover_at=batch_cutover_at,
         batch_max_comments=int(raw.get("batch_max_comments", base.batch_max_comments)),
         batch_wait_hours=int(raw.get("batch_wait_hours", base.batch_wait_hours)),
         batch_retry_cooldown_minutes=int(

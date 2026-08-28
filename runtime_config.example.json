@@ -5,6 +5,12 @@
     "max_reply_length": 1000,
     "cta_every_n_comments": 7,
     "max_comments_per_hour": 100,
+    "batch_replies_enabled": false,
+    "batch_cutover_at": null,
+    "batch_max_comments": 3,
+    "batch_wait_hours": 12,
+    "batch_retry_cooldown_minutes": 60,
+    "batch_max_attempts_per_comment": 2,
     "developer_telegram_chat_ids": "123456789,987654321",
     "error_email_list": "dev1@example.com,dev2@example.com"
   },
