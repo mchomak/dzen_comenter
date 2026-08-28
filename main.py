@@ -7,23 +7,23 @@ from collections.abc import Callable
 import sqlalchemy
 
 from dzen_commenter.ai.factory import create_provider
-from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
 from dzen_commenter.auth.dzen_login_control import DzenLoginControlServer
+from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
 from dzen_commenter.browser.session_manager import PlaywrightSessionManager
 from dzen_commenter.config.runtime_config import RuntimeConfig, ensure_runtime_config
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import Notifier
 from dzen_commenter.db.repository import PostgresCommentRepository
 from dzen_commenter.dzen.page import DzenStudioPage
+from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
 from dzen_commenter.monitoring.email_fallback import EmailFallbackNotifier
 from dzen_commenter.monitoring.logging_config import configure_logging
 from dzen_commenter.monitoring.telegram_notifier import TelegramNotifier
-from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
 from dzen_commenter.orchestrator.loop import OrchestratorLoop
+from dzen_commenter.prompt.batch import DameoBatchPromptBuilder, parse_batch
 from dzen_commenter.prompt.builder import DameoPromptBuilder
 from dzen_commenter.prompt.classifier import classify_reply_type, is_cta_candidate_title
 from dzen_commenter.prompt.config_loader import load_brand_config
-
 
 _ERROR_NOTIFICATION_COOLDOWN = 15 * 60
 logger = logging.getLogger(__name__)
@@ -46,6 +46,9 @@ def build_app(
 
     prompt_builder = DameoPromptBuilder(
         language=settings.AI_PROMPT_LANGUAGE,
+        config_provider=lambda: runtime_config.get().prompt,
+    )
+    batch_prompt_builder = DameoBatchPromptBuilder(
         config_provider=lambda: runtime_config.get().prompt,
     )
 
@@ -77,20 +80,24 @@ def build_app(
     else:
         email_fallback = None
 
-    notifier = DeveloperNotifier(TelegramNotifier(
-        bot_token=settings.TELEGRAM_BOT_TOKEN,
-        chat_id="",
-        proxy_url=settings.TELEGRAM_PROXY_URL,
-        fallback=email_fallback,
-        chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
-        proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
-    ))
+    notifier = DeveloperNotifier(
+        TelegramNotifier(
+            bot_token=settings.TELEGRAM_BOT_TOKEN,
+            chat_id="",
+            proxy_url=settings.TELEGRAM_PROXY_URL,
+            fallback=email_fallback,
+            chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
+            proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
+        )
+    )
 
     loop = OrchestratorLoop(
         settings=settings,
         repository=repository,
         ai_provider=ai_provider,
         prompt_builder=prompt_builder,
+        batch_prompt_builder=batch_prompt_builder,
+        batch_reply_parser=parse_batch,
         session=session,
         page=page,
         notifier=notifier,
@@ -167,7 +174,9 @@ def main() -> None:
     configure_logging()
     settings = Settings()
     loop, session, notifier = build_app(settings)
-    DzenLoginControlServer(settings.DZEN_LOGIN_CONTROL_SOCKET, session).serve_in_thread()
+    DzenLoginControlServer(
+        settings.DZEN_LOGIN_CONTROL_SOCKET, session
+    ).serve_in_thread()
     configure_logging(notifier=notifier)
     run_supervised(
         loop,

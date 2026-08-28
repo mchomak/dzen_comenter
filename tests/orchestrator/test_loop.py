@@ -19,6 +19,8 @@ def test_orchestrator_loop_import_and_di_signature():
         "repository",
         "ai_provider",
         "prompt_builder",
+        "batch_prompt_builder",
+        "batch_reply_parser",
         "session",
         "page",
         "notifier",
@@ -33,6 +35,186 @@ def test_orchestrator_loop_import_and_di_signature():
     for name in expected[1:]:
         assert signature.parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
     assert signature.parameters["sleep_fn"].default is not inspect.Signature.empty
+
+
+_BATCH_CUTOVER = "2020-01-01T00:00:00+03:00"
+
+
+def _batch_comments(comment_factory, count: int):
+    comments = [comment_factory(index) for index in range(1, count + 1)]
+    for comment in comments:
+        comment.post_url = "https://dzen.example.test/article"
+        comment.publication_title = "Статья"
+    return comments
+
+
+def _batch_settings(**overrides):
+    return {
+        "BATCH_REPLIES_ENABLED": True,
+        "BATCH_CUTOVER_AT": _BATCH_CUTOVER,
+        "BATCH_MAX_COMMENTS": 3,
+        "BATCH_WAIT_HOURS": 12,
+        **overrides,
+    }
+
+
+def test_batch_feature_off_keeps_single_generation_path(loop_factory, comment_factory):
+    comment = _batch_comments(comment_factory, 1)[0]
+    harness = loop_factory(comments=[comment], ai_responses=["single reply"])
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert len(harness.prompt_builder.contexts) == 1
+    assert harness.batch_prompt_builder.calls == []
+    assert harness.repository.batch_queue == {}
+
+
+def test_batch_generates_three_comments_with_one_article_and_model_call(
+    loop_factory, comment_factory
+):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=[
+            "C01\tREPLY\tПервый ответ\n"
+            "C02\tREPLY\tВторой ответ\n"
+            "C03\tREPLY\tТретий ответ"
+        ],
+    )
+    harness.page.article_text_by_url[comments[0].post_url] = "текст статьи"
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert [item.comment_id for item in harness.batch_prompt_builder.calls[0][0]] == [
+        1,
+        2,
+        3,
+    ]
+    assert harness.batch_prompt_builder.calls[0][1] == "текст статьи"
+    assert harness.page.article_text_urls == [comments[0].post_url]
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert len(harness.page.publish_calls) == 3
+
+
+def test_batch_waits_for_timeout_before_claiming_incomplete_article_group(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 8, 1, 12, 0, 0)
+    current_time = [now]
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
+    comments = _batch_comments(comment_factory, 2)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=["C01\tREPLY\tПервый\nC02\tREPLY\tВторой"],
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.ai_provider.calls == []
+    current_time[0] = now + timedelta(hours=12)
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert len(harness.repository.save_batch_outcomes_calls[0][1]) == 2
+
+
+def test_batch_claim_is_limited_by_remaining_hourly_quota(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 8, 1, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(MAX_COMMENTS_PER_HOUR=100),
+        ai_responses=["C01\tREPLY\tПервый\nC02\tREPLY\tВторой"],
+    )
+    for index in range(98):
+        harness.repository.save_reply(
+            harness.loop._make_reply(
+                comment_id=1_000 + index,
+                text="previous attempt",
+                status=ReplyStatus.GENERATED,
+                error_reason=None,
+            )
+        )
+
+    harness.loop.run_cycle()
+
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert len(harness.ai_provider.calls) == 1
+    assert [outcome.comment_id for outcome in outcomes] == [1, 2]
+    assert harness.repository.count_ai_attempts_since(now - timedelta(hours=1)) == 100
+
+
+def test_invalid_batch_output_saves_errors_and_publishes_nothing(
+    loop_factory, comment_factory
+):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=["C01\tREPLY\tТолько один ответ"],
+    )
+
+    harness.loop.run_cycle()
+
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert [outcome.kind.value for outcome in outcomes] == ["error", "error", "error"]
+    assert harness.page.publish_calls == []
+    assert all(
+        reply.status is ReplyStatus.ERROR
+        for reply in harness.repository.replies.values()
+    )
+
+
+def test_batch_uses_no_article_fallback(loop_factory, comment_factory):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=["C01\tREPLY\tПервый\nC02\tREPLY\tВторой\nC03\tREPLY\tТретий"],
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.batch_prompt_builder.calls[0][1] == ""
+    assert {
+        reply.article_context_status for reply in harness.repository.replies.values()
+    } == {"without_article_text"}
+
+
+def test_batch_continues_after_one_publication_failure(loop_factory, comment_factory):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=["C01\tREPLY\tПервый\nC02\tREPLY\tВторой\nC03\tREPLY\tТретий"],
+    )
+    original_publish = harness.page.publish_reply
+
+    def publish_reply(comment, text, *, auto_publish):
+        if comment.dzen_comment_id == "comment-2":
+            raise RuntimeError("publication failed")
+        original_publish(comment, text, auto_publish=auto_publish)
+
+    harness.page.publish_reply = publish_reply
+
+    harness.loop.run_cycle()
+
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert len(harness.page.publish_calls) == 2
+    assert harness.repository.replies[2].status is ReplyStatus.ERROR
+    assert harness.repository.replies[1].status is ReplyStatus.GENERATED
+    assert harness.repository.replies[3].status is ReplyStatus.GENERATED
 
 
 def test_orchestrator_has_no_direct_imports_from_concrete_layers():
@@ -140,7 +322,10 @@ def test_run_cycle_passes_article_text_and_marks_reply_as_article_text_used(
 
     assert harness.prompt_builder.contexts[0].article_text == "Article body"
     assert harness.prompt_builder.contexts[0].post_url == comment.post_url
-    assert next(iter(harness.repository.replies.values())).article_context_status == "article_text_used"
+    assert (
+        next(iter(harness.repository.replies.values())).article_context_status
+        == "article_text_used"
+    )
 
 
 def test_run_cycle_falls_back_and_marks_reply_without_article_text(
@@ -154,7 +339,10 @@ def test_run_cycle_falls_back_and_marks_reply_without_article_text(
     harness.loop.run_cycle()
 
     assert harness.prompt_builder.contexts[0].article_text == ""
-    assert next(iter(harness.repository.replies.values())).article_context_status == "without_article_text"
+    assert (
+        next(iter(harness.repository.replies.values())).article_context_status
+        == "without_article_text"
+    )
 
 
 def test_run_cycle_skips_comment_with_published_reply(
@@ -432,7 +620,10 @@ def test_run_cycle_saves_state_after_restore(
 
 def test_extract_reply_text_removes_structured_type_line():
     raw = "\u0442\u0438\u043f: \u0432\u043e\u0432\u043b\u0435\u043a\u0430\u044e\u0449\u0438\u0439\n\u043e\u0442\u0432\u0435\u0442: \u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442"
-    assert OrchestratorLoop._extract_reply_text(raw) == "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442"
+    assert (
+        OrchestratorLoop._extract_reply_text(raw)
+        == "\u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442"
+    )
 
 
 def test_extract_reply_text_skips_explicit_pass():
@@ -649,7 +840,9 @@ def test_generated_reply_prefixes_author_and_lowercases_ai_text(
 ):
     comment = comment_factory(1)
     comment.author = "Ольга Иванова"
-    harness = loop_factory(comments=[comment], ai_responses=["Салфетки — простая деталь"])
+    harness = loop_factory(
+        comments=[comment], ai_responses=["Салфетки — простая деталь"]
+    )
 
     harness.loop.run_cycle()
 
@@ -678,7 +871,9 @@ def test_cta_candidate_asks_ai_to_integrate_plain_cta_text(
     assert "отдельной строкой" in harness.ai_provider.calls[0][0]
 
 
-def test_cta_instruction_is_added_to_each_seventh_target_reply(loop_factory, comment_factory):
+def test_cta_instruction_is_added_to_each_seventh_target_reply(
+    loop_factory, comment_factory
+):
     comments = [comment_factory(index) for index in range(1, 15)]
     for comment in comments:
         comment.publication_title = "Ремонт квартиры"
@@ -700,7 +895,9 @@ def test_cta_instruction_is_added_to_each_seventh_target_reply(loop_factory, com
     assert "domeo ru" in prompts[13]
 
 
-def test_non_target_article_does_not_advance_cta_interval(loop_factory, comment_factory):
+def test_non_target_article_does_not_advance_cta_interval(
+    loop_factory, comment_factory
+):
     comments = [comment_factory(index) for index in range(1, 8)]
     for comment in comments[:-1]:
         comment.publication_title = "Лучшие фильмы года"
@@ -710,10 +907,15 @@ def test_non_target_article_does_not_advance_cta_interval(loop_factory, comment_
 
     harness.loop.run_cycle()
 
-    assert "Рассчитать стоимость ремонта" not in harness.repository.replies[7].generated_text
+    assert (
+        "Рассчитать стоимость ремонта"
+        not in harness.repository.replies[7].generated_text
+    )
 
 
-def test_failed_target_publication_does_not_advance_cta_interval(loop_factory, comment_factory):
+def test_failed_target_publication_does_not_advance_cta_interval(
+    loop_factory, comment_factory
+):
     comments = [comment_factory(index) for index in range(1, 8)]
     for comment in comments:
         comment.publication_title = "Ремонт кухни"
@@ -735,7 +937,9 @@ def test_failed_target_publication_does_not_advance_cta_interval(loop_factory, c
     assert "Текст CTA для этого ответа" in harness.ai_provider.calls[-1][0]
 
 
-def test_cta_instruction_applies_in_draft_mode_without_auto_publish(loop_factory, comment_factory):
+def test_cta_instruction_applies_in_draft_mode_without_auto_publish(
+    loop_factory, comment_factory
+):
     comments = [comment_factory(index) for index in range(1, 8)]
     for comment in comments:
         comment.publication_title = "Ремонт квартиры"
@@ -755,7 +959,9 @@ def test_cta_instruction_applies_in_draft_mode_without_auto_publish(loop_factory
     assert reply.status == ReplyStatus.GENERATED
 
 
-def test_hourly_limit_leaves_next_comment_unprocessed(loop_factory, comment_factory, monkeypatch):
+def test_hourly_limit_leaves_next_comment_unprocessed(
+    loop_factory, comment_factory, monkeypatch
+):
     from dzen_commenter.orchestrator import loop as loop_module
 
     now = datetime(2026, 7, 31, 12, 0, 0)
@@ -780,7 +986,9 @@ def test_hourly_limit_leaves_next_comment_unprocessed(loop_factory, comment_fact
     assert harness.ai_provider.calls == []
 
 
-def test_hourly_limit_counts_draft_ai_attempts(loop_factory, comment_factory, monkeypatch):
+def test_hourly_limit_counts_draft_ai_attempts(
+    loop_factory, comment_factory, monkeypatch
+):
     from dzen_commenter.orchestrator import loop as loop_module
 
     now = datetime(2026, 7, 31, 12, 0, 0)
@@ -820,7 +1028,9 @@ def test_cta_does_not_overflow_or_attach_to_empty_reply(loop_factory, comment_fa
     assert harness.repository.replies == {}
 
 
-def test_author_prefix_reserves_reply_length_before_generation(loop_factory, comment_factory, monkeypatch):
+def test_author_prefix_reserves_reply_length_before_generation(
+    loop_factory, comment_factory, monkeypatch
+):
     from dzen_commenter.orchestrator import loop as loop_module
 
     now = datetime(2026, 7, 31, 12, 0, 0)
@@ -851,11 +1061,16 @@ def test_author_prefix_reserves_reply_length_before_generation(loop_factory, com
     text = harness.repository.replies[7].generated_text
     assert text == "author-7, " + answer
     assert len(text) == harness.runtime_config.data.settings.max_reply_length
-    assert f"Длина ответа: не более {len(answer)} символов." in harness.ai_provider.calls[0][0]
+    assert (
+        f"Длина ответа: не более {len(answer)} символов."
+        in harness.ai_provider.calls[0][0]
+    )
     assert "Текст CTA для этого ответа" in harness.ai_provider.calls[0][0]
 
 
-def test_reply_is_marked_error_when_author_prefix_does_not_fit(loop_factory, comment_factory):
+def test_reply_is_marked_error_when_author_prefix_does_not_fit(
+    loop_factory, comment_factory
+):
     target = comment_factory(1)
     target.publication_title = "Ремонт кухни"
     harness = loop_factory(

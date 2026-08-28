@@ -2,18 +2,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
 from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
 from dzen_commenter.config.settings import Settings
-from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import PromptContext, ReplyType
-from dzen_commenter.contracts.models import Comment, Publication, Reply
+from dzen_commenter.contracts.models import (
+    BatchItem,
+    BatchOutcome,
+    ClaimedBatch,
+    Comment,
+    Publication,
+    Reply,
+)
 from dzen_commenter.orchestrator import OrchestratorLoop
+from dzen_commenter.prompt import parse_batch
 from dzen_commenter.prompt.config_loader import load_brand_config
-
 
 _MISSING = object()
 
@@ -48,9 +55,13 @@ class FakeCommentRepository:
         self.set_reply_status_calls: list[tuple[int, ReplyStatus, str | None]] = []
         self.has_generated_reply_calls: list[int] = []
         self.has_published_reply_calls: list[int] = []
+        self.batch_queue: dict[int, dict[str, object]] = {}
+        self.claimed_batches: dict[int, ClaimedBatch] = {}
+        self.save_batch_outcomes_calls: list[tuple[int, tuple[BatchOutcome, ...]]] = []
         self._next_publication_id = 1
         self._next_comment_id = 1
         self._next_reply_id = 1
+        self._next_batch_id = 1
 
     def upsert_publication(self, pub: Publication) -> int:
         self.upsert_publication_calls.append(pub)
@@ -120,7 +131,12 @@ class FakeCommentRepository:
     def count_ai_attempts_since(self, since: datetime) -> int:
         return sum(
             reply.status
-            in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED, ReplyStatus.ERROR)
+            in (
+                ReplyStatus.GENERATED,
+                ReplyStatus.PUBLISHED,
+                ReplyStatus.ERROR,
+                ReplyStatus.SKIPPED,
+            )
             and reply.created_at is not None
             and reply.created_at >= since
             for reply in self.replies.values()
@@ -156,6 +172,146 @@ class FakeCommentRepository:
             for reply in self.replies.values()
         )
 
+    def enqueue_batch_comment(
+        self,
+        comment_id: int,
+        post_url: str,
+        *,
+        queued_at: datetime,
+        cutover_at: datetime,
+    ) -> bool:
+        comment = self.comments[comment_id]
+        if (
+            comment.status is not CommentStatus.NEW
+            or comment.post_url != post_url
+            or comment.fetched_at is None
+            or comment.fetched_at < cutover_at
+            or self.has_generated_reply(comment_id)
+            or comment_id in self.batch_queue
+        ):
+            return False
+        self.batch_queue[comment_id] = {
+            "post_url": post_url,
+            "queued_at": queued_at,
+            "state": "queued",
+            "attempt_count": 0,
+            "claimed_batch_id": None,
+            "next_attempt_at": None,
+        }
+        return True
+
+    def claim_next_batch(
+        self,
+        now: datetime,
+        *,
+        max_comments: int,
+        wait_hours: int,
+        quota_remaining: int,
+    ) -> ClaimedBatch | None:
+        limit = min(max_comments, quota_remaining)
+        if limit <= 0:
+            return None
+        queued = [
+            (comment_id, row)
+            for comment_id, row in self.batch_queue.items()
+            if row["state"] == "queued"
+            and (row["next_attempt_at"] is None or row["next_attempt_at"] <= now)
+        ]
+        if not queued:
+            return None
+        queued.sort(key=lambda entry: (entry[1]["queued_at"], entry[0]))
+        post_url = str(queued[0][1]["post_url"])
+        selected = [entry for entry in queued if entry[1]["post_url"] == post_url][
+            :limit
+        ]
+        if len(selected) < limit and selected[0][1]["queued_at"] > now - timedelta(
+            hours=wait_hours
+        ):
+            return None
+        batch_id = self._next_batch_id
+        self._next_batch_id += 1
+        items = tuple(
+            BatchItem(
+                batch_id=batch_id,
+                comment_id=comment_id,
+                item_no=item_no,
+                post_url=post_url,
+                publication_title=self.comments[comment_id].publication_title,
+                thread_text=self.comments[comment_id].thread_text,
+                author=self.comments[comment_id].author,
+                comment_text=self.comments[comment_id].text,
+            )
+            for item_no, (comment_id, _) in enumerate(selected, start=1)
+        )
+        batch = ClaimedBatch(batch_id, post_url, now, items)
+        self.claimed_batches[batch_id] = batch
+        for comment_id, row in selected:
+            row["state"] = "claimed"
+            row["claimed_batch_id"] = batch_id
+            row["attempt_count"] = int(row["attempt_count"]) + 1
+        return batch
+
+    def save_batch_outcomes(
+        self,
+        batch_id: int,
+        outcomes: tuple[BatchOutcome, ...],
+        *,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        created_at: datetime,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        retry_cooldown_minutes: int,
+        max_attempts_per_comment: int,
+    ) -> tuple[int, ...]:
+        batch = self.claimed_batches[batch_id]
+        expected = [(item.comment_id, item.item_no) for item in batch.items]
+        actual = [(outcome.comment_id, outcome.item_no) for outcome in outcomes]
+        if actual != expected:
+            raise ValueError("Batch outcomes do not match the claimed item order")
+        self.save_batch_outcomes_calls.append((batch_id, outcomes))
+        reply_ids: list[int] = []
+        for outcome in outcomes:
+            status = {
+                BatchOutcomeKind.REPLY: ReplyStatus.GENERATED,
+                BatchOutcomeKind.SKIP: ReplyStatus.SKIPPED,
+                BatchOutcomeKind.ERROR: ReplyStatus.ERROR,
+            }[outcome.kind]
+            reply_id = self.save_reply(
+                Reply(
+                    id=None,
+                    comment_id=outcome.comment_id,
+                    generated_text=outcome.text,
+                    ai_provider=ai_provider,
+                    ai_model=ai_model,
+                    status=status,
+                    published_at=None,
+                    error_reason=outcome.error_reason,
+                    created_at=created_at,
+                    article_context_status=article_context_status,
+                )
+            )
+            reply_ids.append(reply_id)
+            self.comments[outcome.comment_id].status = {
+                BatchOutcomeKind.REPLY: CommentStatus.ANSWERED,
+                BatchOutcomeKind.SKIP: CommentStatus.SKIPPED,
+                BatchOutcomeKind.ERROR: CommentStatus.ERROR,
+            }[outcome.kind]
+            queue = self.batch_queue[outcome.comment_id]
+            retry = (
+                outcome.kind is BatchOutcomeKind.ERROR
+                and int(queue["attempt_count"]) < max_attempts_per_comment
+            )
+            queue["state"] = "queued" if retry else "completed"
+            queue["claimed_batch_id"] = None if retry else batch_id
+            queue["next_attempt_at"] = (
+                created_at + timedelta(minutes=retry_cooldown_minutes)
+                if retry
+                else None
+            )
+        return tuple(reply_ids)
+
 
 class FakeAIProvider:
     def __init__(self, responses: list[str] | None = None) -> None:
@@ -177,6 +333,16 @@ class FakePromptBuilder:
     def build(self, context: PromptContext) -> str:
         self.contexts.append(context)
         return f"prompt:{context.reply_type}:{context.thread_text}"
+
+
+class FakeBatchPromptBuilder:
+    def __init__(self) -> None:
+        self.calls: list[tuple[tuple[BatchItem, ...], str]] = []
+
+    def build_batch(self, items, *, article_text: str) -> str:
+        item_tuple = tuple(items)
+        self.calls.append((item_tuple, article_text))
+        return "batch prompt"
 
 
 class FakeSessionManager:
@@ -248,9 +414,7 @@ class FakeDzenPage:
         self.article_text_urls.append(post_url)
         return self.article_text_by_url.get(post_url)
 
-    def publish_reply(
-        self, comment: Comment, text: str, *, auto_publish: bool
-    ) -> None:
+    def publish_reply(self, comment: Comment, text: str, *, auto_publish: bool) -> None:
         self.publish_calls.append((comment, text, auto_publish))
 
 
@@ -328,6 +492,7 @@ class LoopHarness:
     repository: FakeCommentRepository
     ai_provider: FakeAIProvider
     prompt_builder: FakePromptBuilder
+    batch_prompt_builder: FakeBatchPromptBuilder
     session: FakeSessionManager
     page: FakeDzenPage
     notifier: FakeNotifier
@@ -396,7 +561,9 @@ def settings_factory() -> Callable[..., Settings]:
             "EMAIL_FALLBACK_LIST",
             "PROMPT_CONFIG_PATH",
         }
-        values.update({key: value for key, value in overrides.items() if key not in moved_fields})
+        values.update(
+            {key: value for key, value in overrides.items() if key not in moved_fields}
+        )
         return Settings(**values)
 
     return _factory
@@ -421,6 +588,7 @@ def loop_factory(
         repository = repository or FakeCommentRepository()
         ai_provider = FakeAIProvider(ai_responses)
         prompt_builder = FakePromptBuilder()
+        batch_prompt_builder = FakeBatchPromptBuilder()
         session = session or FakeSessionManager()
         page = FakeDzenPage(comments)
         notifier = FakeNotifier()
@@ -433,14 +601,32 @@ def loop_factory(
             RuntimeConfigData(
                 settings=RuntimeSettings(
                     auto_publish=runtime_overrides.get("AUTO_PUBLISH", False),
-                    max_comment_age_days=runtime_overrides.get("MAX_COMMENT_AGE_DAYS", 30),
+                    max_comment_age_days=runtime_overrides.get(
+                        "MAX_COMMENT_AGE_DAYS", 30
+                    ),
                     max_reply_length=runtime_overrides.get("MAX_REPLY_LENGTH", 1000),
-                    cta_every_n_comments=runtime_overrides.get("CTA_EVERY_N_COMMENTS", 7),
-                    max_comments_per_hour=runtime_overrides.get("MAX_COMMENTS_PER_HOUR", 100),
+                    cta_every_n_comments=runtime_overrides.get(
+                        "CTA_EVERY_N_COMMENTS", 7
+                    ),
+                    max_comments_per_hour=runtime_overrides.get(
+                        "MAX_COMMENTS_PER_HOUR", 100
+                    ),
                     developer_telegram_chat_ids=runtime_overrides.get(
                         "DEVELOPER_TELEGRAM_CHAT_ID_LIST", ""
                     ),
                     error_email_list=runtime_overrides.get("EMAIL_FALLBACK_LIST", ""),
+                    batch_replies_enabled=runtime_overrides.get(
+                        "BATCH_REPLIES_ENABLED", False
+                    ),
+                    batch_cutover_at=runtime_overrides.get("BATCH_CUTOVER_AT"),
+                    batch_max_comments=runtime_overrides.get("BATCH_MAX_COMMENTS", 3),
+                    batch_wait_hours=runtime_overrides.get("BATCH_WAIT_HOURS", 12),
+                    batch_retry_cooldown_minutes=runtime_overrides.get(
+                        "BATCH_RETRY_COOLDOWN_MINUTES", 60
+                    ),
+                    batch_max_attempts_per_comment=runtime_overrides.get(
+                        "BATCH_MAX_ATTEMPTS_PER_COMMENT", 2
+                    ),
                 ),
                 prompt=load_brand_config(None),
             )
@@ -451,6 +637,8 @@ def loop_factory(
             repository=repository,
             ai_provider=ai_provider,
             prompt_builder=prompt_builder,
+            batch_prompt_builder=batch_prompt_builder,
+            batch_reply_parser=parse_batch,
             session=session,
             page=page,
             notifier=notifier,
@@ -467,6 +655,7 @@ def loop_factory(
             repository=repository,
             ai_provider=ai_provider,
             prompt_builder=prompt_builder,
+            batch_prompt_builder=batch_prompt_builder,
             session=session,
             page=page,
             notifier=notifier,

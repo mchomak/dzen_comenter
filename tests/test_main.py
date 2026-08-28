@@ -57,6 +57,12 @@ def install_di_fakes(monkeypatch):
             self.config_provider = config_provider
             rec.events.append(("prompt_builder", self))
 
+    class FakeBatchPromptBuilder:
+        def __init__(self, config_path=None, config_provider=None):
+            self.config_path = config_path
+            self.config_provider = config_provider
+            rec.events.append(("batch_prompt_builder", self))
+
     class FakeRuntimeConfig:
         def __init__(self, path):
             self.path = path
@@ -113,6 +119,7 @@ def install_di_fakes(monkeypatch):
     monkeypatch.setattr(main, "PostgresCommentRepository", FakeRepository)
     monkeypatch.setattr(main, "create_provider", fake_create_provider)
     monkeypatch.setattr(main, "DameoPromptBuilder", FakePromptBuilder)
+    monkeypatch.setattr(main, "DameoBatchPromptBuilder", FakeBatchPromptBuilder)
     monkeypatch.setattr(main, "RuntimeConfig", FakeRuntimeConfig)
     monkeypatch.setattr(main, "ensure_runtime_config", fake_ensure_runtime_config)
     monkeypatch.setattr(main, "PlaywrightSessionManager", FakeSession)
@@ -133,7 +140,8 @@ def _first(rec, name):
 
 # Acceptance 1 — импортируемость публичного API.
 def test_public_api_importable():
-    from main import build_app, main as main_entry, run_supervised
+    from main import build_app, run_supervised
+    from main import main as main_entry
 
     assert callable(build_app)
     assert callable(run_supervised)
@@ -166,6 +174,9 @@ def test_build_app_wires_layers(monkeypatch):
     assert pb.language == settings.AI_PROMPT_LANGUAGE
     assert pb.config_path is None
     assert callable(pb.config_provider)
+    batch_pb = _first(rec, "batch_prompt_builder")[1]
+    assert batch_pb.config_path is None
+    assert callable(batch_pb.config_provider)
 
     # RuntimeConfig создан по RUNTIME_CONFIG_PATH и просеян через ensure_runtime_config.
     runtime_config = _first(rec, "runtime_config")[1]
@@ -186,13 +197,15 @@ def test_build_app_wires_layers(monkeypatch):
     )
     assert session.kwargs["auth_assistant"] is auth_assistant
 
-    # OrchestratorLoop — ровно 9 keyword-аргументов, каждый идентичен фейку.
+    # OrchestratorLoop receives both isolated prompt-building dependencies.
     loop_kwargs = loop.kwargs
     assert set(loop_kwargs) == {
         "settings",
         "repository",
         "ai_provider",
         "prompt_builder",
+        "batch_prompt_builder",
+        "batch_reply_parser",
         "session",
         "page",
         "notifier",
@@ -206,6 +219,8 @@ def test_build_app_wires_layers(monkeypatch):
     assert loop_kwargs["repository"] is _first(rec, "repository")[1]
     assert loop_kwargs["ai_provider"] is provider_ev[2]
     assert loop_kwargs["prompt_builder"] is pb
+    assert loop_kwargs["batch_prompt_builder"] is batch_pb
+    assert loop_kwargs["batch_reply_parser"] is main.parse_batch
     assert loop_kwargs["session"] is session
     assert loop_kwargs["page"] is dzen_ev[1]
     assert isinstance(loop_kwargs["notifier"], DeveloperNotifier)
@@ -240,7 +255,9 @@ def test_build_app_email_fallback_configured(monkeypatch):
     assert tg.kwargs["fallback"] is ef
 
 
-def test_build_app_email_fallback_is_available_for_recipients_added_at_runtime(monkeypatch):
+def test_build_app_email_fallback_is_available_for_recipients_added_at_runtime(
+    monkeypatch,
+):
     rec = install_di_fakes(monkeypatch)
     settings = make_fake_settings(SMTP_HOST="smtp.example.com")
 
