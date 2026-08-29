@@ -622,7 +622,7 @@ def test_enqueue_batch_comment_persists_datetime_literal(repo, engine):
     assert stored_queued_at == queued_at
 
 
-def test_claim_next_batch_claims_only_one_post_when_full(repo):
+def test_claim_next_batch_extracts_joined_rows_in_order(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 8, 28, 12, 0, 0)
     cutover = now - timedelta(minutes=1)
@@ -662,6 +662,13 @@ def test_claim_next_batch_claims_only_one_post_when_full(repo):
     assert [(item.comment_id, item.item_no) for item in batch.items] == list(
         zip(first_post_ids, (1, 2, 3), strict=True)
     )
+    with engine.connect() as conn:
+        states = conn.execute(
+            select(CommentBatchQueueTable.state)
+            .where(CommentBatchQueueTable.comment_id.in_(first_post_ids))
+            .order_by(CommentBatchQueueTable.comment_id)
+        ).scalars().all()
+    assert states == ["claimed", "claimed", "claimed"]
 
 
 def test_claim_next_batch_waits_for_timeout_and_respects_quota(repo):

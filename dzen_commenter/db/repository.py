@@ -248,7 +248,14 @@ class PostgresCommentRepository:
                 return None
 
             rows = conn.execute(
-                select(CommentBatchQueueTable, CommentTable)
+                select(
+                    CommentBatchQueueTable.queued_at.label("queue_queued_at"),
+                    CommentTable.id.label("comment_id"),
+                    CommentTable.post_title.label("post_title"),
+                    CommentTable.thread_text.label("thread_text"),
+                    CommentTable.author.label("author"),
+                    CommentTable.text.label("comment_text"),
+                )
                 .join(
                     CommentTable,
                     CommentTable.id == CommentBatchQueueTable.comment_id,
@@ -260,10 +267,10 @@ class PostgresCommentRepository:
                 )
                 .limit(limit)
                 .with_for_update(skip_locked=True, of=CommentBatchQueueTable)
-            ).all()
+            ).mappings().all()
             if not rows:
                 return None
-            oldest = rows[0][0].queued_at
+            oldest = rows[0]["queue_queued_at"]
             if len(rows) < limit and oldest > now - timedelta(hours=wait_hours):
                 return None
 
@@ -280,15 +287,15 @@ class PostgresCommentRepository:
             items = tuple(
                 BatchItem(
                     batch_id=batch_id,
-                    comment_id=comment.id,
+                    comment_id=row["comment_id"],
                     item_no=index,
                     post_url=first_post_url,
-                    publication_title=comment.post_title or "",
-                    thread_text=comment.thread_text or "",
-                    author=comment.author or "",
-                    comment_text=comment.text or "",
+                    publication_title=row["post_title"] or "",
+                    thread_text=row["thread_text"] or "",
+                    author=row["author"] or "",
+                    comment_text=row["comment_text"] or "",
                 )
-                for index, (_, comment) in enumerate(rows, start=1)
+                for index, row in enumerate(rows, start=1)
             )
             conn.execute(
                 insert(ReplyBatchItemTable),
