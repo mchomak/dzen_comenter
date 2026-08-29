@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import case, exists, func, select, update
+from sqlalchemy import case, exists, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -201,9 +201,9 @@ class PostgresCommentRepository:
                 select(
                     CommentTable.id,
                     CommentTable.post_url,
-                    queued_at,
-                    "queued",
-                    0,
+                    literal(queued_at),
+                    literal("queued"),
+                    literal(0),
                 ).where(CommentTable.id.in_(eligible)),
             )
             .on_conflict_do_nothing(index_elements=[CommentBatchQueueTable.comment_id])

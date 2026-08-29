@@ -6,6 +6,7 @@ from sqlalchemy import inspect, text
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import CommentRepository
 from dzen_commenter.contracts.models import BatchOutcome, Comment, Publication, Reply
+from dzen_commenter.db.models import CommentBatchQueueTable
 from dzen_commenter.db.repository import PostgresCommentRepository
 
 
@@ -595,6 +596,30 @@ def test_enqueue_batch_comment_excludes_old_and_answered_comments(repo):
     assert not repo.enqueue_batch_comment(
         answered_id, "http://post/1", queued_at=cutover, cutover_at=cutover
     )
+
+
+def test_enqueue_batch_comment_persists_datetime_literal(repo, engine):
+    pub_id = repo.upsert_publication(_make_publication())
+    queued_at = datetime(2026, 8, 29, 9, 15, 30)
+    comment_id = repo.upsert_comment(
+        _make_comment(pub_id, fetched_at=queued_at)
+    )
+
+    assert repo.enqueue_batch_comment(
+        comment_id,
+        "http://post/1",
+        queued_at=queued_at,
+        cutover_at=queued_at,
+    )
+
+    with engine.connect() as conn:
+        stored_queued_at = conn.execute(
+            select(CommentBatchQueueTable.queued_at).where(
+                CommentBatchQueueTable.comment_id == comment_id
+            )
+        ).scalar_one()
+
+    assert stored_queued_at == queued_at
 
 
 def test_claim_next_batch_claims_only_one_post_when_full(repo):
