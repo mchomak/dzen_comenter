@@ -129,8 +129,8 @@ def parse_batch(
             raise BatchParseError("Batch row has an unknown outcome kind")
         if not text.strip():
             raise BatchParseError("REPLY rows must have non-empty text")
-        if "\t" in text or "\n" in text or "\r" in text:
-            raise BatchParseError("REPLY text must not contain tabs or newlines")
+        if "|" in text or "\t" in text or "\n" in text or "\r" in text:
+            raise BatchParseError("REPLY text must not contain pipes, tabs or newlines")
 
         formatted_text = _format_reply_text(text, item.author)
         if len(formatted_text) > max_length:

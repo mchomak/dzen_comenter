@@ -149,6 +149,7 @@ def test_parse_batch_accepts_common_machine_output_delimiters(raw):
         "C01\tREPLY\tодин\nстрока продолжения\nC02\tREPLY\tдва",
         "C01\tSKIP\tне пусто\nC02\tREPLY\tдва",
         "C01\tREPLY\t   \nC02\tREPLY\tдва",
+        "C01\tREPLY\tодин | два\nC02\tREPLY\tтри",
         "C01 | \nC02 | ответ",
         "C01 | SKIP | текст\nC02 | ответ",
         "C01 | ответ\tс tab\nC02 | ответ",
