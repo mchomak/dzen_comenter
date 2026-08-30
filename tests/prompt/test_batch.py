@@ -1,6 +1,7 @@
 import pytest
 
 from dzen_commenter.contracts.enums import BatchOutcomeKind
+from dzen_commenter.contracts.exceptions import BatchParseError as ContractBatchParseError
 from dzen_commenter.contracts.models import BatchItem
 from dzen_commenter.prompt import BatchParseError, DameoBatchPromptBuilder, parse_batch
 
@@ -16,6 +17,10 @@ def make_item(item_no: int) -> BatchItem:
         author=f"Автор {item_no}",
         comment_text=f"комментарий {item_no}",
     )
+
+
+def test_batch_parse_error_remains_exported_by_prompt():
+    assert BatchParseError is ContractBatchParseError
 
 
 @pytest.mark.parametrize("size", [1, 3, 5])

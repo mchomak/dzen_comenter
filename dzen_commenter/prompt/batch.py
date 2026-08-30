@@ -3,13 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from dzen_commenter.contracts.enums import BatchOutcomeKind
+from dzen_commenter.contracts.exceptions import BatchParseError
 from dzen_commenter.contracts.models import BatchItem, BatchOutcome
 from dzen_commenter.prompt.classifier import classify_reply_type
 from dzen_commenter.prompt.config_loader import PromptBrandConfig, load_brand_config
-
-
-class BatchParseError(ValueError):
-    """The model output cannot be safely mapped to every batch item."""
 
 
 _OUTCOME_KIND_ALIASES = {

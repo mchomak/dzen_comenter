@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from dzen_commenter.config.runtime_config import RuntimeConfig
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.exceptions import BatchParseError
 from dzen_commenter.contracts.interfaces import (
     AIProvider,
     AuthAssistant,
@@ -30,7 +31,6 @@ from dzen_commenter.contracts.models import (
     Publication,
     Reply,
 )
-from dzen_commenter.prompt.batch import BatchParseError
 from dzen_commenter.time_utils import moscow_now
 
 CTA_PROMPT_TEMPLATE = (

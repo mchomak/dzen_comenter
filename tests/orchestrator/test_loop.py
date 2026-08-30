@@ -394,14 +394,7 @@ def test_orchestrator_has_no_direct_imports_from_concrete_layers():
                         offenders.append((path.name, alias.name))
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                allowed_batch_parse_error_import = (
-                    module == "dzen_commenter.prompt.batch"
-                    and [alias.name for alias in node.names] == ["BatchParseError"]
-                )
-                if (
-                    module.startswith(forbidden_prefixes)
-                    and not allowed_batch_parse_error_import
-                ):
+                if module.startswith(forbidden_prefixes):
                     offenders.append((path.name, module))
                 if module == "dzen_commenter":
                     for alias in node.names:
