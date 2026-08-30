@@ -30,6 +30,7 @@ from dzen_commenter.contracts.models import (
     Publication,
     Reply,
 )
+from dzen_commenter.prompt.batch import BatchParseError
 from dzen_commenter.time_utils import moscow_now
 
 CTA_PROMPT_TEMPLATE = (
@@ -231,7 +232,7 @@ class OrchestratorLoop:
                 runtime_settings.max_reply_length,
             )
         except Exception as exc:
-            if len(batch.items) > 1 and self._is_batch_parse_error(exc):
+            if len(batch.items) > 1 and isinstance(exc, BatchParseError):
                 outcomes = self._generate_single_item_batch_outcomes(
                     batch.items,
                     article_text=article_text or "",
@@ -353,10 +354,6 @@ class OrchestratorLoop:
         )
         self.notifier.notify_error(reason, exc)
         return outcomes
-
-    @staticmethod
-    def _is_batch_parse_error(exc: Exception) -> bool:
-        return exc.__class__.__name__ == "BatchParseError"
 
     @staticmethod
     def _batch_cutover_at(value: str | None) -> datetime | None:

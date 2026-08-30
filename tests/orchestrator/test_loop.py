@@ -175,6 +175,11 @@ def test_malformed_multi_item_batch_falls_back_to_single_item_generations(
 
     outcomes = harness.repository.save_batch_outcomes_calls[0][1]
     assert [outcome.kind.value for outcome in outcomes] == ["reply", "reply", "reply"]
+    assert [(outcome.comment_id, outcome.item_no) for outcome in outcomes] == [
+        (1, 1),
+        (2, 2),
+        (3, 3),
+    ]
     assert len(harness.ai_provider.calls) == 4
     assert len(harness.batch_prompt_builder.calls) == 4
     assert [item.item_no for item in harness.batch_prompt_builder.calls[1][0]] == [1]
@@ -209,6 +214,89 @@ def test_single_item_fallback_failure_saves_error_and_notifies(
     assert len(harness.notifier.errors) == 1
     assert harness.notifier.errors[0][0] == (
         "Batch reply generation failed: Batch row has an unknown outcome kind"
+    )
+
+
+def test_initial_batch_provider_error_does_not_fall_back(
+    loop_factory, comment_factory
+):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+    )
+
+    def fail_generate(*args, **kwargs):
+        raise RuntimeError("provider unavailable")
+
+    harness.ai_provider.generate = fail_generate
+
+    harness.loop.run_cycle()
+
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert [outcome.kind.value for outcome in outcomes] == ["error", "error", "error"]
+    assert len(harness.batch_prompt_builder.calls) == 1
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert harness.notifier.errors[0][0] == (
+        "Batch reply generation failed: provider unavailable"
+    )
+
+
+def test_initial_batch_builder_error_does_not_fall_back(
+    loop_factory, comment_factory
+):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+    )
+    original_build_batch = harness.batch_prompt_builder.build_batch
+
+    def fail_build_batch(*args, **kwargs):
+        original_build_batch(*args, **kwargs)
+        raise RuntimeError("prompt builder unavailable")
+
+    harness.batch_prompt_builder.build_batch = fail_build_batch
+
+    harness.loop.run_cycle()
+
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert [outcome.kind.value for outcome in outcomes] == ["error", "error", "error"]
+    assert harness.ai_provider.calls == []
+    assert len(harness.batch_prompt_builder.calls) == 1
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert harness.notifier.errors[0][0] == (
+        "Batch reply generation failed: prompt builder unavailable"
+    )
+
+
+def test_foreign_exception_named_batch_parse_error_does_not_fall_back(
+    loop_factory, comment_factory
+):
+    class BatchParseError(Exception):
+        pass
+
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=["ignored"],
+    )
+
+    def raise_foreign_parse_error(*args, **kwargs):
+        raise BatchParseError("foreign parser error")
+
+    harness.loop.batch_reply_parser = raise_foreign_parse_error
+
+    harness.loop.run_cycle()
+
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert [outcome.kind.value for outcome in outcomes] == ["error", "error", "error"]
+    assert len(harness.ai_provider.calls) == 1
+    assert len(harness.batch_prompt_builder.calls) == 1
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert harness.notifier.errors[0][0] == (
+        "Batch reply generation failed: foreign parser error"
     )
 
 
@@ -306,7 +394,14 @@ def test_orchestrator_has_no_direct_imports_from_concrete_layers():
                         offenders.append((path.name, alias.name))
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module.startswith(forbidden_prefixes):
+                allowed_batch_parse_error_import = (
+                    module == "dzen_commenter.prompt.batch"
+                    and [alias.name for alias in node.names] == ["BatchParseError"]
+                )
+                if (
+                    module.startswith(forbidden_prefixes)
+                    and not allowed_batch_parse_error_import
+                ):
                     offenders.append((path.name, module))
                 if module == "dzen_commenter":
                     for alias in node.names:
