@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 
 from dzen_commenter.contracts.enums import BatchOutcomeKind
@@ -7,7 +8,6 @@ from dzen_commenter.contracts.exceptions import BatchParseError
 from dzen_commenter.contracts.models import BatchItem, BatchOutcome
 from dzen_commenter.prompt.classifier import classify_reply_type
 from dzen_commenter.prompt.config_loader import PromptBrandConfig, load_brand_config
-
 
 _OUTCOME_KIND_ALIASES = {
     "reply": "REPLY",
@@ -55,6 +55,11 @@ class DameoBatchPromptBuilder:
         )
         protocol = (
             "ФОРМАТ ОТВЕТА:\n"
+            "Верни ровно одну строку без пояснений: только текст ответа или SKIP.\n"
+            "Для запрещённой, непонятной или небезопасной темы используй SKIP. "
+            "В тексте ответа запрещены символы |, tab и перевод строки."
+            if len(items) == 1
+            else "ФОРМАТ ОТВЕТА:\n"
             f"Верни ровно {len(items)} строк в том же порядке, без пояснений.\n"
             "Каждая строка: Cnn | текст ответа или Cnn | SKIP.\n"
             "Для запрещённой, непонятной или небезопасной темы используй SKIP. "
@@ -100,6 +105,8 @@ def parse_batch(
     lines = _strip_optional_code_fence(raw)
     if len(lines) != len(items):
         raise BatchParseError("Batch line count does not match claimed items")
+    if len(items) == 1 and not _looks_like_labeled_batch_row(lines[0]):
+        return (_parse_single_outcome(lines[0], items[0], max_length),)
 
     outcomes: list[BatchOutcome] = []
     for position, (line, item) in enumerate(zip(lines, items, strict=True), start=1):
@@ -124,22 +131,7 @@ def parse_batch(
             continue
         if is_legacy and normalized_kind != "REPLY" and not text.strip():
             raise BatchParseError("Batch row has an unknown outcome kind")
-        if not text.strip():
-            raise BatchParseError("REPLY rows must have non-empty text")
-        if "|" in text or "\t" in text or "\n" in text or "\r" in text:
-            raise BatchParseError("REPLY text must not contain pipes, tabs or newlines")
-
-        formatted_text = _format_reply_text(text, item.author)
-        if len(formatted_text) > max_length:
-            raise BatchParseError("REPLY text exceeds the maximum length after prefix")
-        outcomes.append(
-            BatchOutcome(
-                item.comment_id,
-                item.item_no,
-                BatchOutcomeKind.REPLY,
-                text=formatted_text,
-            )
-        )
+        outcomes.append(_reply_outcome(item, text, max_length))
     return tuple(outcomes)
 
 
@@ -175,6 +167,35 @@ def _split_batch_row(line: str) -> tuple[str, str, str, bool]:
         return label, kind, text, True
 
     raise BatchParseError("Batch row has an invalid column separator count")
+
+
+def _looks_like_labeled_batch_row(line: str) -> bool:
+    return bool(re.match(r"^C\d+\s*(?:\||\t|<TAB>|\\t)", line))
+
+
+def _parse_single_outcome(
+    line: str, item: BatchItem, max_length: int
+) -> BatchOutcome:
+    if line == "SKIP":
+        return BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
+    return _reply_outcome(item, line, max_length)
+
+
+def _reply_outcome(item: BatchItem, text: str, max_length: int) -> BatchOutcome:
+    if not text.strip():
+        raise BatchParseError("REPLY rows must have non-empty text")
+    if "|" in text or "\t" in text or "\n" in text or "\r" in text:
+        raise BatchParseError("REPLY text must not contain pipes, tabs or newlines")
+
+    formatted_text = _format_reply_text(text, item.author)
+    if len(formatted_text) > max_length:
+        raise BatchParseError("REPLY text exceeds the maximum length after prefix")
+    return BatchOutcome(
+        item.comment_id,
+        item.item_no,
+        BatchOutcomeKind.REPLY,
+        text=formatted_text,
+    )
 
 
 def _normalize_outcome_kind(kind: str) -> str:

@@ -1,7 +1,9 @@
 import pytest
 
 from dzen_commenter.contracts.enums import BatchOutcomeKind
-from dzen_commenter.contracts.exceptions import BatchParseError as ContractBatchParseError
+from dzen_commenter.contracts.exceptions import (
+    BatchParseError as ContractBatchParseError,
+)
 from dzen_commenter.contracts.models import BatchItem
 from dzen_commenter.prompt import BatchParseError, DameoBatchPromptBuilder, parse_batch
 
@@ -35,7 +37,8 @@ def test_build_batch_shares_article_context_and_labels_every_card(size):
         True
     ] * size
     assert "C06" not in prompt
-    assert "Cnn | текст ответа или Cnn | SKIP" in prompt
+    if size > 1:
+        assert "Cnn | текст ответа или Cnn | SKIP" in prompt
     assert (
         "REPLY"
         not in prompt.split("ФОРМАТ ОТВЕТА:", 1)[1].split("КАРТОЧКИ КОММЕНТАРИЕВ:", 1)[
@@ -53,6 +56,53 @@ def test_build_batch_rejects_items_from_different_articles():
 
     with pytest.raises(ValueError, match="article URLs"):
         DameoBatchPromptBuilder().build_batch((first, second), article_text="text")
+
+
+def test_build_single_item_batch_requests_unlabeled_output():
+    prompt = DameoBatchPromptBuilder().build_batch((make_item(1),), article_text="text")
+    protocol = prompt.split("ФОРМАТ ОТВЕТА:", 1)[1].split(
+        "КАРТОЧКИ КОММЕНТАРИЕВ:", 1
+    )[0]
+
+    assert "только текст ответа или SKIP" in protocol
+    assert "Cnn" not in protocol
+
+
+def test_parse_single_item_batch_accepts_unlabeled_reply_and_skip():
+    item = make_item(1)
+
+    reply = parse_batch("Ответ", (item,), max_length=100)
+    skip = parse_batch("SKIP", (item,), max_length=100)
+
+    assert reply[0].kind is BatchOutcomeKind.REPLY
+    assert reply[0].text == "Автор 1, ответ"
+    assert skip[0].kind is BatchOutcomeKind.SKIP
+
+
+def test_parse_single_item_batch_keeps_labeled_legacy_compatibility():
+    outcome = parse_batch("C01 | REPLY | ответ", (make_item(1),), max_length=100)
+
+    assert outcome[0].kind is BatchOutcomeKind.REPLY
+    assert outcome[0].text == "Автор 1, ответ"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "C02 | ответ",
+        " \n\t ",
+        "ответ\nещё ответ",
+        "ответ\tещё ответ",
+    ],
+)
+def test_parse_single_item_batch_rejects_wrong_or_unsafe_output(raw):
+    with pytest.raises(BatchParseError):
+        parse_batch(raw, (make_item(1),), max_length=100)
+
+
+def test_parse_multi_item_batch_does_not_accept_unlabeled_single_protocol():
+    with pytest.raises(BatchParseError, match="line count"):
+        parse_batch("ответ", (make_item(1), make_item(2)), max_length=100)
 
 
 @pytest.mark.parametrize("size", [1, 3, 5])
