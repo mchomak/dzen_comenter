@@ -76,6 +76,22 @@ def test_parse_batch_accepts_model_skip_without_reply_type_prediction():
 
 
 @pytest.mark.parametrize(
+    ("raw", "expected_kind"),
+    [
+        ("C01\t reply \tответ", BatchOutcomeKind.REPLY),
+        ("C01\tAnSwEr\tответ", BatchOutcomeKind.REPLY),
+        ("C01\tОТВЕТ\tответ", BatchOutcomeKind.REPLY),
+        ("C01\t skip \t", BatchOutcomeKind.SKIP),
+        ("C01\tПРОПУСК\t", BatchOutcomeKind.SKIP),
+    ],
+)
+def test_parse_batch_normalizes_common_outcome_kind_aliases(raw, expected_kind):
+    outcome = parse_batch(raw, (make_item(1),), max_length=100)
+
+    assert outcome[0].kind is expected_kind
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         "C01 | REPLY | ответ\nC02 | SKIP | ",

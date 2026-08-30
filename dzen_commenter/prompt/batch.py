@@ -12,6 +12,15 @@ class BatchParseError(ValueError):
     """The model output cannot be safely mapped to every batch item."""
 
 
+_OUTCOME_KIND_ALIASES = {
+    "reply": "REPLY",
+    "answer": "REPLY",
+    "ответ": "REPLY",
+    "skip": "SKIP",
+    "пропуск": "SKIP",
+}
+
+
 class DameoBatchPromptBuilder:
     """Build one-article prompts for a strictly ordered batch of comments."""
 
@@ -103,6 +112,7 @@ def parse_batch(
         expected_label = f"C{position:02d}"
         if label != expected_label:
             raise BatchParseError("Batch item IDs do not match the claimed order")
+        kind = _normalize_outcome_kind(kind)
         if kind == "SKIP":
             if text:
                 raise BatchParseError("SKIP rows must have an empty text column")
@@ -159,6 +169,10 @@ def _split_batch_row(line: str) -> tuple[str, str, str]:
         return label, kind, text
 
     raise BatchParseError("Batch row must contain exactly two column separators")
+
+
+def _normalize_outcome_kind(kind: str) -> str:
+    return _OUTCOME_KIND_ALIASES.get(kind.strip().casefold(), kind)
 
 
 def _format_reply_text(text: str, author: str) -> str:
