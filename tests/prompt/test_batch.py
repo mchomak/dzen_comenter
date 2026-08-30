@@ -78,12 +78,32 @@ def test_parse_batch_accepts_model_skip_without_reply_type_prediction():
 @pytest.mark.parametrize(
     "raw",
     [
+        "C01 | REPLY | ответ\nC02 | SKIP | ",
+        "```\nC01 | REPLY | ответ\nC02 | SKIP |\n```",
+        "C01<TAB>REPLY<TAB>ответ\nC02<TAB>SKIP<TAB>",
+        "C01\\tREPLY\\tответ\nC02\\tSKIP\\t",
+    ],
+)
+def test_parse_batch_accepts_common_machine_output_delimiters(raw):
+    outcomes = parse_batch(raw, (make_item(1), make_item(2)), max_length=100)
+
+    assert [outcome.kind for outcome in outcomes] == [
+        BatchOutcomeKind.REPLY,
+        BatchOutcomeKind.SKIP,
+    ]
+    assert outcomes[0].text == "Автор 1, ответ"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
         "C01\tREPLY\tодин",
         "C02\tREPLY\tодин\nC01\tREPLY\tдва",
         "C01\tREPLY\tодин\nC01\tREPLY\tдва",
         "C01\tREPLY\tодин\nC02\tREPLY\tдва\nC03\tREPLY\tтри",
         "C01\tUNKNOWN\tодин\nC02\tREPLY\tдва",
         "C01\tREPLY\tодин\tдва\nC02\tREPLY\tтри",
+        "C01<TAB>REPLY<TAB>один<TAB>два\nC02<TAB>REPLY<TAB>три",
         "C01\tREPLY\tодин\nстрока продолжения\nC02\tREPLY\tдва",
         "C01\tSKIP\tне пусто\nC02\tREPLY\tдва",
         "C01\tREPLY\t   \nC02\tREPLY\tдва",

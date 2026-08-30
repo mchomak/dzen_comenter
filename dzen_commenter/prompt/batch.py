@@ -50,8 +50,7 @@ class DameoBatchPromptBuilder:
         protocol = (
             "ФОРМАТ ОТВЕТА:\n"
             f"Верни ровно {len(items)} строк в том же порядке, без пояснений.\n"
-            "Каждая строка: Cnn<TAB>REPLY<TAB>текст ответа или "
-            "Cnn<TAB>SKIP<TAB>.\n"
+            "Каждая строка: Cnn | REPLY | текст ответа или Cnn | SKIP | .\n"
             "Для запрещённой, непонятной или небезопасной темы используй SKIP. "
             "В тексте REPLY запрещены tab и перевод строки."
         )
@@ -92,7 +91,7 @@ def parse_batch(
     if max_length < 1:
         raise BatchParseError("Maximum reply length must be positive")
 
-    lines = raw.splitlines()
+    lines = _strip_optional_code_fence(raw)
     if len(lines) != len(items):
         raise BatchParseError("Batch line count does not match claimed items")
 
@@ -100,9 +99,7 @@ def parse_batch(
     for position, (line, item) in enumerate(zip(lines, items, strict=True), start=1):
         if item.item_no != position:
             raise BatchParseError("Claimed item order is invalid")
-        if line.count("\t") != 2:
-            raise BatchParseError("Batch row must contain exactly two tab characters")
-        label, kind, text = line.split("\t")
+        label, kind, text = _split_batch_row(line)
         expected_label = f"C{position:02d}"
         if label != expected_label:
             raise BatchParseError("Batch item IDs do not match the claimed order")
@@ -132,6 +129,36 @@ def parse_batch(
             )
         )
     return tuple(outcomes)
+
+
+def _strip_optional_code_fence(raw: str) -> list[str]:
+    lines = raw.splitlines()
+    if len(lines) >= 2 and lines[0].strip().startswith("```"):
+        if lines[-1].strip() != "```":
+            raise BatchParseError("Batch code fence is not closed")
+        return lines[1:-1]
+    return lines
+
+
+def _split_batch_row(line: str) -> tuple[str, str, str]:
+    """Accept the documented pipe protocol and legacy tab-separated model output."""
+    if line.count("\t") == 2:
+        label, kind, text = line.split("\t")
+        return label, kind, text
+
+    if line.count("|") >= 2:
+        label, kind, text = (part.strip() for part in line.split("|", maxsplit=2))
+        return label, kind, text
+
+    if line.count("<TAB>") == 2:
+        label, kind, text = line.split("<TAB>")
+        return label, kind, text
+
+    if line.count("\\t") == 2:
+        label, kind, text = line.split("\\t")
+        return label, kind, text
+
+    raise BatchParseError("Batch row must contain exactly two column separators")
 
 
 def _format_reply_text(text: str, author: str) -> str:

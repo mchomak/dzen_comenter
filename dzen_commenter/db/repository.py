@@ -343,12 +343,15 @@ class PostgresCommentRepository:
         """Persist every item outcome in one transaction or persist none of them."""
         with self._engine.begin() as conn:
             items = conn.execute(
-                select(ReplyBatchItemTable)
+                select(
+                    ReplyBatchItemTable.comment_id.label("comment_id"),
+                    ReplyBatchItemTable.item_no.label("item_no"),
+                )
                 .where(ReplyBatchItemTable.batch_id == batch_id)
                 .order_by(ReplyBatchItemTable.item_no)
                 .with_for_update()
-            ).scalars().all()
-            expected = [(item.comment_id, item.item_no) for item in items]
+            ).mappings().all()
+            expected = [(item["comment_id"], item["item_no"]) for item in items]
             actual = [(outcome.comment_id, outcome.item_no) for outcome in outcomes]
             if not items or actual != expected:
                 raise ValueError("Batch outcomes do not match the claimed item order")
@@ -358,7 +361,10 @@ class PostgresCommentRepository:
                 raise ValueError("Unknown batch outcome kind")
 
             queue_rows = conn.execute(
-                select(CommentBatchQueueTable)
+                select(
+                    CommentBatchQueueTable.comment_id.label("comment_id"),
+                    CommentBatchQueueTable.attempt_count.label("attempt_count"),
+                )
                 .where(
                     CommentBatchQueueTable.comment_id.in_(
                         [outcome.comment_id for outcome in outcomes]
@@ -367,8 +373,8 @@ class PostgresCommentRepository:
                     CommentBatchQueueTable.state == "claimed",
                 )
                 .with_for_update()
-            ).scalars().all()
-            queues = {queue.comment_id: queue for queue in queue_rows}
+            ).mappings().all()
+            queues = {queue["comment_id"]: queue for queue in queue_rows}
             if len(queues) != len(outcomes):
                 raise ValueError("Batch queue claim is no longer active")
 
@@ -421,7 +427,7 @@ class PostgresCommentRepository:
                 queue = queues[outcome.comment_id]
                 retry = (
                     outcome.kind is BatchOutcomeKind.ERROR
-                    and queue.attempt_count < max_attempts_per_comment
+                    and queue["attempt_count"] < max_attempts_per_comment
                 )
                 conn.execute(
                     update(CommentBatchQueueTable)

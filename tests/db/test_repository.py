@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 from sqlalchemy import inspect, select, text
 
+import dzen_commenter.db.repository as repository_module
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import CommentRepository
 from dzen_commenter.contracts.models import BatchOutcome, Comment, Publication, Reply
@@ -778,6 +779,47 @@ def test_save_batch_outcomes_is_atomic_and_counts_skips_and_errors(repo, engine)
         ).scalar_one()
     assert statuses == ["generated", "skipped", "error"]
     assert batch_status == "error"
+
+
+def test_save_batch_outcomes_reads_core_table_results_by_mapping(repo, monkeypatch):
+    pub_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 8, 28, 12, 0, 0)
+    comment_id = repo.upsert_comment(
+        _make_comment(pub_id, dzen_id="core-result", fetched_at=now)
+    )
+    _enqueue(
+        repo,
+        comment_id,
+        "http://post/1",
+        queued_at=now,
+        cutover_at=now - timedelta(days=1),
+    )
+    batch = repo.claim_next_batch(now, max_comments=1, wait_hours=12, quota_remaining=1)
+    assert batch is not None
+
+    monkeypatch.setattr(
+        repository_module, "ReplyBatchItemTable", repository_module.ReplyBatchItemTable.__table__
+    )
+    monkeypatch.setattr(
+        repository_module,
+        "CommentBatchQueueTable",
+        repository_module.CommentBatchQueueTable.__table__,
+    )
+
+    reply_ids = repo.save_batch_outcomes(
+        batch.id,
+        (BatchOutcome(comment_id, 1, BatchOutcomeKind.REPLY, text="готово"),),
+        ai_provider="test",
+        ai_model="test-model",
+        article_context_status="article_text_used",
+        created_at=now,
+        prompt_tokens=1,
+        completion_tokens=1,
+        retry_cooldown_minutes=60,
+        max_attempts_per_comment=1,
+    )
+
+    assert len(reply_ids) == 1
 
 
 def test_save_batch_outcomes_rejects_partial_data_without_writes(repo, engine):
