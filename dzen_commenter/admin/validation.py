@@ -1,5 +1,6 @@
 import re
 from collections.abc import Mapping
+from datetime import datetime
 from urllib.parse import urlparse
 
 from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
@@ -7,6 +8,10 @@ from dzen_commenter.prompt.config_loader import PromptBrandConfig
 
 MAX_COMMENT_AGE_DAYS = 3650
 MAX_REPLY_LENGTH = 10000
+MAX_BATCH_COMMENTS = 100
+MAX_BATCH_WAIT_HOURS = 24 * 7
+MAX_BATCH_RETRY_COOLDOWN_MINUTES = 24 * 60
+MAX_BATCH_ATTEMPTS_PER_COMMENT = 10
 
 _PROMPT_FIELDS = (
     "role",
@@ -78,6 +83,21 @@ def _telegram_proxy_url(form: Mapping[str, object], errors: dict[str, str]) -> s
     return value
 
 
+def _batch_cutover_at(form: Mapping[str, object], errors: dict[str, str]) -> str | None:
+    value = _value(form, "batch_cutover_at")
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        errors["batch_cutover_at"] = "Введите дату и время с часовым поясом, например +03:00."
+        return None
+    if parsed.tzinfo is None:
+        errors["batch_cutover_at"] = "Укажите часовой пояс, например +03:00."
+        return None
+    return value
+
+
 def validate_settings_form(
     form: Mapping[str, object],
 ) -> tuple[RuntimeConfigData | None, dict[str, str]]:
@@ -112,6 +132,46 @@ def validate_settings_form(
     )
     error_notification_cooldown_seconds = _notification_cooldown(form, errors)
     telegram_proxy_url = _telegram_proxy_url(form, errors)
+    batch_replies_enabled = _value(form, "batch_replies_enabled").lower() in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
+    batch_cutover_at = _batch_cutover_at(form, errors)
+    batch_max_comments = _integer(
+        form,
+        "batch_max_comments",
+        minimum=1,
+        maximum=MAX_BATCH_COMMENTS,
+        errors=errors,
+    )
+    batch_wait_hours = _integer(
+        form,
+        "batch_wait_hours",
+        minimum=1,
+        maximum=MAX_BATCH_WAIT_HOURS,
+        errors=errors,
+    )
+    batch_retry_cooldown_minutes = _integer(
+        form,
+        "batch_retry_cooldown_minutes",
+        minimum=1,
+        maximum=MAX_BATCH_RETRY_COOLDOWN_MINUTES,
+        errors=errors,
+    )
+    batch_max_attempts_per_comment = _integer(
+        form,
+        "batch_max_attempts_per_comment",
+        minimum=1,
+        maximum=MAX_BATCH_ATTEMPTS_PER_COMMENT,
+        errors=errors,
+    )
+    if batch_replies_enabled and batch_cutover_at is None:
+        errors.setdefault(
+            "batch_cutover_at",
+            "Для включения пакетной генерации укажите дату и время с часовым поясом.",
+        )
 
     telegram_ids = _list_values(form, "developer_telegram_chat_ids")
     if any(not _TELEGRAM_ID_RE.fullmatch(item) for item in telegram_ids):
@@ -141,6 +201,12 @@ def validate_settings_form(
                 error_email_list=", ".join(emails),
                 error_notification_cooldown_seconds=error_notification_cooldown_seconds,
                 telegram_proxy_url=telegram_proxy_url,
+                batch_replies_enabled=batch_replies_enabled,
+                batch_cutover_at=batch_cutover_at,
+                batch_max_comments=batch_max_comments,
+                batch_wait_hours=batch_wait_hours,
+                batch_retry_cooldown_minutes=batch_retry_cooldown_minutes,
+                batch_max_attempts_per_comment=batch_max_attempts_per_comment,
             ),
             prompt=PromptBrandConfig(**prompt_values),
         ),

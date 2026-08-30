@@ -63,6 +63,46 @@ def test_developer_notifier_uses_developer_transport():
     assert transport.errors == [("database unavailable", error)]
 
 
+def test_developer_notifier_throttles_duplicate_errors(tmp_path):
+    transport = SpyTransport()
+    now = [100.0]
+    notifier = DeveloperNotifier(
+        transport,
+        error_cooldown_provider=lambda: 3600,
+        cooldown_state_path=str(tmp_path / "cooldown.json"),
+        time_fn=lambda: now[0],
+    )
+
+    notifier.notify_error("database unavailable", ValueError("down"))
+    notifier.notify_error("database unavailable", ValueError("down"))
+
+    assert len(transport.errors) == 1
+
+
+def test_developer_notifier_keeps_cooldown_across_restart(tmp_path):
+    state_path = tmp_path / "cooldown.json"
+    first_transport = SpyTransport()
+    first = DeveloperNotifier(
+        first_transport,
+        error_cooldown_provider=lambda: 6 * 3600,
+        cooldown_state_path=str(state_path),
+        time_fn=lambda: 100.0,
+    )
+    first.notify_error("batch generation failed", RuntimeError("provider unavailable"))
+
+    second_transport = SpyTransport()
+    second = DeveloperNotifier(
+        second_transport,
+        error_cooldown_provider=lambda: 6 * 3600,
+        cooldown_state_path=str(state_path),
+        time_fn=lambda: 101.0,
+    )
+    second.notify_error("batch generation failed", RuntimeError("provider unavailable"))
+
+    assert len(first_transport.errors) == 1
+    assert second_transport.errors == []
+
+
 def test_configure_logging_does_not_duplicate_developer_handler():
     transport = SpyTransport()
     root = logging.getLogger()

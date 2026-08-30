@@ -235,6 +235,16 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
         "error_email_list": split_csv_items(data.settings.error_email_list),
         "error_notification_cooldown": cooldown,
         "telegram_proxy_url": data.settings.telegram_proxy_url,
+        "batch_replies_enabled": "on" if data.settings.batch_replies_enabled else "",
+        "batch_cutover_at": data.settings.batch_cutover_at or "",
+        "batch_max_comments": str(data.settings.batch_max_comments),
+        "batch_wait_hours": str(data.settings.batch_wait_hours),
+        "batch_retry_cooldown_minutes": str(
+            data.settings.batch_retry_cooldown_minutes
+        ),
+        "batch_max_attempts_per_comment": str(
+            data.settings.batch_max_attempts_per_comment
+        ),
         "role": data.prompt.role,
         "tone_of_voice": data.prompt.tone_of_voice,
         "anti_rules": data.prompt.anti_rules,
@@ -257,6 +267,12 @@ def _form_values(form) -> dict[str, object]:
             "max_comments_per_hour",
             "error_notification_cooldown",
             "telegram_proxy_url",
+            "batch_replies_enabled",
+            "batch_cutover_at",
+            "batch_max_comments",
+            "batch_wait_hours",
+            "batch_retry_cooldown_minutes",
+            "batch_max_attempts_per_comment",
             "role",
             "tone_of_voice",
             "anti_rules",

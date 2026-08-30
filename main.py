@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 import sqlalchemy
 
@@ -88,7 +89,15 @@ def build_app(
             fallback=email_fallback,
             chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
             proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
-        )
+        ),
+        error_cooldown_provider=lambda: (
+            runtime_config.get().settings.error_notification_cooldown_seconds
+        ),
+        cooldown_state_path=str(
+            Path(settings.RUNTIME_CONFIG_PATH).with_name(
+                "error_notification_cooldown.json"
+            )
+        ),
     )
 
     loop = OrchestratorLoop(

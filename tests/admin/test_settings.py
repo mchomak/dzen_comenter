@@ -87,6 +87,12 @@ def _form() -> dict[str, object]:
         "error_email_list": ["one@example.com", "two@example.com"],
         "error_notification_cooldown": "15m",
         "telegram_proxy_url": "",
+        "batch_replies_enabled": "on",
+        "batch_cutover_at": "2026-08-30T12:00:00+03:00",
+        "batch_max_comments": "3",
+        "batch_wait_hours": "12",
+        "batch_retry_cooldown_minutes": "60",
+        "batch_max_attempts_per_comment": "2",
         "role": "new role",
         "tone_of_voice": "new tone",
         "anti_rules": "new rules",
@@ -161,6 +167,42 @@ def test_settings_saves_and_renders_notification_interval_and_telegram_proxy(cli
     reloaded = client.get("/settings")
     assert 'name="error_notification_cooldown" value="2h"' in reloaded.text
     assert 'name="telegram_proxy_url" value="socks5h://proxy.example:1080"' in reloaded.text
+
+
+def test_settings_saves_and_renders_batching_configuration(client, settings):
+    data = _form()
+    data.update(
+        {
+            "batch_max_comments": "5",
+            "batch_wait_hours": "6",
+            "batch_retry_cooldown_minutes": "30",
+            "batch_max_attempts_per_comment": "3",
+        }
+    )
+
+    response = client.post("/settings", data=data)
+
+    assert response.status_code == 302
+    saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
+    assert saved["settings"]["batch_replies_enabled"] is True
+    assert saved["settings"]["batch_cutover_at"] == "2026-08-30T12:00:00+03:00"
+    assert saved["settings"]["batch_max_comments"] == 5
+    assert saved["settings"]["batch_wait_hours"] == 6
+    assert saved["settings"]["batch_retry_cooldown_minutes"] == 30
+    assert saved["settings"]["batch_max_attempts_per_comment"] == 3
+
+    reloaded = client.get("/settings")
+    assert 'name="batch_replies_enabled" checked' in reloaded.text
+    assert 'name="batch_max_comments" value="5"' in reloaded.text
+
+
+def test_batching_requires_a_timezone_aware_cutover_when_enabled():
+    data = _form()
+    data["batch_cutover_at"] = "2026-08-30T12:00:00"
+
+    _, errors = validate_settings_form(data)
+
+    assert "batch_cutover_at" in errors
 
 
 def test_settings_rejects_invalid_proxy_without_losing_form_values(client):
