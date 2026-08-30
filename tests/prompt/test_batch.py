@@ -91,13 +91,26 @@ def test_parse_single_item_batch_keeps_labeled_legacy_compatibility():
     [
         "C02 | ответ",
         " \n\t ",
-        "ответ\nещё ответ",
         "ответ\tещё ответ",
+        "C01 | ответ\nещё ответ",
     ],
 )
 def test_parse_single_item_batch_rejects_wrong_or_unsafe_output(raw):
     with pytest.raises(BatchParseError):
         parse_batch(raw, (make_item(1),), max_length=100)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Ответ:\nТекст ответа", "Автор 1, текст ответа"),
+        ("Первая часть\nвторая часть", "Автор 1, первая часть вторая часть"),
+    ],
+)
+def test_parse_single_item_batch_normalizes_unlabeled_response_lines(raw, expected):
+    outcome = parse_batch(raw, (make_item(1),), max_length=100)
+
+    assert outcome[0].text == expected
 
 
 def test_parse_multi_item_batch_does_not_accept_unlabeled_single_protocol():

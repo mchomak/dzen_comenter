@@ -103,36 +103,11 @@ def parse_batch(
         raise BatchParseError("Maximum reply length must be positive")
 
     lines = _strip_optional_code_fence(raw)
+    if len(items) == 1:
+        return (_parse_single_item_output(lines, items[0], max_length),)
     if len(lines) != len(items):
         raise BatchParseError("Batch line count does not match claimed items")
-    if len(items) == 1 and not _looks_like_labeled_batch_row(lines[0]):
-        return (_parse_single_outcome(lines[0], items[0], max_length),)
-
-    outcomes: list[BatchOutcome] = []
-    for position, (line, item) in enumerate(zip(lines, items, strict=True), start=1):
-        if item.item_no != position:
-            raise BatchParseError("Claimed item order is invalid")
-        label, kind, text, is_legacy = _split_batch_row(line)
-        expected_label = f"C{position:02d}"
-        if label != expected_label:
-            raise BatchParseError("Batch item IDs do not match the claimed order")
-        normalized_kind = _normalize_outcome_kind(kind)
-        if not is_legacy and text == "SKIP":
-            outcomes.append(
-                BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
-            )
-            continue
-        if is_legacy and normalized_kind == "SKIP":
-            if text:
-                raise BatchParseError("SKIP rows must have an empty text column")
-            outcomes.append(
-                BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
-            )
-            continue
-        if is_legacy and normalized_kind != "REPLY" and not text.strip():
-            raise BatchParseError("Batch row has an unknown outcome kind")
-        outcomes.append(_reply_outcome(item, text, max_length))
-    return tuple(outcomes)
+    return _parse_labeled_outcomes(lines, items, max_length)
 
 
 def _strip_optional_code_fence(raw: str) -> list[str]:
@@ -179,6 +154,54 @@ def _parse_single_outcome(
     if line == "SKIP":
         return BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
     return _reply_outcome(item, line, max_length)
+
+
+def _parse_single_item_output(
+    lines: list[str], item: BatchItem, max_length: int
+) -> BatchOutcome:
+    if not lines:
+        raise BatchParseError("Batch line count does not match claimed items")
+    if len(lines) == 1:
+        line = lines[0]
+        if not _looks_like_labeled_batch_row(line):
+            return _parse_single_outcome(line, item, max_length)
+        return _parse_labeled_outcomes((line,), (item,), max_length)[0]
+
+    if any(re.match(r"^C\d+\b", line) for line in lines):
+        raise BatchParseError("Batch line count does not match claimed items")
+    if lines[0].strip().casefold() in {"ответ:", "текст ответа:"}:
+        lines = lines[1:]
+    return _parse_single_outcome(" ".join(line.strip() for line in lines), item, max_length)
+
+
+def _parse_labeled_outcomes(
+    lines: Sequence[str], items: Sequence[BatchItem], max_length: int
+) -> tuple[BatchOutcome, ...]:
+    outcomes: list[BatchOutcome] = []
+    for position, (line, item) in enumerate(zip(lines, items, strict=True), start=1):
+        if item.item_no != position:
+            raise BatchParseError("Claimed item order is invalid")
+        label, kind, text, is_legacy = _split_batch_row(line)
+        expected_label = f"C{position:02d}"
+        if label != expected_label:
+            raise BatchParseError("Batch item IDs do not match the claimed order")
+        normalized_kind = _normalize_outcome_kind(kind)
+        if not is_legacy and text == "SKIP":
+            outcomes.append(
+                BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
+            )
+            continue
+        if is_legacy and normalized_kind == "SKIP":
+            if text:
+                raise BatchParseError("SKIP rows must have an empty text column")
+            outcomes.append(
+                BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
+            )
+            continue
+        if is_legacy and normalized_kind != "REPLY" and not text.strip():
+            raise BatchParseError("Batch row has an unknown outcome kind")
+        outcomes.append(_reply_outcome(item, text, max_length))
+    return tuple(outcomes)
 
 
 def _reply_outcome(item: BatchItem, text: str, max_length: int) -> BatchOutcome:
