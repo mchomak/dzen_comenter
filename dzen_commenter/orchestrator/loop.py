@@ -23,6 +23,7 @@ from dzen_commenter.contracts.interfaces import (
     SessionManager,
 )
 from dzen_commenter.contracts.models import (
+    BatchItem,
     BatchOutcome,
     ClaimedBatch,
     Comment,
@@ -230,17 +231,14 @@ class OrchestratorLoop:
                 runtime_settings.max_reply_length,
             )
         except Exception as exc:
-            reason = f"Batch reply generation failed: {exc}"
-            outcomes = tuple(
-                BatchOutcome(
-                    comment_id=item.comment_id,
-                    item_no=item.item_no,
-                    kind=BatchOutcomeKind.ERROR,
-                    error_reason=reason,
+            if len(batch.items) > 1 and self._is_batch_parse_error(exc):
+                outcomes = self._generate_single_item_batch_outcomes(
+                    batch.items,
+                    article_text=article_text or "",
+                    max_reply_length=runtime_settings.max_reply_length,
                 )
-                for item in batch.items
-            )
-            self.notifier.notify_error(reason, exc)
+            else:
+                outcomes = self._batch_error_outcomes(batch.items, exc)
 
         reply_ids = self.repository.save_batch_outcomes(
             batch.id,
@@ -291,6 +289,74 @@ class OrchestratorLoop:
                     ReplyStatus.PUBLISHED,
                     published_at=moscow_now(),
                 )
+
+    def _generate_single_item_batch_outcomes(
+        self,
+        items: tuple[BatchItem, ...],
+        *,
+        article_text: str,
+        max_reply_length: int,
+    ) -> tuple[BatchOutcome, ...]:
+        outcomes: list[BatchOutcome] = []
+        for item in items:
+            single_item = BatchItem(
+                batch_id=item.batch_id,
+                comment_id=item.comment_id,
+                item_no=1,
+                post_url=item.post_url,
+                publication_title=item.publication_title,
+                thread_text=item.thread_text,
+                author=item.author,
+                comment_text=item.comment_text,
+            )
+            try:
+                prompt = self.batch_prompt_builder.build_batch(
+                    (single_item,),
+                    article_text=article_text,
+                )
+                raw = self.ai_provider.generate(
+                    prompt,
+                    temperature=self.settings.AI_TEMPERATURE,
+                    max_tokens=self.settings.AI_MAX_TOKENS,
+                )
+                outcome = self.batch_reply_parser(
+                    raw,
+                    (single_item,),
+                    max_reply_length,
+                )[0]
+            except Exception as exc:
+                outcomes.extend(self._batch_error_outcomes((item,), exc))
+                continue
+            outcomes.append(
+                BatchOutcome(
+                    comment_id=item.comment_id,
+                    item_no=item.item_no,
+                    kind=outcome.kind,
+                    text=outcome.text,
+                    error_reason=outcome.error_reason,
+                )
+            )
+        return tuple(outcomes)
+
+    def _batch_error_outcomes(
+        self, items: tuple[BatchItem, ...], exc: Exception
+    ) -> tuple[BatchOutcome, ...]:
+        reason = f"Batch reply generation failed: {exc}"
+        outcomes = tuple(
+            BatchOutcome(
+                comment_id=item.comment_id,
+                item_no=item.item_no,
+                kind=BatchOutcomeKind.ERROR,
+                error_reason=reason,
+            )
+            for item in items
+        )
+        self.notifier.notify_error(reason, exc)
+        return outcomes
+
+    @staticmethod
+    def _is_batch_parse_error(exc: Exception) -> bool:
+        return exc.__class__.__name__ == "BatchParseError"
 
     @staticmethod
     def _batch_cutover_at(value: str | None) -> datetime | None:

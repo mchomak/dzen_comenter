@@ -97,6 +97,7 @@ def test_batch_generates_three_comments_with_one_article_and_model_call(
     assert harness.page.article_text_urls == [comments[0].post_url]
     assert len(harness.repository.save_batch_outcomes_calls) == 1
     assert len(harness.page.publish_calls) == 3
+    assert harness.notifier.errors == []
 
 
 def test_batch_waits_for_timeout_before_claiming_incomplete_article_group(
@@ -155,24 +156,59 @@ def test_batch_claim_is_limited_by_remaining_hourly_quota(
     assert harness.repository.count_ai_attempts_since(now - timedelta(hours=1)) == 100
 
 
-def test_invalid_batch_output_saves_errors_and_publishes_nothing(
+def test_malformed_multi_item_batch_falls_back_to_single_item_generations(
     loop_factory, comment_factory
 ):
     comments = _batch_comments(comment_factory, 3)
     harness = loop_factory(
         comments=comments,
         settings_overrides=_batch_settings(),
-        ai_responses=["C01\tREPLY\tТолько один ответ"],
+        ai_responses=[
+            "C01\tREPLY\tТолько один ответ",
+            "C01 | Первый ответ",
+            "C01 | Второй ответ",
+            "C01 | Третий ответ",
+        ],
     )
 
     harness.loop.run_cycle()
 
     outcomes = harness.repository.save_batch_outcomes_calls[0][1]
-    assert [outcome.kind.value for outcome in outcomes] == ["error", "error", "error"]
-    assert harness.page.publish_calls == []
-    assert all(
-        reply.status is ReplyStatus.ERROR
-        for reply in harness.repository.replies.values()
+    assert [outcome.kind.value for outcome in outcomes] == ["reply", "reply", "reply"]
+    assert len(harness.ai_provider.calls) == 4
+    assert len(harness.batch_prompt_builder.calls) == 4
+    assert [item.item_no for item in harness.batch_prompt_builder.calls[1][0]] == [1]
+    assert [item.item_no for item in harness.batch_prompt_builder.calls[2][0]] == [1]
+    assert [item.item_no for item in harness.batch_prompt_builder.calls[3][0]] == [1]
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert len(harness.page.publish_calls) == 3
+    assert harness.notifier.errors == []
+
+
+def test_single_item_fallback_failure_saves_error_and_notifies(
+    loop_factory, comment_factory
+):
+    comments = _batch_comments(comment_factory, 3)
+    harness = loop_factory(
+        comments=comments,
+        settings_overrides=_batch_settings(),
+        ai_responses=[
+            "C01\tUNKNOWN\t\nC02\tUNKNOWN\t\nC03\tUNKNOWN\t",
+            "C01 | Первый ответ",
+            "C01\tUNKNOWN\t",
+            "C01 | Третий ответ",
+        ],
+    )
+
+    harness.loop.run_cycle()
+
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert [outcome.kind.value for outcome in outcomes] == ["reply", "error", "reply"]
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert len(harness.page.publish_calls) == 2
+    assert len(harness.notifier.errors) == 1
+    assert harness.notifier.errors[0][0] == (
+        "Batch reply generation failed: Batch row has an unknown outcome kind"
     )
 
 
