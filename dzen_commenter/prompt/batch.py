@@ -147,7 +147,7 @@ def parse_batch(
 
 
 def _strip_optional_code_fence(raw: str) -> list[str]:
-    lines = raw.splitlines()
+    lines = [line for line in raw.splitlines() if line.strip()]
     if len(lines) >= 2 and lines[0].strip().startswith("```"):
         if lines[-1].strip() != "```":
             raise BatchParseError("Batch code fence is not closed")

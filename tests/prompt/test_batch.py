@@ -136,6 +136,24 @@ def test_parse_batch_accepts_common_machine_output_delimiters(raw):
     assert outcomes[0].text == "Автор 1, ответ"
 
 
+def test_parse_batch_ignores_blank_separator_lines_in_optional_fence():
+    outcomes = parse_batch(
+        "```\n\nC01 | ответ\n \nC02 | SKIP\n\n```",
+        (make_item(1), make_item(2)),
+        max_length=100,
+    )
+
+    assert [outcome.kind for outcome in outcomes] == [
+        BatchOutcomeKind.REPLY,
+        BatchOutcomeKind.SKIP,
+    ]
+
+
+def test_parse_batch_rejects_a_missing_data_row_despite_blank_lines():
+    with pytest.raises(BatchParseError, match="line count"):
+        parse_batch("C01 | ответ\n\n  ", (make_item(1), make_item(2)), max_length=100)
+
+
 @pytest.mark.parametrize(
     "raw",
     [
