@@ -59,9 +59,9 @@ class DameoBatchPromptBuilder:
         protocol = (
             "ФОРМАТ ОТВЕТА:\n"
             f"Верни ровно {len(items)} строк в том же порядке, без пояснений.\n"
-            "Каждая строка: Cnn | REPLY | текст ответа или Cnn | SKIP | .\n"
+            "Каждая строка: Cnn | текст ответа или Cnn | SKIP.\n"
             "Для запрещённой, непонятной или небезопасной темы используй SKIP. "
-            "В тексте REPLY запрещены tab и перевод строки."
+            "В тексте ответа запрещены символы |, tab и перевод строки."
         )
         return "\n\n".join(
             (
@@ -108,19 +108,24 @@ def parse_batch(
     for position, (line, item) in enumerate(zip(lines, items, strict=True), start=1):
         if item.item_no != position:
             raise BatchParseError("Claimed item order is invalid")
-        label, kind, text = _split_batch_row(line)
+        label, kind, text, is_legacy = _split_batch_row(line)
         expected_label = f"C{position:02d}"
         if label != expected_label:
             raise BatchParseError("Batch item IDs do not match the claimed order")
-        kind = _normalize_outcome_kind(kind)
-        if kind == "SKIP":
+        normalized_kind = _normalize_outcome_kind(kind)
+        if not is_legacy and text == "SKIP":
+            outcomes.append(
+                BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
+            )
+            continue
+        if is_legacy and normalized_kind == "SKIP":
             if text:
                 raise BatchParseError("SKIP rows must have an empty text column")
             outcomes.append(
                 BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
             )
             continue
-        if kind != "REPLY":
+        if is_legacy and normalized_kind != "REPLY" and not text.strip():
             raise BatchParseError("Batch row has an unknown outcome kind")
         if not text.strip():
             raise BatchParseError("REPLY rows must have non-empty text")
@@ -150,25 +155,29 @@ def _strip_optional_code_fence(raw: str) -> list[str]:
     return lines
 
 
-def _split_batch_row(line: str) -> tuple[str, str, str]:
-    """Accept the documented pipe protocol and legacy tab-separated model output."""
+def _split_batch_row(line: str) -> tuple[str, str, str, bool]:
+    """Accept the two-column protocol and strictly delimited legacy rows."""
     if line.count("\t") == 2:
         label, kind, text = line.split("\t")
-        return label, kind, text
-
-    if line.count("|") >= 2:
-        label, kind, text = (part.strip() for part in line.split("|", maxsplit=2))
-        return label, kind, text
+        return label, kind, text, True
 
     if line.count("<TAB>") == 2:
         label, kind, text = line.split("<TAB>")
-        return label, kind, text
+        return label, kind, text, True
 
     if line.count("\\t") == 2:
         label, kind, text = line.split("\\t")
-        return label, kind, text
+        return label, kind, text, True
 
-    raise BatchParseError("Batch row must contain exactly two column separators")
+    if line.count("|") == 1:
+        label, text = (part.strip() for part in line.split("|"))
+        return label, "", text, False
+
+    if line.count("|") == 2:
+        label, kind, text = (part.strip() for part in line.split("|", maxsplit=2))
+        return label, kind, text, True
+
+    raise BatchParseError("Batch row has an invalid column separator count")
 
 
 def _normalize_outcome_kind(kind: str) -> str:

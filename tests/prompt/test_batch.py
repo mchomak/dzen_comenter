@@ -30,6 +30,13 @@ def test_build_batch_shares_article_context_and_labels_every_card(size):
         True
     ] * size
     assert "C06" not in prompt
+    assert "Cnn | текст ответа или Cnn | SKIP" in prompt
+    assert (
+        "REPLY"
+        not in prompt.split("ФОРМАТ ОТВЕТА:", 1)[1].split("КАРТОЧКИ КОММЕНТАРИЕВ:", 1)[
+            0
+        ]
+    )
 
 
 def test_build_batch_rejects_items_from_different_articles():
@@ -67,7 +74,19 @@ def test_parse_batch_returns_every_outcome_in_claimed_item_order(size):
         assert outcomes[1].text == ""
 
 
-def test_parse_batch_accepts_model_skip_without_reply_type_prediction():
+def test_parse_batch_accepts_two_column_protocol():
+    item = make_item(1)
+
+    outcomes = parse_batch(
+        "C01 | ответ\nC02 | SKIP", (item, make_item(2)), max_length=100
+    )
+
+    assert outcomes[0].kind is BatchOutcomeKind.REPLY
+    assert outcomes[0].text == "Автор 1, ответ"
+    assert outcomes[1].kind is BatchOutcomeKind.SKIP
+
+
+def test_parse_batch_accepts_legacy_model_skip_without_reply_type_prediction():
     item = make_item(1)
 
     outcome = parse_batch("C01\tSKIP\t", (item,), max_length=100)
@@ -89,6 +108,13 @@ def test_parse_batch_normalizes_common_outcome_kind_aliases(raw, expected_kind):
     outcome = parse_batch(raw, (make_item(1),), max_length=100)
 
     assert outcome[0].kind is expected_kind
+
+
+def test_parse_batch_treats_unknown_legacy_kind_with_text_as_reply():
+    outcome = parse_batch("C01\tСФОРМИРОВАНО\tОтвет", (make_item(1),), max_length=100)
+
+    assert outcome[0].kind is BatchOutcomeKind.REPLY
+    assert outcome[0].text == "Автор 1, ответ"
 
 
 @pytest.mark.parametrize(
@@ -117,12 +143,15 @@ def test_parse_batch_accepts_common_machine_output_delimiters(raw):
         "C02\tREPLY\tодин\nC01\tREPLY\tдва",
         "C01\tREPLY\tодин\nC01\tREPLY\tдва",
         "C01\tREPLY\tодин\nC02\tREPLY\tдва\nC03\tREPLY\tтри",
-        "C01\tUNKNOWN\tодин\nC02\tREPLY\tдва",
+        "C01\tUNKNOWN\t\nC02\tREPLY\tдва",
         "C01\tREPLY\tодин\tдва\nC02\tREPLY\tтри",
         "C01<TAB>REPLY<TAB>один<TAB>два\nC02<TAB>REPLY<TAB>три",
         "C01\tREPLY\tодин\nстрока продолжения\nC02\tREPLY\tдва",
         "C01\tSKIP\tне пусто\nC02\tREPLY\tдва",
         "C01\tREPLY\t   \nC02\tREPLY\tдва",
+        "C01 | \nC02 | ответ",
+        "C01 | SKIP | текст\nC02 | ответ",
+        "C01 | ответ\tс tab\nC02 | ответ",
     ],
 )
 def test_parse_batch_rejects_the_entire_batch_for_structural_errors(raw):
