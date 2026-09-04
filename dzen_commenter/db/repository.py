@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from datetime import datetime, timedelta
 
 from sqlalchemy import case, exists, func, literal, select, update
@@ -219,6 +220,7 @@ class PostgresCommentRepository:
         max_comments: int,
         wait_hours: int,
         quota_remaining: int,
+        available_comment_ids: Collection[int] | None = None,
     ) -> ClaimedBatch | None:
         """Claim one post-local batch under row locks in a stable item order."""
         limit = min(max_comments, quota_remaining)
@@ -233,6 +235,8 @@ class PostgresCommentRepository:
                 | (CommentBatchQueueTable.next_attempt_at <= now)
             )
         )
+        if available_comment_ids is not None:
+            ready &= CommentBatchQueueTable.comment_id.in_(available_comment_ids)
         with self._engine.begin() as conn:
             first_post_url = conn.execute(
                 select(CommentBatchQueueTable.post_url)

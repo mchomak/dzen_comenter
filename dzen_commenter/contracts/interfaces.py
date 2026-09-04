@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -72,6 +72,7 @@ class CommentRepository(Protocol):
         max_comments: int,
         wait_hours: int,
         quota_remaining: int,
+        available_comment_ids: Collection[int] | None = None,
     ) -> ClaimedBatch | None:
         ...
 

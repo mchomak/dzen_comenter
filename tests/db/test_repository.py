@@ -672,6 +672,50 @@ def test_claim_next_batch_extracts_joined_rows_in_order(repo, engine):
     assert states == ["claimed", "claimed", "claimed"]
 
 
+def test_claim_next_batch_only_claims_comments_available_for_publication(repo, engine):
+    pub_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 8, 28, 12, 0, 0)
+    cutover = now - timedelta(days=1)
+    unavailable_id = repo.upsert_comment(
+        _make_comment(pub_id, dzen_id="unavailable", fetched_at=now)
+    )
+    available_id = repo.upsert_comment(
+        _make_comment(pub_id, dzen_id="available", fetched_at=now)
+    )
+    _enqueue(
+        repo,
+        unavailable_id,
+        "http://post/1",
+        queued_at=now - timedelta(hours=12),
+        cutover_at=cutover,
+    )
+    _enqueue(
+        repo,
+        available_id,
+        "http://post/1",
+        queued_at=now - timedelta(hours=12),
+        cutover_at=cutover,
+    )
+
+    batch = repo.claim_next_batch(
+        now,
+        max_comments=1,
+        wait_hours=12,
+        quota_remaining=1,
+        available_comment_ids={available_id},
+    )
+
+    assert batch is not None
+    assert [item.comment_id for item in batch.items] == [available_id]
+    with engine.connect() as conn:
+        unavailable_state = conn.execute(
+            select(CommentBatchQueueTable.state).where(
+                CommentBatchQueueTable.comment_id == unavailable_id
+            )
+        ).scalar_one()
+    assert unavailable_state == "queued"
+
+
 def test_claim_next_batch_waits_for_timeout_and_respects_quota(repo):
     pub_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 8, 28, 12, 0, 0)

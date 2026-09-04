@@ -177,6 +177,7 @@ class OrchestratorLoop:
             ),
             wait_hours=runtime_settings.batch_wait_hours,
             quota_remaining=quota_remaining,
+            available_comment_ids={comment_id for comment_id, _ in indexed_comments},
         )
         processed_items = 0
         if batch is not None:

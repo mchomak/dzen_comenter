@@ -207,6 +207,7 @@ class FakeCommentRepository:
         max_comments: int,
         wait_hours: int,
         quota_remaining: int,
+        available_comment_ids: set[int] | None = None,
     ) -> ClaimedBatch | None:
         limit = min(max_comments, quota_remaining)
         if limit <= 0:
@@ -216,6 +217,10 @@ class FakeCommentRepository:
             for comment_id, row in self.batch_queue.items()
             if row["state"] == "queued"
             and (row["next_attempt_at"] is None or row["next_attempt_at"] <= now)
+            and (
+                available_comment_ids is None
+                or comment_id in available_comment_ids
+            )
         ]
         if not queued:
             return None
