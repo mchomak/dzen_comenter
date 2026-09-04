@@ -672,7 +672,7 @@ def test_claim_next_batch_extracts_joined_rows_in_order(repo, engine):
     assert states == ["claimed", "claimed", "claimed"]
 
 
-def test_claim_next_batch_only_claims_comments_available_for_publication(repo, engine):
+def test_claim_next_batch_claims_oldest_ready_comment_without_page_snapshot(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 8, 28, 12, 0, 0)
     cutover = now - timedelta(days=1)
@@ -702,18 +702,17 @@ def test_claim_next_batch_only_claims_comments_available_for_publication(repo, e
         max_comments=1,
         wait_hours=12,
         quota_remaining=1,
-        available_comment_ids={available_id},
     )
 
     assert batch is not None
-    assert [item.comment_id for item in batch.items] == [available_id]
+    assert [item.comment_id for item in batch.items] == [unavailable_id]
     with engine.connect() as conn:
         unavailable_state = conn.execute(
             select(CommentBatchQueueTable.state).where(
                 CommentBatchQueueTable.comment_id == unavailable_id
             )
         ).scalar_one()
-    assert unavailable_state == "queued"
+    assert unavailable_state == "claimed"
 
 
 def test_claim_next_batch_waits_for_timeout_and_respects_quota(repo):

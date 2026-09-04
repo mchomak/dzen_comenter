@@ -177,7 +177,6 @@ class OrchestratorLoop:
             ),
             wait_hours=runtime_settings.batch_wait_hours,
             quota_remaining=quota_remaining,
-            available_comment_ids={comment_id for comment_id, _ in indexed_comments},
         )
         processed_items = 0
         if batch is not None:
@@ -208,39 +207,87 @@ class OrchestratorLoop:
         comments_by_id: dict[int, Comment],
         runtime_settings,
     ) -> None:
-        try:
-            with self._browser_access():
-                article_text = self.page.fetch_article_text(batch.post_url)
-        except Exception as exc:
-            article_text = None
-            self.notifier.notify_error("Dzen article text extraction failed", exc)
+        available_items = tuple(
+            BatchItem(
+                batch_id=item.batch_id,
+                comment_id=item.comment_id,
+                item_no=position,
+                post_url=item.post_url,
+                publication_title=item.publication_title,
+                thread_text=item.thread_text,
+                author=item.author,
+                comment_text=item.comment_text,
+            )
+            for position, item in enumerate(
+                (item for item in batch.items if item.comment_id in comments_by_id),
+                start=1,
+            )
+        )
+        unavailable_outcomes = {
+            item.comment_id: BatchOutcome(
+                comment_id=item.comment_id,
+                item_no=item.item_no,
+                kind=BatchOutcomeKind.ERROR,
+                error_reason="Dzen comment is unavailable for batch reply publication",
+            )
+            for item in batch.items
+            if item.comment_id not in comments_by_id
+        }
+        article_text = None
+        generated_outcomes: tuple[BatchOutcome, ...] = ()
+        if available_items:
+            try:
+                with self._browser_access():
+                    article_text = self.page.fetch_article_text(batch.post_url)
+            except Exception as exc:
+                self.notifier.notify_error("Dzen article text extraction failed", exc)
+            try:
+                prompt = self.batch_prompt_builder.build_batch(
+                    available_items,
+                    article_text=article_text or "",
+                )
+                raw = self.ai_provider.generate(
+                    prompt,
+                    temperature=self.settings.AI_TEMPERATURE,
+                    max_tokens=self.settings.AI_MAX_TOKENS,
+                )
+                generated_outcomes = self.batch_reply_parser(
+                    raw,
+                    available_items,
+                    runtime_settings.max_reply_length,
+                )
+            except Exception as exc:
+                if len(available_items) > 1 and isinstance(exc, BatchParseError):
+                    generated_outcomes = self._generate_single_item_batch_outcomes(
+                        available_items,
+                        article_text=article_text or "",
+                        max_reply_length=runtime_settings.max_reply_length,
+                    )
+                else:
+                    generated_outcomes = self._batch_error_outcomes(available_items, exc)
+
+        original_item_numbers = {
+            item.comment_id: item.item_no for item in batch.items
+        }
+        outcomes_by_comment_id = {
+            outcome.comment_id: BatchOutcome(
+                comment_id=outcome.comment_id,
+                item_no=original_item_numbers[outcome.comment_id],
+                kind=outcome.kind,
+                text=outcome.text,
+                error_reason=outcome.error_reason,
+            )
+            for outcome in generated_outcomes
+        }
+        outcomes = tuple(
+            unavailable_outcomes[item.comment_id]
+            if item.comment_id in unavailable_outcomes
+            else outcomes_by_comment_id[item.comment_id]
+            for item in batch.items
+        )
         article_context_status = (
             "article_text_used" if article_text else "without_article_text"
         )
-        try:
-            prompt = self.batch_prompt_builder.build_batch(
-                batch.items,
-                article_text=article_text or "",
-            )
-            raw = self.ai_provider.generate(
-                prompt,
-                temperature=self.settings.AI_TEMPERATURE,
-                max_tokens=self.settings.AI_MAX_TOKENS,
-            )
-            outcomes = self.batch_reply_parser(
-                raw,
-                batch.items,
-                runtime_settings.max_reply_length,
-            )
-        except Exception as exc:
-            if len(batch.items) > 1 and isinstance(exc, BatchParseError):
-                outcomes = self._generate_single_item_batch_outcomes(
-                    batch.items,
-                    article_text=article_text or "",
-                    max_reply_length=runtime_settings.max_reply_length,
-                )
-            else:
-                outcomes = self._batch_error_outcomes(batch.items, exc)
 
         reply_ids = self.repository.save_batch_outcomes(
             batch.id,
@@ -257,15 +304,7 @@ class OrchestratorLoop:
         for outcome, reply_id in zip(outcomes, reply_ids, strict=True):
             if outcome.kind is not BatchOutcomeKind.REPLY:
                 continue
-            comment = comments_by_id.get(outcome.comment_id)
-            if comment is None:
-                reason = "Dzen comment is unavailable for batch reply publication"
-                self.repository.set_reply_status(reply_id, ReplyStatus.ERROR, reason)
-                self.repository.set_comment_status(
-                    outcome.comment_id, CommentStatus.ERROR
-                )
-                self.notifier.notify_error(reason)
-                continue
+            comment = comments_by_id[outcome.comment_id]
             try:
                 with self._browser_access():
                     self.page.publish_reply(

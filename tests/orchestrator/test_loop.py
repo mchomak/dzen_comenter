@@ -125,7 +125,40 @@ def test_batch_waits_for_timeout_before_claiming_incomplete_article_group(
     assert len(harness.repository.save_batch_outcomes_calls[0][1]) == 2
 
 
-def test_batch_only_claims_comments_from_current_dzen_snapshot(
+def test_batch_retries_ready_comment_missing_from_current_dzen_snapshot(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 8, 1, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    stale_comment = _batch_comments(comment_factory, 1)[0]
+    harness = loop_factory(
+        comments=[],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
+        ai_responses=["C01\tREPLY\tАктуальный ответ"],
+    )
+    stale_comment_id = harness.repository.upsert_comment(stale_comment)
+    harness.repository.enqueue_batch_comment(
+        stale_comment_id,
+        stale_comment.post_url,
+        queued_at=now - timedelta(hours=12),
+        cutover_at=now - timedelta(days=1),
+    )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.repository.save_batch_outcomes_calls) == 1
+    assert harness.ai_provider.calls == []
+    assert harness.page.publish_calls == []
+    assert harness.notifier.errors == []
+    assert harness.repository.batch_queue[stale_comment_id]["state"] == "queued"
+    assert harness.repository.batch_queue[stale_comment_id]["next_attempt_at"] == now + timedelta(
+        minutes=60
+    )
+
+
+def test_batch_processes_available_items_while_retrying_missing_items(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -135,8 +168,8 @@ def test_batch_only_claims_comments_from_current_dzen_snapshot(
     stale_comment, current_comment = _batch_comments(comment_factory, 2)
     harness = loop_factory(
         comments=[current_comment],
-        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
-        ai_responses=["C01\tREPLY\tАктуальный ответ"],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=2),
+        ai_responses=["current reply"],
     )
     stale_comment_id = harness.repository.upsert_comment(stale_comment)
     harness.repository.enqueue_batch_comment(
@@ -154,9 +187,12 @@ def test_batch_only_claims_comments_from_current_dzen_snapshot(
     assert [
         item.comment_id for item in harness.batch_prompt_builder.calls[0][0]
     ] == [current_comment_id]
-    assert harness.page.publish_calls
+    assert [outcome.kind.value for outcome in harness.repository.save_batch_outcomes_calls[0][1]] == [
+        "error",
+        "reply",
+    ]
+    assert [call[0].id for call in harness.page.publish_calls] == [current_comment_id]
     assert harness.repository.batch_queue[stale_comment_id]["state"] == "queued"
-    assert harness.notifier.errors == []
 
 
 def test_batch_claim_is_limited_by_remaining_hourly_quota(
