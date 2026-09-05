@@ -234,17 +234,24 @@ class PostgresCommentRepository:
             )
         )
         with self._engine.begin() as conn:
-            first_post_url = conn.execute(
+            ready_count = func.count(CommentBatchQueueTable.comment_id)
+            oldest_queued_at = func.min(CommentBatchQueueTable.queued_at)
+            next_post_url = conn.execute(
                 select(CommentBatchQueueTable.post_url)
                 .where(ready)
+                .group_by(CommentBatchQueueTable.post_url)
+                .having(
+                    (ready_count >= limit)
+                    | (oldest_queued_at <= now - timedelta(hours=wait_hours))
+                )
                 .order_by(
-                    CommentBatchQueueTable.queued_at,
-                    CommentBatchQueueTable.comment_id,
+                    func.abs(ready_count - limit),
+                    oldest_queued_at,
+                    CommentBatchQueueTable.post_url,
                 )
                 .limit(1)
-                .with_for_update(skip_locked=True, of=CommentBatchQueueTable)
             ).scalar_one_or_none()
-            if first_post_url is None:
+            if next_post_url is None:
                 return None
 
             rows = conn.execute(
@@ -260,7 +267,7 @@ class PostgresCommentRepository:
                     CommentTable,
                     CommentTable.id == CommentBatchQueueTable.comment_id,
                 )
-                .where(ready, CommentBatchQueueTable.post_url == first_post_url)
+                .where(ready, CommentBatchQueueTable.post_url == next_post_url)
                 .order_by(
                     CommentBatchQueueTable.queued_at,
                     CommentBatchQueueTable.comment_id,
@@ -277,7 +284,7 @@ class PostgresCommentRepository:
             batch_id = conn.execute(
                 insert(ReplyBatchTable)
                 .values(
-                    post_url=first_post_url,
+                    post_url=next_post_url,
                     created_at=now,
                     status="claimed",
                     item_count=len(rows),
@@ -289,7 +296,7 @@ class PostgresCommentRepository:
                     batch_id=batch_id,
                     comment_id=row["comment_id"],
                     item_no=index,
-                    post_url=first_post_url,
+                    post_url=next_post_url,
                     publication_title=row["post_title"] or "",
                     thread_text=row["thread_text"] or "",
                     author=row["author"] or "",
@@ -321,7 +328,7 @@ class PostgresCommentRepository:
             )
             return ClaimedBatch(
                 id=batch_id,
-                post_url=first_post_url,
+                post_url=next_post_url,
                 created_at=now,
                 items=items,
             )

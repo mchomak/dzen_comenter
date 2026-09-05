@@ -672,6 +672,58 @@ def test_claim_next_batch_extracts_joined_rows_in_order(repo, engine):
     assert states == ["claimed", "claimed", "claimed"]
 
 
+def test_claim_next_batch_skips_unexpired_incomplete_post_for_full_post(repo):
+    pub_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 8, 28, 12, 0, 0)
+    cutover = now - timedelta(days=1)
+    older_incomplete_ids = [
+        repo.upsert_comment(
+            _make_comment(
+                pub_id,
+                dzen_id=f"older-incomplete-{number}",
+                post_url="http://post/older-incomplete",
+                fetched_at=now,
+            )
+        )
+        for number in range(2)
+    ]
+    full_post_ids = [
+        repo.upsert_comment(
+            _make_comment(
+                pub_id,
+                dzen_id=f"full-post-{number}",
+                post_url="http://post/full",
+                fetched_at=now,
+            )
+        )
+        for number in range(3)
+    ]
+    for comment_id in older_incomplete_ids:
+        _enqueue(
+            repo,
+            comment_id,
+            "http://post/older-incomplete",
+            queued_at=now - timedelta(hours=1),
+            cutover_at=cutover,
+        )
+    for comment_id in full_post_ids:
+        _enqueue(
+            repo,
+            comment_id,
+            "http://post/full",
+            queued_at=now,
+            cutover_at=cutover,
+        )
+
+    batch = repo.claim_next_batch(
+        now, max_comments=3, wait_hours=12, quota_remaining=3
+    )
+
+    assert batch is not None
+    assert batch.post_url == "http://post/full"
+    assert [item.comment_id for item in batch.items] == full_post_ids
+
+
 def test_claim_next_batch_claims_oldest_ready_comment_without_page_snapshot(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 8, 28, 12, 0, 0)
