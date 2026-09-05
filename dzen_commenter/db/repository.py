@@ -245,7 +245,10 @@ class PostgresCommentRepository:
                     | (oldest_queued_at <= now - timedelta(hours=wait_hours))
                 )
                 .order_by(
-                    func.abs(ready_count - limit),
+                    case(
+                        (ready_count >= limit, 0),
+                        else_=limit - ready_count,
+                    ),
                     oldest_queued_at,
                     CommentBatchQueueTable.post_url,
                 )

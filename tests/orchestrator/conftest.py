@@ -220,14 +220,27 @@ class FakeCommentRepository:
         if not queued:
             return None
         queued.sort(key=lambda entry: (entry[1]["queued_at"], entry[0]))
-        post_url = str(queued[0][1]["post_url"])
-        selected = [entry for entry in queued if entry[1]["post_url"] == post_url][
-            :limit
+        queued_by_post: dict[str, list[tuple[int, dict[str, object]]]] = {}
+        for entry in queued:
+            post_url = str(entry[1]["post_url"])
+            queued_by_post.setdefault(post_url, []).append(entry)
+        candidates = [
+            (post_url, entries)
+            for post_url, entries in queued_by_post.items()
+            if len(entries) >= limit
+            or entries[0][1]["queued_at"] <= now - timedelta(hours=wait_hours)
         ]
-        if len(selected) < limit and selected[0][1]["queued_at"] > now - timedelta(
-            hours=wait_hours
-        ):
+        if not candidates:
             return None
+        post_url, selected = min(
+            candidates,
+            key=lambda candidate: (
+                max(limit - len(candidate[1]), 0),
+                candidate[1][0][1]["queued_at"],
+                candidate[0],
+            ),
+        )
+        selected = selected[:limit]
         batch_id = self._next_batch_id
         self._next_batch_id += 1
         items = tuple(
