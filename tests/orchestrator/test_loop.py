@@ -125,7 +125,7 @@ def test_batch_waits_for_timeout_before_claiming_incomplete_article_group(
     assert len(harness.repository.save_batch_outcomes_calls[0][1]) == 2
 
 
-def test_batch_retries_ready_comment_missing_from_current_dzen_snapshot(
+def test_batch_skips_ready_comment_missing_from_current_dzen_snapshot(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -152,13 +152,13 @@ def test_batch_retries_ready_comment_missing_from_current_dzen_snapshot(
     assert harness.ai_provider.calls == []
     assert harness.page.publish_calls == []
     assert harness.notifier.errors == []
-    assert harness.repository.batch_queue[stale_comment_id]["state"] == "queued"
-    assert harness.repository.batch_queue[stale_comment_id]["next_attempt_at"] == now + timedelta(
-        minutes=60
-    )
+    outcomes = harness.repository.save_batch_outcomes_calls[0][1]
+    assert [outcome.kind.value for outcome in outcomes] == ["skip"]
+    assert harness.repository.batch_queue[stale_comment_id]["state"] == "completed"
+    assert harness.repository.batch_queue[stale_comment_id]["next_attempt_at"] is None
 
 
-def test_batch_processes_available_items_while_retrying_missing_items(
+def test_batch_processes_available_items_while_skipping_missing_items(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -188,11 +188,11 @@ def test_batch_processes_available_items_while_retrying_missing_items(
         item.comment_id for item in harness.batch_prompt_builder.calls[0][0]
     ] == [current_comment_id]
     assert [outcome.kind.value for outcome in harness.repository.save_batch_outcomes_calls[0][1]] == [
-        "error",
+        "skip",
         "reply",
     ]
     assert [call[0].id for call in harness.page.publish_calls] == [current_comment_id]
-    assert harness.repository.batch_queue[stale_comment_id]["state"] == "queued"
+    assert harness.repository.batch_queue[stale_comment_id]["state"] == "completed"
 
 
 def test_batch_claim_is_limited_by_remaining_hourly_quota(

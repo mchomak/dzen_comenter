@@ -227,8 +227,7 @@ class OrchestratorLoop:
             item.comment_id: BatchOutcome(
                 comment_id=item.comment_id,
                 item_no=item.item_no,
-                kind=BatchOutcomeKind.ERROR,
-                error_reason="Dzen comment is unavailable for batch reply publication",
+                kind=BatchOutcomeKind.SKIP,
             )
             for item in batch.items
             if item.comment_id not in comments_by_id
