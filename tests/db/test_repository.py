@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import inspect, select, text
@@ -7,8 +8,16 @@ import dzen_commenter.db.repository as repository_module
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import CommentRepository
 from dzen_commenter.contracts.models import BatchOutcome, Comment, Publication, Reply
-from dzen_commenter.db.models import CommentBatchQueueTable
+from dzen_commenter.db.models import (
+    CommentBatchQueueTable,
+    CommentTable,
+    ReplyPublicationQueueTable,
+    ReplyTable,
+)
 from dzen_commenter.db.repository import PostgresCommentRepository
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -74,10 +83,19 @@ def _make_reply(
 def test_tables_exist_with_columns(engine):
     insp = inspect(engine)
     tables = set(insp.get_table_names())
-    assert {"publications", "comments", "replies"} <= tables
+    assert {"publications", "comments", "replies", "reply_publication_queue"} <= tables
 
     pub_cols = {c["name"] for c in insp.get_columns("publications")}
-    assert {"id", "dzen_publication_id", "title", "url"} <= pub_cols
+    assert {
+        "id",
+        "dzen_publication_id",
+        "title",
+        "url",
+        "article_text",
+        "article_fetched_at",
+        "article_content_hash",
+        "article_context_status",
+    } <= pub_cols
 
     com_cols = {c["name"] for c in insp.get_columns("comments")}
     assert {
@@ -108,6 +126,36 @@ def test_tables_exist_with_columns(engine):
         "article_context_status",
         "is_cta_candidate",
     } <= rep_cols
+
+
+def test_article_context_migration_preserves_existing_publications(engine):
+    from alembic import command
+    from alembic.config import Config
+
+    config = Config(str(REPO_ROOT / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(REPO_ROOT / "dzen_commenter" / "db" / "migrations")
+    )
+    command.downgrade(config, "0008_reply_batches")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO publications (dzen_publication_id, title, url) "
+                "VALUES ('before-0009', 'Existing title', 'http://existing')"
+            )
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT title, url, article_text, article_fetched_at, "
+                "article_content_hash, article_context_status "
+                "FROM publications WHERE dzen_publication_id = 'before-0009'"
+            )
+        ).one()
+    assert row == ("Existing title", "http://existing", None, None, None, None)
 
 
 def test_save_reply_stores_article_context_status(repo, engine):
@@ -259,6 +307,12 @@ def test_repository_fulfils_contract(repo):
         "enqueue_batch_comment",
         "claim_next_batch",
         "save_batch_outcomes",
+        "get_article_context",
+        "save_article_context",
+        "enqueue_publication",
+        "claim_next_publication",
+        "complete_publication",
+        "fail_publication",
     ):
         assert callable(getattr(repo, method))
 
@@ -1000,3 +1054,126 @@ def test_save_batch_outcomes_rejects_partial_data_without_writes(repo, engine):
 
     with engine.begin() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM replies")).scalar_one() == 0
+
+
+def test_article_context_is_persisted_on_the_publication(repo):
+    publication_id = repo.upsert_publication(_make_publication())
+    fetched_at = datetime(2026, 9, 10, 10, 0, 0)
+
+    saved = repo.save_article_context(
+        publication_id,
+        text="Текст статьи",
+        status="article_text_used",
+        fetched_at=fetched_at,
+    )
+
+    assert saved.publication_id == publication_id
+    assert saved.text == "Текст статьи"
+    assert saved.status == "article_text_used"
+    assert saved.fetched_at == fetched_at
+    assert saved.content_hash == (
+        "2be57bd9fdcaee96ade3bbc48abe37b274d99cfe06be4d8b34c880b04d42cd73"
+    )
+    assert repo.get_article_context(publication_id) == saved
+
+
+def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(
+        _make_comment(publication_id, fetched_at=now)
+    )
+    _enqueue(
+        repo,
+        comment_id,
+        "http://post/1",
+        queued_at=now,
+        cutover_at=now - timedelta(days=1),
+    )
+    batch = repo.claim_next_batch(
+        now, max_comments=1, wait_hours=12, quota_remaining=1
+    )
+    assert batch is not None
+    reply_id = repo.save_batch_outcomes(
+        batch.id,
+        (BatchOutcome(comment_id, 1, BatchOutcomeKind.REPLY, text="готово"),),
+        ai_provider="test",
+        ai_model="test-model",
+        article_context_status="article_text_used",
+        created_at=now,
+        prompt_tokens=1,
+        completion_tokens=1,
+        retry_cooldown_minutes=60,
+        max_attempts_per_comment=2,
+    )[0]
+
+    claimed = repo.claim_next_publication(now)
+
+    assert claimed is not None
+    assert claimed.reply_id == reply_id
+    assert claimed.comment.id == comment_id
+    assert claimed.text == "готово"
+    assert repo.claim_next_publication(now) is None
+    with engine.connect() as conn:
+        queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.attempt_count,
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
+        ).one()
+    assert queue == ("claimed", 1)
+
+
+def test_publication_failure_retries_without_new_generation_and_ends_as_error(
+    repo, engine
+):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(
+        _make_comment(publication_id, fetched_at=now)
+    )
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+    assert repo.claim_next_publication(now) is not None
+
+    assert repo.fail_publication(
+        reply_id,
+        error_reason="comment not in DOM",
+        failed_at=now,
+        retry_cooldown_minutes=60,
+        max_attempts_per_reply=2,
+    )
+    assert repo.claim_next_publication(now + timedelta(minutes=59)) is None
+    assert repo.claim_next_publication(now + timedelta(minutes=60)) is not None
+    assert not repo.fail_publication(
+        reply_id,
+        error_reason="comment not in DOM",
+        failed_at=now + timedelta(minutes=60),
+        retry_cooldown_minutes=60,
+        max_attempts_per_reply=2,
+    )
+
+    with engine.connect() as conn:
+        reply_status = conn.execute(
+            select(ReplyTable.status).where(ReplyTable.id == reply_id)
+        ).scalar_one()
+        comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+        queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.last_error,
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
+        ).one()
+        reply_count = conn.execute(text("SELECT COUNT(*) FROM replies")).scalar_one()
+        generation_state = conn.execute(
+            select(CommentBatchQueueTable.state).where(
+                CommentBatchQueueTable.comment_id == comment_id
+            )
+        ).scalar_one_or_none()
+    assert reply_status == "error"
+    assert comment_status == "error"
+    assert queue == ("completed", "comment not in DOM")
+    assert reply_count == 1
+    assert generation_state is None

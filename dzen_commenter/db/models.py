@@ -15,6 +15,10 @@ class PublicationTable(Base):
     dzen_publication_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
+    article_text: Mapped[str | None] = mapped_column(Text)
+    article_fetched_at: Mapped[datetime | None] = mapped_column()
+    article_content_hash: Mapped[str | None] = mapped_column(Text)
+    article_context_status: Mapped[str | None] = mapped_column(Text)
 
 
 class CommentTable(Base):
@@ -94,3 +98,15 @@ class ReplyBatchItemTable(Base):
     item_no: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     reply_id: Mapped[int | None] = mapped_column(ForeignKey("replies.id"))
+
+
+class ReplyPublicationQueueTable(Base):
+    __tablename__ = "reply_publication_queue"
+
+    reply_id: Mapped[int] = mapped_column(ForeignKey("replies.id"), primary_key=True)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column()
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column()

@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _drop_all(engine) -> None:
     with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS reply_publication_queue CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS reply_batch_items CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS comment_batch_queue CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS reply_batches CASCADE"))
@@ -48,7 +49,7 @@ def clean_rows(engine):
     with engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE reply_batch_items, comment_batch_queue, reply_batches, "
+                "TRUNCATE reply_publication_queue, reply_batch_items, comment_batch_queue, reply_batches, "
                 "replies, comments, publications RESTART IDENTITY CASCADE"
             )
         )

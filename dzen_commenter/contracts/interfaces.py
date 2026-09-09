@@ -6,9 +6,11 @@ from typing import Literal, Protocol
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.models import (
+    ArticleContext,
     BatchItem,
     BatchOutcome,
     ClaimedBatch,
+    ClaimedPublication,
     Comment,
     Publication,
     Reply,
@@ -89,6 +91,41 @@ class CommentRepository(Protocol):
         retry_cooldown_minutes: int,
         max_attempts_per_comment: int,
     ) -> tuple[int, ...]:
+        ...
+
+    def get_article_context(self, publication_id: int) -> ArticleContext | None:
+        ...
+
+    def save_article_context(
+        self,
+        publication_id: int,
+        *,
+        text: str | None,
+        status: str,
+        fetched_at: datetime,
+    ) -> ArticleContext:
+        ...
+
+    def enqueue_publication(self, reply_id: int, *, created_at: datetime) -> bool:
+        ...
+
+    def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+        ...
+
+    def complete_publication(
+        self, reply_id: int, *, published_at: datetime | None
+    ) -> None:
+        ...
+
+    def fail_publication(
+        self,
+        reply_id: int,
+        *,
+        error_reason: str,
+        failed_at: datetime,
+        retry_cooldown_minutes: int,
+        max_attempts_per_reply: int,
+    ) -> bool:
         ...
 
     def count_cta_candidates_produced(self) -> int:

@@ -12,9 +12,11 @@ from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts import interfaces
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.models import (  # noqa: F401
+    ArticleContext,
     BatchItem,
     BatchOutcome,
     ClaimedBatch,
+    ClaimedPublication,
     Comment,
     Publication,
     Reply,
@@ -162,3 +164,27 @@ def test_env_example_keys_match_settings():
 
 def test_prompt_context_reply_type_literal():
     assert typing.get_args(interfaces.ReplyType) == ("lead", "engage")
+
+
+def test_publication_queue_contract_is_exposed():
+    assert ArticleContext.__dataclass_fields__.keys() == {
+        "publication_id",
+        "text",
+        "status",
+        "fetched_at",
+        "content_hash",
+    }
+    assert ClaimedPublication.__dataclass_fields__.keys() == {
+        "reply_id",
+        "comment",
+        "text",
+    }
+    for method in (
+        "get_article_context",
+        "save_article_context",
+        "enqueue_publication",
+        "claim_next_publication",
+        "complete_publication",
+        "fail_publication",
+    ):
+        assert callable(getattr(interfaces.CommentRepository, method))

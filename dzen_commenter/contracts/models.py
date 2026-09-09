@@ -16,6 +16,15 @@ class Publication:
     url: str
 
 
+@dataclass(frozen=True)
+class ArticleContext:
+    publication_id: int
+    text: str | None
+    status: str | None
+    fetched_at: datetime | None
+    content_hash: str | None
+
+
 @dataclass
 class Comment:
     id: int | None
@@ -65,6 +74,14 @@ class ClaimedBatch:
     post_url: str
     created_at: datetime
     items: tuple[BatchItem, ...]
+    publication_id: int | None = None
+
+
+@dataclass(frozen=True)
+class ClaimedPublication:
+    reply_id: int
+    comment: Comment
+    text: str
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from hashlib import sha256
 
 from sqlalchemy import case, exists, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -6,9 +7,11 @@ from sqlalchemy.engine import Engine
 
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.models import (
+    ArticleContext,
     BatchItem,
     BatchOutcome,
     ClaimedBatch,
+    ClaimedPublication,
     Comment,
     Publication,
     Reply,
@@ -19,6 +22,7 @@ from dzen_commenter.db.models import (
     PublicationTable,
     ReplyBatchItemTable,
     ReplyBatchTable,
+    ReplyPublicationQueueTable,
     ReplyTable,
 )
 
@@ -261,6 +265,7 @@ class PostgresCommentRepository:
                 select(
                     CommentBatchQueueTable.queued_at.label("queue_queued_at"),
                     CommentTable.id.label("comment_id"),
+                    CommentTable.publication_id.label("publication_id"),
                     CommentTable.post_title.label("post_title"),
                     CommentTable.thread_text.label("thread_text"),
                     CommentTable.author.label("author"),
@@ -331,6 +336,7 @@ class PostgresCommentRepository:
             )
             return ClaimedBatch(
                 id=batch_id,
+                publication_id=rows[0]["publication_id"],
                 post_url=next_post_url,
                 created_at=now,
                 items=items,
@@ -420,6 +426,19 @@ class PostgresCommentRepository:
                     .returning(ReplyTable.id)
                 ).scalar_one()
                 reply_ids.append(reply_id)
+                if outcome.kind is BatchOutcomeKind.REPLY:
+                    conn.execute(
+                        insert(ReplyPublicationQueueTable)
+                        .values(
+                            reply_id=reply_id,
+                            state="queued",
+                            attempt_count=0,
+                            created_at=created_at,
+                        )
+                        .on_conflict_do_nothing(
+                            index_elements=[ReplyPublicationQueueTable.reply_id]
+                        )
+                    )
                 conn.execute(
                     update(ReplyBatchItemTable)
                     .where(
@@ -465,6 +484,238 @@ class PostgresCommentRepository:
                 )
             )
             return tuple(reply_ids)
+
+    def get_article_context(self, publication_id: int) -> ArticleContext | None:
+        stmt = select(
+            PublicationTable.id.label("publication_id"),
+            PublicationTable.article_text.label("text"),
+            PublicationTable.article_context_status.label("status"),
+            PublicationTable.article_fetched_at.label("fetched_at"),
+            PublicationTable.article_content_hash.label("content_hash"),
+        ).where(PublicationTable.id == publication_id)
+        with self._engine.begin() as conn:
+            row = conn.execute(stmt).mappings().one_or_none()
+        if row is None:
+            return None
+        return ArticleContext(
+            publication_id=row["publication_id"],
+            text=row["text"],
+            status=row["status"],
+            fetched_at=row["fetched_at"],
+            content_hash=row["content_hash"],
+        )
+
+    def save_article_context(
+        self,
+        publication_id: int,
+        *,
+        text: str | None,
+        status: str,
+        fetched_at: datetime,
+    ) -> ArticleContext:
+        content_hash = sha256(text.encode("utf-8")).hexdigest() if text else None
+        stmt = (
+            update(PublicationTable)
+            .where(PublicationTable.id == publication_id)
+            .values(
+                article_text=text,
+                article_context_status=status,
+                article_fetched_at=fetched_at,
+                article_content_hash=content_hash,
+            )
+            .returning(
+                PublicationTable.id.label("publication_id"),
+                PublicationTable.article_text.label("text"),
+                PublicationTable.article_context_status.label("status"),
+                PublicationTable.article_fetched_at.label("fetched_at"),
+                PublicationTable.article_content_hash.label("content_hash"),
+            )
+        )
+        with self._engine.begin() as conn:
+            row = conn.execute(stmt).mappings().one_or_none()
+        if row is None:
+            raise ValueError("Publication does not exist")
+        return ArticleContext(
+            publication_id=row["publication_id"],
+            text=row["text"],
+            status=row["status"],
+            fetched_at=row["fetched_at"],
+            content_hash=row["content_hash"],
+        )
+
+    def enqueue_publication(self, reply_id: int, *, created_at: datetime) -> bool:
+        stmt = (
+            insert(ReplyPublicationQueueTable)
+            .from_select(
+                ["reply_id", "state", "attempt_count", "created_at"],
+                select(
+                    ReplyTable.id,
+                    literal("queued"),
+                    literal(0),
+                    literal(created_at),
+                ).where(
+                    ReplyTable.id == reply_id,
+                    ReplyTable.status == ReplyStatus.GENERATED.value,
+                ),
+            )
+            .on_conflict_do_nothing(
+                index_elements=[ReplyPublicationQueueTable.reply_id]
+            )
+            .returning(ReplyPublicationQueueTable.reply_id)
+        )
+        with self._engine.begin() as conn:
+            return conn.execute(stmt).scalar_one_or_none() is not None
+
+    def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+        ready = (ReplyPublicationQueueTable.state == "queued") & (
+            (ReplyPublicationQueueTable.next_attempt_at.is_(None))
+            | (ReplyPublicationQueueTable.next_attempt_at <= now)
+        )
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                select(
+                    ReplyPublicationQueueTable.reply_id.label("reply_id"),
+                    ReplyTable.generated_text.label("reply_text"),
+                    CommentTable.id.label("comment_id"),
+                    CommentTable.dzen_comment_id.label("dzen_comment_id"),
+                    CommentTable.publication_id.label("publication_id"),
+                    CommentTable.author.label("author"),
+                    CommentTable.text.label("comment_text"),
+                    CommentTable.parent_comment_id.label("parent_comment_id"),
+                    CommentTable.posted_at.label("posted_at"),
+                    CommentTable.fetched_at.label("fetched_at"),
+                    CommentTable.status.label("comment_status"),
+                    CommentTable.post_title.label("publication_title"),
+                    CommentTable.thread_text.label("thread_text"),
+                    CommentTable.post_url.label("post_url"),
+                )
+                .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
+                .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+                .where(ready)
+                .order_by(
+                    func.coalesce(
+                        ReplyPublicationQueueTable.next_attempt_at,
+                        ReplyPublicationQueueTable.created_at,
+                    ),
+                    ReplyPublicationQueueTable.created_at,
+                    ReplyPublicationQueueTable.reply_id,
+                )
+                .limit(1)
+                .with_for_update(skip_locked=True, of=ReplyPublicationQueueTable)
+            ).mappings().one_or_none()
+            if row is None:
+                return None
+            conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(ReplyPublicationQueueTable.reply_id == row["reply_id"])
+                .values(
+                    state="claimed",
+                    claimed_at=now,
+                    attempt_count=ReplyPublicationQueueTable.attempt_count + 1,
+                )
+            )
+        return ClaimedPublication(
+            reply_id=row["reply_id"],
+            comment=Comment(
+                id=row["comment_id"],
+                dzen_comment_id=row["dzen_comment_id"],
+                publication_id=row["publication_id"],
+                author=row["author"] or "",
+                text=row["comment_text"] or "",
+                parent_comment_id=row["parent_comment_id"],
+                posted_at=row["posted_at"],
+                fetched_at=row["fetched_at"],
+                status=CommentStatus(row["comment_status"]),
+                publication_title=row["publication_title"] or "",
+                thread_text=row["thread_text"] or "",
+                post_url=row["post_url"],
+            ),
+            text=row["reply_text"] or "",
+        )
+
+    def complete_publication(
+        self, reply_id: int, *, published_at: datetime | None
+    ) -> None:
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                select(ReplyPublicationQueueTable.reply_id)
+                .where(
+                    ReplyPublicationQueueTable.reply_id == reply_id,
+                    ReplyPublicationQueueTable.state == "claimed",
+                )
+                .with_for_update()
+            ).one_or_none()
+            if row is None:
+                raise ValueError("Publication queue claim is no longer active")
+            status = (
+                ReplyStatus.PUBLISHED.value
+                if published_at is not None
+                else ReplyStatus.GENERATED.value
+            )
+            conn.execute(
+                update(ReplyTable)
+                .where(ReplyTable.id == reply_id)
+                .values(status=status, published_at=published_at)
+            )
+            conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(ReplyPublicationQueueTable.reply_id == reply_id)
+                .values(state="completed", next_attempt_at=None)
+            )
+
+    def fail_publication(
+        self,
+        reply_id: int,
+        *,
+        error_reason: str,
+        failed_at: datetime,
+        retry_cooldown_minutes: int,
+        max_attempts_per_reply: int,
+    ) -> bool:
+        with self._engine.begin() as conn:
+            queue = conn.execute(
+                select(
+                    ReplyPublicationQueueTable.attempt_count.label("attempt_count")
+                )
+                .where(
+                    ReplyPublicationQueueTable.reply_id == reply_id,
+                    ReplyPublicationQueueTable.state == "claimed",
+                )
+                .with_for_update()
+            ).mappings().one_or_none()
+            if queue is None:
+                raise ValueError("Publication queue claim is no longer active")
+            retry = queue["attempt_count"] < max_attempts_per_reply
+            conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(ReplyPublicationQueueTable.reply_id == reply_id)
+                .values(
+                    state="queued" if retry else "completed",
+                    next_attempt_at=(
+                        failed_at + timedelta(minutes=retry_cooldown_minutes)
+                        if retry
+                        else None
+                    ),
+                    last_error=error_reason,
+                )
+            )
+            if not retry:
+                conn.execute(
+                    update(ReplyTable)
+                    .where(ReplyTable.id == reply_id)
+                    .values(status=ReplyStatus.ERROR.value, error_reason=error_reason)
+                )
+                conn.execute(
+                    update(CommentTable)
+                    .where(
+                        CommentTable.id
+                        == select(ReplyTable.comment_id)
+                        .where(ReplyTable.id == reply_id)
+                        .scalar_subquery()
+                    )
+                    .values(status=CommentStatus.ERROR.value)
+                )
+            return retry
 
     def count_cta_candidates_produced(self) -> int:
         stmt = select(func.count()).select_from(ReplyTable).where(
