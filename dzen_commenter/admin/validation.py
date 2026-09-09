@@ -12,6 +12,8 @@ MAX_BATCH_COMMENTS = 100
 MAX_BATCH_WAIT_HOURS = 24 * 7
 MAX_BATCH_RETRY_COOLDOWN_MINUTES = 24 * 60
 MAX_BATCH_ATTEMPTS_PER_COMMENT = 10
+MAX_PUBLICATION_RETRY_COOLDOWN_MINUTES = 24 * 60
+MAX_PUBLICATION_ATTEMPTS_PER_REPLY = 10
 
 _PROMPT_FIELDS = (
     "role",
@@ -167,6 +169,20 @@ def validate_settings_form(
         maximum=MAX_BATCH_ATTEMPTS_PER_COMMENT,
         errors=errors,
     )
+    publication_retry_cooldown_minutes = _integer(
+        form,
+        "publication_retry_cooldown_minutes",
+        minimum=1,
+        maximum=MAX_PUBLICATION_RETRY_COOLDOWN_MINUTES,
+        errors=errors,
+    )
+    publication_max_attempts_per_reply = _integer(
+        form,
+        "publication_max_attempts_per_reply",
+        minimum=1,
+        maximum=MAX_PUBLICATION_ATTEMPTS_PER_REPLY,
+        errors=errors,
+    )
     if batch_replies_enabled and batch_cutover_at is None:
         errors.setdefault(
             "batch_cutover_at",
@@ -207,6 +223,8 @@ def validate_settings_form(
                 batch_wait_hours=batch_wait_hours,
                 batch_retry_cooldown_minutes=batch_retry_cooldown_minutes,
                 batch_max_attempts_per_comment=batch_max_attempts_per_comment,
+                publication_retry_cooldown_minutes=publication_retry_cooldown_minutes,
+                publication_max_attempts_per_reply=publication_max_attempts_per_reply,
             ),
             prompt=PromptBrandConfig(**prompt_values),
         ),

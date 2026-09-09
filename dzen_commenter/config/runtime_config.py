@@ -28,6 +28,9 @@ from dzen_commenter.prompt.config_loader import (
 
 logger = logging.getLogger(__name__)
 
+MAX_PUBLICATION_RETRY_COOLDOWN_MINUTES = 24 * 60
+MAX_PUBLICATION_ATTEMPTS_PER_REPLY = 10
+
 
 @dataclass
 class RuntimeSettings:
@@ -46,6 +49,8 @@ class RuntimeSettings:
     batch_wait_hours: int = 12
     batch_retry_cooldown_minutes: int = 60
     batch_max_attempts_per_comment: int = 2
+    publication_retry_cooldown_minutes: int = 60
+    publication_max_attempts_per_reply: int = 3
 
 
 @dataclass
@@ -82,6 +87,15 @@ def _parse_batch_cutover(value: object) -> str | None:
     except ValueError:
         return None
     return cutover_at if parsed.tzinfo is not None else None
+
+
+def _parse_positive_integer(
+    raw: dict, name: str, default: int, maximum: int
+) -> int:
+    value = int(raw.get(name, default))
+    if not 1 <= value <= maximum:
+        raise ValueError(f"{name} must be between 1 and {maximum}")
+    return value
 
 
 def _parse_settings(raw: dict) -> RuntimeSettings:
@@ -124,6 +138,18 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
             raw.get(
                 "batch_max_attempts_per_comment", base.batch_max_attempts_per_comment
             )
+        ),
+        publication_retry_cooldown_minutes=_parse_positive_integer(
+            raw,
+            "publication_retry_cooldown_minutes",
+            base.publication_retry_cooldown_minutes,
+            MAX_PUBLICATION_RETRY_COOLDOWN_MINUTES,
+        ),
+        publication_max_attempts_per_reply=_parse_positive_integer(
+            raw,
+            "publication_max_attempts_per_reply",
+            base.publication_max_attempts_per_reply,
+            MAX_PUBLICATION_ATTEMPTS_PER_REPLY,
         ),
     )
 

@@ -93,6 +93,8 @@ def _form() -> dict[str, object]:
         "batch_wait_hours": "12",
         "batch_retry_cooldown_minutes": "60",
         "batch_max_attempts_per_comment": "2",
+        "publication_retry_cooldown_minutes": "60",
+        "publication_max_attempts_per_reply": "3",
         "role": "new role",
         "tone_of_voice": "new tone",
         "anti_rules": "new rules",
@@ -194,6 +196,36 @@ def test_settings_saves_and_renders_batching_configuration(client, settings):
     reloaded = client.get("/settings")
     assert 'name="batch_replies_enabled" checked' in reloaded.text
     assert 'name="batch_max_comments" value="5"' in reloaded.text
+
+
+def test_settings_saves_renders_and_validates_publication_retry_configuration(client, settings):
+    data = _form()
+    data.update(
+        {
+            "publication_retry_cooldown_minutes": "30",
+            "publication_max_attempts_per_reply": "4",
+        }
+    )
+
+    parsed, errors = validate_settings_form(data)
+    assert errors == {}
+    assert parsed.settings.publication_retry_cooldown_minutes == 30
+    assert parsed.settings.publication_max_attempts_per_reply == 4
+
+    response = client.post("/settings", data=data)
+
+    assert response.status_code == 302
+    saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
+    assert saved["settings"]["publication_retry_cooldown_minutes"] == 30
+    assert saved["settings"]["publication_max_attempts_per_reply"] == 4
+
+    reloaded = client.get("/settings")
+    assert 'name="publication_retry_cooldown_minutes" value="30"' in reloaded.text
+    assert 'name="publication_max_attempts_per_reply" value="4"' in reloaded.text
+
+    data["publication_max_attempts_per_reply"] = "0"
+    _, errors = validate_settings_form(data)
+    assert "publication_max_attempts_per_reply" in errors
 
 
 def test_batching_requires_a_timezone_aware_cutover_when_enabled():

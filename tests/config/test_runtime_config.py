@@ -3,6 +3,8 @@ import logging
 import os
 import pathlib
 
+import pytest
+
 import dzen_commenter.config.runtime_config as rcmod
 from dzen_commenter.config.runtime_config import (
     RuntimeConfig,
@@ -172,6 +174,57 @@ def test_runtime_settings_include_notification_cooldown_and_telegram_proxy_defau
     saved = json.loads((tmp_path / "initial.json").read_text(encoding="utf-8"))
     assert saved["settings"]["error_notification_cooldown_seconds"] == 900
     assert saved["settings"]["telegram_proxy_url"] == ""
+
+
+def test_runtime_settings_include_publication_retry_defaults_and_reload(tmp_path):
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps({"settings": {}, "prompt": {}}), encoding="utf-8")
+    runtime_config = RuntimeConfig(str(path))
+
+    defaults = runtime_config.get().settings
+
+    assert defaults.publication_retry_cooldown_minutes == 60
+    assert defaults.publication_max_attempts_per_reply == 3
+
+    path.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    "publication_retry_cooldown_minutes": 15,
+                    "publication_max_attempts_per_reply": 4,
+                },
+                "prompt": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    st = path.stat()
+    os.utime(path, (st.st_atime + 10, st.st_mtime + 10))
+
+    reloaded = runtime_config.get().settings
+    assert reloaded.publication_retry_cooldown_minutes == 15
+    assert reloaded.publication_max_attempts_per_reply == 4
+
+
+@pytest.mark.parametrize(
+    "settings",
+    (
+        {"publication_retry_cooldown_minutes": 0},
+        {"publication_retry_cooldown_minutes": 1441},
+        {"publication_max_attempts_per_reply": 0},
+        {"publication_max_attempts_per_reply": 11},
+    ),
+)
+def test_invalid_publication_retry_settings_fall_back_to_safe_defaults(tmp_path, settings):
+    path = tmp_path / "runtime.json"
+    path.write_text(
+        json.dumps({"settings": settings, "prompt": {}}), encoding="utf-8"
+    )
+
+    parsed = RuntimeConfig(str(path)).get().settings
+
+    assert parsed.publication_retry_cooldown_minutes == 60
+    assert parsed.publication_max_attempts_per_reply == 3
 
 
 def test_batching_requires_a_timezone_aware_cutover_timestamp(tmp_path):

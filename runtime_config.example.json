@@ -11,6 +11,8 @@
     "batch_wait_hours": 12,
     "batch_retry_cooldown_minutes": 60,
     "batch_max_attempts_per_comment": 2,
+    "publication_retry_cooldown_minutes": 60,
+    "publication_max_attempts_per_reply": 3,
     "developer_telegram_chat_ids": "123456789,987654321",
     "error_email_list": "dev1@example.com,dev2@example.com"
   },

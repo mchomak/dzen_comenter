@@ -245,6 +245,12 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
         "batch_max_attempts_per_comment": str(
             data.settings.batch_max_attempts_per_comment
         ),
+        "publication_retry_cooldown_minutes": str(
+            data.settings.publication_retry_cooldown_minutes
+        ),
+        "publication_max_attempts_per_reply": str(
+            data.settings.publication_max_attempts_per_reply
+        ),
         "role": data.prompt.role,
         "tone_of_voice": data.prompt.tone_of_voice,
         "anti_rules": data.prompt.anti_rules,
@@ -273,6 +279,8 @@ def _form_values(form) -> dict[str, object]:
             "batch_wait_hours",
             "batch_retry_cooldown_minutes",
             "batch_max_attempts_per_comment",
+            "publication_retry_cooldown_minutes",
+            "publication_max_attempts_per_reply",
             "role",
             "tone_of_voice",
             "anti_rules",
