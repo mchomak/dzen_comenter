@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from dzen_commenter.auth import DzenLoginAuthenticator, DzenSmsRestartRequested
@@ -17,6 +18,8 @@ from dzen_commenter.dzen import selectors
 
 
 logger = logging.getLogger(__name__)
+
+_KEEPALIVE_TIMEOUT_RESTART_THRESHOLD = 3
 
 
 class PlaywrightSessionManager:
@@ -41,6 +44,7 @@ class PlaywrightSessionManager:
         self._context = None
         self._page = None
         self._lock = threading.RLock()
+        self._consecutive_keepalive_timeouts = 0
 
     @property
     def page(self):
@@ -167,6 +171,40 @@ class PlaywrightSessionManager:
         with self._lock:
             try:
                 self._page.reload(wait_until="domcontentloaded")
+            except PlaywrightTimeoutError as exc:
+                self._consecutive_keepalive_timeouts += 1
+                logger.warning(
+                    "Keep-alive navigation timed out",
+                    extra={
+                        "event": "keepalive_timeout",
+                        "consecutive_timeouts": self._consecutive_keepalive_timeouts,
+                        "timeout_restart_threshold": _KEEPALIVE_TIMEOUT_RESTART_THRESHOLD,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    },
+                )
+                if (
+                    self._consecutive_keepalive_timeouts
+                    < _KEEPALIVE_TIMEOUT_RESTART_THRESHOLD
+                ):
+                    return
+
+                logger.warning(
+                    "Restarting browser session after repeated keep-alive timeouts",
+                    extra={
+                        "event": "keepalive_timeout_restart_started",
+                        "consecutive_timeouts": self._consecutive_keepalive_timeouts,
+                    },
+                )
+                try:
+                    self._restart_browser_session()
+                except Exception as recovery_error:
+                    raise exc from recovery_error
+                self._consecutive_keepalive_timeouts = 0
+                logger.info(
+                    "Browser session restarted after repeated keep-alive timeouts",
+                    extra={"event": "keepalive_timeout_restart_succeeded"},
+                )
             except PlaywrightError as exc:
                 if not self._is_browser_crash_error(exc):
                     raise
@@ -186,6 +224,9 @@ class PlaywrightSessionManager:
                     )
                 except Exception:
                     raise exc
+                self._consecutive_keepalive_timeouts = 0
+            else:
+                self._consecutive_keepalive_timeouts = 0
 
     def _restart_browser_session(self) -> None:
         self._close_browser_session()

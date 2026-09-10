@@ -238,6 +238,17 @@ def test_poll_auth_command_returns_true_for_configured_chat():
     assert assistant.poll_auth_command() is True
 
 
+def test_poll_auth_command_returns_false_and_logs_warning_on_network_timeout(caplog):
+    request = httpx.Request("POST", "https://api.telegram.org/botTOKEN/getUpdates")
+    recorder = RequestRecorder([httpx.ReadTimeout("timed out", request=request)])
+    assistant, _ = _assistant(recorder)
+
+    with caplog.at_level("WARNING"):
+        assert assistant.poll_auth_command() is False
+
+    assert "Telegram auth command polling failed" in caplog.text
+
+
 @pytest.mark.parametrize("text", ["/auth extra", "/auth@", "/auth@bot extra"])
 def test_poll_auth_command_rejects_extra_text(text):
     update = {

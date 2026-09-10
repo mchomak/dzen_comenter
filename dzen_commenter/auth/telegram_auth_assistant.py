@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 import re
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
 
 
 class TelegramAuthAssistant:
@@ -32,7 +36,13 @@ class TelegramAuthAssistant:
         self._update_offset: int | None = None
 
     def poll_auth_command(self) -> bool:
-        for update in self._get_updates(timeout=0):
+        try:
+            updates = self._get_updates(timeout=0)
+        except httpx.TransportError as exc:
+            logger.warning("Telegram auth command polling failed: %s", exc)
+            return False
+
+        for update in updates:
             if self._matching_auth_command(update):
                 return True
         return False

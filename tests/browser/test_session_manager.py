@@ -3,6 +3,7 @@ import inspect
 import dzen_commenter.browser  # noqa: F401
 import pytest
 from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from dzen_commenter.browser import PlaywrightSessionManager
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import SessionManager
@@ -407,6 +408,100 @@ def test_keep_alive_reloads_once():
 
     assert page.reload_count == 1
     assert page.reload_kwargs == [{"wait_until": "domcontentloaded"}]
+
+
+def test_keep_alive_swallows_one_navigation_timeout(caplog):
+    settings = make_settings()
+    page = FakePage()
+    page.reload_error = PlaywrightTimeoutError(
+        "Page.reload: Timeout 30000ms exceeded."
+    )
+    context = FakeContext(page)
+    mgr = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(context)
+    )
+    mgr.start()
+
+    with caplog.at_level("WARNING", logger="dzen_commenter.browser.session_manager"):
+        mgr.keep_alive()
+
+    assert context.close_calls == 0
+    assert mgr._consecutive_keepalive_timeouts == 1
+    record = next(record for record in caplog.records if record.event == "keepalive_timeout")
+    assert record.consecutive_timeouts == 1
+
+
+def test_keep_alive_restarts_only_after_three_consecutive_navigation_timeouts():
+    settings = make_settings()
+    timed_out_page = FakePage()
+    timed_out_page.reload_error = PlaywrightTimeoutError(
+        "Page.reload: Timeout 30000ms exceeded."
+    )
+    timed_out_context = FakeContext(timed_out_page)
+    recovered_page = FakePage()
+    recovered_context = FakeContext(recovered_page)
+    mgr = PlaywrightSessionManager(
+        settings,
+        playwright_factory=make_sequence_factory(
+            [timed_out_context, recovered_context]
+        ),
+    )
+    mgr.start()
+
+    mgr.keep_alive()
+    mgr.keep_alive()
+
+    assert timed_out_context.close_calls == 0
+
+    mgr.keep_alive()
+
+    assert timed_out_context.close_calls == 1
+    assert recovered_page.goto_calls == [settings.COMMENTS_URL]
+    assert mgr.page is recovered_page
+    assert mgr._consecutive_keepalive_timeouts == 0
+
+
+def test_keep_alive_resets_timeout_counter_after_successful_reload():
+    settings = make_settings()
+    page = FakePage()
+    page.reload_error = PlaywrightTimeoutError(
+        "Page.reload: Timeout 30000ms exceeded."
+    )
+    context = FakeContext(page)
+    mgr = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(context)
+    )
+    mgr.start()
+
+    mgr.keep_alive()
+    page.reload_error = None
+    mgr.keep_alive()
+    page.reload_error = PlaywrightTimeoutError(
+        "Page.reload: Timeout 30000ms exceeded."
+    )
+    mgr.keep_alive()
+    mgr.keep_alive()
+
+    assert context.close_calls == 0
+    assert mgr._consecutive_keepalive_timeouts == 2
+
+
+def test_keep_alive_raises_timeout_only_when_recovery_fails():
+    settings = make_settings()
+    timed_out_page = FakePage()
+    timed_out_page.reload_error = PlaywrightTimeoutError(
+        "Page.reload: Timeout 30000ms exceeded."
+    )
+    mgr = PlaywrightSessionManager(
+        settings,
+        playwright_factory=make_sequence_factory([FakeContext(timed_out_page)]),
+    )
+    mgr.start()
+
+    mgr.keep_alive()
+    mgr.keep_alive()
+    with pytest.raises(PlaywrightTimeoutError, match="Timeout 30000ms"):
+        mgr.keep_alive()
 
 
 def test_keep_alive_restarts_session_after_page_crash():
