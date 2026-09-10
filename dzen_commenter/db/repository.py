@@ -1,11 +1,16 @@
 from datetime import datetime, timedelta
 from hashlib import sha256
 
-from sqlalchemy import case, exists, func, literal, select, update
+from sqlalchemy import case, exists, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
-from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import (
+    BatchOutcomeKind,
+    CommentStatus,
+    PublicationFailureOutcome,
+    ReplyStatus,
+)
 from dzen_commenter.contracts.models import (
     ArticleContext,
     BatchItem,
@@ -32,6 +37,8 @@ class PostgresCommentRepository:
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
+
+    _PUBLICATION_CLAIM_LEASE = timedelta(minutes=5)
 
     def upsert_publication(self, pub: Publication) -> int:
         stmt = (
@@ -572,6 +579,18 @@ class PostgresCommentRepository:
             | (ReplyPublicationQueueTable.next_attempt_at <= now)
         )
         with self._engine.begin() as conn:
+            conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(
+                    ReplyPublicationQueueTable.state == "claimed",
+                    or_(
+                        ReplyPublicationQueueTable.claimed_at.is_(None),
+                        ReplyPublicationQueueTable.claimed_at
+                        <= now - self._PUBLICATION_CLAIM_LEASE,
+                    ),
+                )
+                .values(state="queued", claimed_at=None)
+            )
             row = conn.execute(
                 select(
                     ReplyPublicationQueueTable.reply_id.label("reply_id"),
@@ -671,7 +690,7 @@ class PostgresCommentRepository:
         failed_at: datetime,
         retry_cooldown_minutes: int,
         max_attempts_per_reply: int,
-    ) -> bool:
+    ) -> PublicationFailureOutcome:
         with self._engine.begin() as conn:
             queue = conn.execute(
                 select(
@@ -715,7 +734,11 @@ class PostgresCommentRepository:
                     )
                     .values(status=CommentStatus.ERROR.value)
                 )
-            return retry
+            return (
+                PublicationFailureOutcome.RETRY
+                if retry
+                else PublicationFailureOutcome.TERMINAL
+            )
 
     def count_cta_candidates_produced(self) -> int:
         stmt = select(func.count()).select_from(ReplyTable).where(

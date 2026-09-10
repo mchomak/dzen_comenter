@@ -10,7 +10,12 @@ import dzen_commenter.contracts  # noqa: F401
 from dzen_commenter.config.runtime_config import RuntimeSettings
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts import interfaces
-from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import (
+    BatchOutcomeKind,
+    CommentStatus,
+    PublicationFailureOutcome,
+    ReplyStatus,
+)
 from dzen_commenter.contracts.models import (  # noqa: F401
     ArticleContext,
     BatchItem,
@@ -188,3 +193,7 @@ def test_publication_queue_contract_is_exposed():
         "fail_publication",
     ):
         assert callable(getattr(interfaces.CommentRepository, method))
+    assert {outcome.value for outcome in PublicationFailureOutcome} == {
+        "retry",
+        "terminal",
+    }

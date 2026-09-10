@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
 
-from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import (
+    CommentStatus,
+    PublicationFailureOutcome,
+    ReplyStatus,
+)
 from dzen_commenter.contracts.models import (
     ArticleContext,
     BatchItem,
@@ -125,7 +129,7 @@ class CommentRepository(Protocol):
         failed_at: datetime,
         retry_cooldown_minutes: int,
         max_attempts_per_reply: int,
-    ) -> bool:
+    ) -> PublicationFailureOutcome:
         ...
 
     def count_cta_candidates_produced(self) -> int:

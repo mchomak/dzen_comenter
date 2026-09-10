@@ -19,3 +19,8 @@ class BatchOutcomeKind(str, Enum):
     REPLY = "reply"
     SKIP = "skip"
     ERROR = "error"
+
+
+class PublicationFailureOutcome(str, Enum):
+    RETRY = "retry"
+    TERMINAL = "terminal"

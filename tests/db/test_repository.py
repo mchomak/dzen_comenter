@@ -1124,6 +1124,31 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
     assert queue == ("claimed", 1)
 
 
+def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(
+        _make_comment(publication_id, fetched_at=now)
+    )
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+    assert repo.claim_next_publication(now) is not None
+
+    assert repo.claim_next_publication(now + timedelta(seconds=1)) is None
+    recovered = repo.claim_next_publication(now + timedelta(hours=1))
+
+    assert recovered is not None
+    assert recovered.reply_id == reply_id
+    with engine.connect() as conn:
+        queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.attempt_count,
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
+        ).one()
+    assert queue == ("claimed", 2)
+
+
 def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     repo, engine
 ):
@@ -1136,22 +1161,40 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     assert repo.enqueue_publication(reply_id, created_at=now)
     assert repo.claim_next_publication(now) is not None
 
-    assert repo.fail_publication(
+    retry_outcome = repo.fail_publication(
         reply_id,
         error_reason="comment not in DOM",
         failed_at=now,
         retry_cooldown_minutes=60,
         max_attempts_per_reply=2,
     )
+    assert retry_outcome.value == "retry"
+    with engine.connect() as conn:
+        retry_reply_status = conn.execute(
+            select(ReplyTable.status).where(ReplyTable.id == reply_id)
+        ).scalar_one()
+        retry_comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+        retry_queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.last_error,
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
+        ).one()
+    assert retry_reply_status == "generated"
+    assert retry_comment_status == "new"
+    assert retry_queue == ("queued", "comment not in DOM")
     assert repo.claim_next_publication(now + timedelta(minutes=59)) is None
     assert repo.claim_next_publication(now + timedelta(minutes=60)) is not None
-    assert not repo.fail_publication(
+    terminal_outcome = repo.fail_publication(
         reply_id,
         error_reason="comment not in DOM",
         failed_at=now + timedelta(minutes=60),
         retry_cooldown_minutes=60,
         max_attempts_per_reply=2,
     )
+    assert terminal_outcome.value == "terminal"
 
     with engine.connect() as conn:
         reply_status = conn.execute(
