@@ -709,7 +709,10 @@ def test_claim_next_batch_extracts_joined_rows_in_order(repo, engine):
     )
 
     batch = repo.claim_next_batch(
-        now, max_comments=3, wait_hours=12, quota_remaining=10
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=10,
     )
 
     assert batch is not None
@@ -770,7 +773,10 @@ def test_claim_next_batch_skips_unexpired_incomplete_post_for_full_post(repo):
         )
 
     batch = repo.claim_next_batch(
-        now, max_comments=3, wait_hours=12, quota_remaining=3
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=3,
     )
 
     assert batch is not None
@@ -822,7 +828,10 @@ def test_claim_next_batch_prioritizes_full_post_over_timeout_incomplete_post(rep
         )
 
     batch = repo.claim_next_batch(
-        now, max_comments=3, wait_hours=12, quota_remaining=3
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=3,
     )
 
     assert batch is not None
@@ -883,7 +892,10 @@ def test_claim_next_batch_waits_for_timeout_and_respects_quota(repo):
     _enqueue(repo, recent_id, "http://post/1", queued_at=now, cutover_at=cutover)
 
     assert repo.claim_next_batch(
-        now, max_comments=3, wait_hours=12, quota_remaining=3
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=3,
     ) is None
 
     old_ids = [recent_id]
@@ -901,7 +913,10 @@ def test_claim_next_batch_waits_for_timeout_and_respects_quota(repo):
         )
 
     batch = repo.claim_next_batch(
-        now, max_comments=5, wait_hours=12, quota_remaining=2
+        now,
+        max_comments=5,
+        wait_hours=12,
+        quota_remaining=2,
     )
 
     assert batch is not None
@@ -923,10 +938,16 @@ def test_claimed_comments_cannot_be_claimed_twice(repo):
         _enqueue(repo, comment_id, "http://post/1", queued_at=now, cutover_at=cutover)
 
     first = repo.claim_next_batch(
-        now, max_comments=3, wait_hours=12, quota_remaining=3
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=3,
     )
     second = repo.claim_next_batch(
-        now, max_comments=3, wait_hours=12, quota_remaining=3
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=3,
     )
 
     assert first is not None and second is not None
@@ -947,7 +968,12 @@ def test_save_batch_outcomes_is_atomic_and_counts_skips_and_errors(repo, engine)
     ]
     for comment_id in comment_ids:
         _enqueue(repo, comment_id, "http://post/1", queued_at=now, cutover_at=cutover)
-    batch = repo.claim_next_batch(now, max_comments=3, wait_hours=12, quota_remaining=3)
+    batch = repo.claim_next_batch(
+        now,
+        max_comments=3,
+        wait_hours=12,
+        quota_remaining=3,
+    )
     assert batch is not None
 
     reply_ids = repo.save_batch_outcomes(
@@ -995,7 +1021,12 @@ def test_save_batch_outcomes_reads_core_table_results_by_mapping(repo, monkeypat
         queued_at=now,
         cutover_at=now - timedelta(days=1),
     )
-    batch = repo.claim_next_batch(now, max_comments=1, wait_hours=12, quota_remaining=1)
+    batch = repo.claim_next_batch(
+        now,
+        max_comments=1,
+        wait_hours=12,
+        quota_remaining=1,
+    )
     assert batch is not None
 
     monkeypatch.setattr(
@@ -1035,7 +1066,12 @@ def test_save_batch_outcomes_rejects_partial_data_without_writes(repo, engine):
     ]
     for comment_id in comment_ids:
         _enqueue(repo, comment_id, "http://post/1", queued_at=now, cutover_at=cutover)
-    batch = repo.claim_next_batch(now, max_comments=2, wait_hours=12, quota_remaining=2)
+    batch = repo.claim_next_batch(
+        now,
+        max_comments=2,
+        wait_hours=12,
+        quota_remaining=2,
+    )
     assert batch is not None
 
     with pytest.raises(ValueError, match="claimed item order"):
@@ -1091,7 +1127,10 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
         cutover_at=now - timedelta(days=1),
     )
     batch = repo.claim_next_batch(
-        now, max_comments=1, wait_hours=12, quota_remaining=1
+        now,
+        max_comments=1,
+        wait_hours=12,
+        quota_remaining=1,
     )
     assert batch is not None
     reply_id = repo.save_batch_outcomes(
@@ -1107,13 +1146,13 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
         max_attempts_per_comment=2,
     )[0]
 
-    claimed = repo.claim_next_publication(now)
+    claimed = repo.claim_next_publication(now, visible_comment_ids={comment_id})
 
     assert claimed is not None
     assert claimed.reply_id == reply_id
     assert claimed.comment.id == comment_id
     assert claimed.text == "готово"
-    assert repo.claim_next_publication(now) is None
+    assert repo.claim_next_publication(now, visible_comment_ids={comment_id}) is None
     with engine.connect() as conn:
         queue = conn.execute(
             select(
@@ -1124,6 +1163,36 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
     assert queue == ("claimed", 1)
 
 
+def test_claim_next_publication_leaves_invisible_reply_queued(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    invisible_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="invisible", fetched_at=now)
+    )
+    visible_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="visible", fetched_at=now)
+    )
+    invisible_reply_id = repo.save_reply(_make_reply(invisible_comment_id))
+    visible_reply_id = repo.save_reply(_make_reply(visible_comment_id))
+    assert repo.enqueue_publication(invisible_reply_id, created_at=now)
+    assert repo.enqueue_publication(visible_reply_id, created_at=now)
+
+    claimed = repo.claim_next_publication(
+        now, visible_comment_ids={visible_comment_id}
+    )
+
+    assert claimed is not None
+    assert claimed.reply_id == visible_reply_id
+    with engine.connect() as conn:
+        invisible_queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.attempt_count,
+            ).where(ReplyPublicationQueueTable.reply_id == invisible_reply_id)
+        ).one()
+    assert invisible_queue == ("queued", 0)
+
+
 def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo):
     publication_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 9, 10, 10, 0, 0)
@@ -1132,10 +1201,14 @@ def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo)
     )
     reply_id = repo.save_reply(_make_reply(comment_id))
     assert repo.enqueue_publication(reply_id, created_at=now)
-    assert repo.claim_next_publication(now) is not None
+    assert repo.claim_next_publication(now, visible_comment_ids={comment_id}) is not None
 
-    assert repo.claim_next_publication(now + timedelta(seconds=1)) is None
-    recovered = repo.claim_next_publication(now + timedelta(hours=1))
+    assert repo.claim_next_publication(
+        now + timedelta(seconds=1), visible_comment_ids={comment_id}
+    ) is None
+    recovered = repo.claim_next_publication(
+        now + timedelta(hours=1), visible_comment_ids={comment_id}
+    )
 
     assert recovered is not None
     assert recovered.reply_id == reply_id
@@ -1159,7 +1232,7 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     )
     reply_id = repo.save_reply(_make_reply(comment_id))
     assert repo.enqueue_publication(reply_id, created_at=now)
-    assert repo.claim_next_publication(now) is not None
+    assert repo.claim_next_publication(now, visible_comment_ids={comment_id}) is not None
 
     retry_outcome = repo.fail_publication(
         reply_id,
@@ -1185,8 +1258,12 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     assert retry_reply_status == "generated"
     assert retry_comment_status == "new"
     assert retry_queue == ("queued", "comment not in DOM")
-    assert repo.claim_next_publication(now + timedelta(minutes=59)) is None
-    assert repo.claim_next_publication(now + timedelta(minutes=60)) is not None
+    assert repo.claim_next_publication(
+        now + timedelta(minutes=59), visible_comment_ids={comment_id}
+    ) is None
+    assert repo.claim_next_publication(
+        now + timedelta(minutes=60), visible_comment_ids={comment_id}
+    ) is not None
     terminal_outcome = repo.fail_publication(
         reply_id,
         error_reason="comment not in DOM",

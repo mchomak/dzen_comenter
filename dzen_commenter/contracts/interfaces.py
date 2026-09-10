@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -113,7 +113,9 @@ class CommentRepository(Protocol):
     def enqueue_publication(self, reply_id: int, *, created_at: datetime) -> bool:
         ...
 
-    def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+    def claim_next_publication(
+        self, now: datetime, *, visible_comment_ids: Collection[int]
+    ) -> ClaimedPublication | None:
         ...
 
     def complete_publication(

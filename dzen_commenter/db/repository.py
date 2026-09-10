@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from datetime import datetime, timedelta
 from hashlib import sha256
 
@@ -573,7 +574,12 @@ class PostgresCommentRepository:
         with self._engine.begin() as conn:
             return conn.execute(stmt).scalar_one_or_none() is not None
 
-    def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+    def claim_next_publication(
+        self, now: datetime, *, visible_comment_ids: Collection[int]
+    ) -> ClaimedPublication | None:
+        visible_ids = tuple(visible_comment_ids)
+        if not visible_ids:
+            return None
         ready = (ReplyPublicationQueueTable.state == "queued") & (
             (ReplyPublicationQueueTable.next_attempt_at.is_(None))
             | (ReplyPublicationQueueTable.next_attempt_at <= now)
@@ -610,7 +616,7 @@ class PostgresCommentRepository:
                 )
                 .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
                 .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
-                .where(ready)
+                .where(ready, CommentTable.id.in_(visible_ids))
                 .order_by(
                     func.coalesce(
                         ReplyPublicationQueueTable.next_attempt_at,

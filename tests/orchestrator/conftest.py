@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -379,11 +379,15 @@ class FakeCommentRepository:
         }
         return True
 
-    def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+    def claim_next_publication(
+        self, now: datetime, *, visible_comment_ids: Collection[int]
+    ) -> ClaimedPublication | None:
+        visible_ids = set(visible_comment_ids)
         ready = [
             (reply_id, row)
             for reply_id, row in self.publication_queue.items()
             if row["state"] == "queued"
+            and self.replies[reply_id].comment_id in visible_ids
             and (
                 row["next_attempt_at"] is None
                 or row["next_attempt_at"] <= now

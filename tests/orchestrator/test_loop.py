@@ -101,7 +101,7 @@ def test_batch_generates_three_comments_with_one_article_and_model_call(
     assert harness.batch_prompt_builder.calls[0][1] == "текст статьи"
     assert harness.page.article_text_urls == [comments[0].post_url]
     assert len(harness.repository.save_batch_outcomes_calls) == 1
-    assert harness.page.publish_calls == []
+    assert [call[0].id for call in harness.page.publish_calls] == [1, 2, 3]
     assert harness.repository.enqueue_publication_calls == [1, 2, 3]
     assert harness.notifier.errors == []
 
@@ -197,8 +197,50 @@ def test_batch_processes_missing_and_current_items_from_claimed_db_data(
         "reply",
         "reply",
     ]
-    assert harness.page.publish_calls == []
+    assert [call[0].id for call in harness.page.publish_calls] == [current_comment_id]
     assert harness.repository.batch_queue[stale_comment_id]["state"] == "completed"
+    assert harness.repository.publication_queue[1]["state"] == "queued"
+    assert harness.repository.publication_queue[1]["attempt_count"] == 0
+    assert harness.notifier.errors == []
+
+
+def test_batch_publication_waits_for_comment_to_reappear_in_current_snapshot(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 8, 1, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    missing_comment = _batch_comments(comment_factory, 1)[0]
+    harness = loop_factory(
+        comments=[],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
+    )
+    comment_id = harness.repository.upsert_comment(missing_comment)
+    reply_id = harness.repository.save_reply(
+        harness.loop._make_reply(
+            comment_id=comment_id,
+            text="ready reply",
+            status=ReplyStatus.GENERATED,
+            error_reason=None,
+        )
+    )
+    harness.repository.enqueue_publication(reply_id, created_at=now)
+
+    harness.loop.run_cycle()
+
+    assert harness.page.publish_calls == []
+    assert harness.repository.fail_publication_calls == []
+    assert harness.repository.publication_queue[reply_id]["state"] == "queued"
+    assert harness.repository.replies[reply_id].status is ReplyStatus.GENERATED
+    assert harness.repository.comments[comment_id].status is not CommentStatus.SKIPPED
+
+    harness.page.comments = [missing_comment]
+    harness.loop.run_cycle()
+
+    assert [call[0].id for call in harness.page.publish_calls] == [comment_id]
+    assert harness.repository.publication_queue[reply_id]["state"] == "completed"
+    assert harness.repository.fail_publication_calls == []
 
 
 def test_batch_claim_is_limited_by_remaining_hourly_quota(
@@ -567,6 +609,7 @@ def test_batch_publication_retry_exhaustion_marks_error_never_skipped(
             harness.page.comments = []
             harness.loop.run_cycle()
             current_time[0] += timedelta(minutes=60)
+            harness.page.comments = [comment]
             harness.loop.run_cycle()
     finally:
         publication_logger.removeHandler(notification_handler)

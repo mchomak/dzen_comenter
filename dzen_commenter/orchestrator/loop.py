@@ -114,8 +114,18 @@ class OrchestratorLoop:
 
         runtime_settings = self.runtime_config.get().settings
         if runtime_settings.batch_replies_enabled:
-            self._run_publication_cycle(runtime_settings)
+            visible_comment_ids = {comment_id for comment_id, _ in indexed_comments}
+            self._run_publication_cycle(
+                runtime_settings,
+                visible_comment_ids=visible_comment_ids,
+                max_publications=self.settings.MAX_REPLIES_PER_CYCLE,
+            )
             self._run_batch_cycle(indexed_comments, runtime_settings)
+            self._run_publication_cycle(
+                runtime_settings,
+                visible_comment_ids=visible_comment_ids,
+                max_publications=self.settings.MAX_REPLIES_PER_CYCLE,
+            )
             return
 
         generated_replies = 0
@@ -306,11 +316,21 @@ class OrchestratorLoop:
                 self.notifier.notify_error("Dzen article context persistence failed", exc)
         return article_text or ""
 
-    def _run_publication_cycle(self, runtime_settings) -> None:
-        for _ in range(self.settings.MAX_REPLIES_PER_CYCLE):
-            claimed = self.repository.claim_next_publication(moscow_now())
+    def _run_publication_cycle(
+        self,
+        runtime_settings,
+        *,
+        visible_comment_ids: set[int],
+        max_publications: int,
+    ) -> int:
+        publication_attempts = 0
+        for _ in range(max_publications):
+            claimed = self.repository.claim_next_publication(
+                moscow_now(), visible_comment_ids=visible_comment_ids
+            )
             if claimed is None:
-                return
+                return publication_attempts
+            publication_attempts += 1
             try:
                 with self._browser_access():
                     self.page.publish_reply(
@@ -356,6 +376,7 @@ class OrchestratorLoop:
                 claimed.reply_id,
                 published_at=(moscow_now() if runtime_settings.auto_publish else None),
             )
+        return publication_attempts
 
     def _generate_single_item_batch_outcomes(
         self,
