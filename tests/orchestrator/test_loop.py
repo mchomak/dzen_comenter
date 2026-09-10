@@ -1,10 +1,15 @@
 import ast
 import inspect
+import logging
 import pathlib
 from datetime import datetime, timedelta
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.models import Reply
+from dzen_commenter.monitoring.developer_notifier import (
+    DeveloperNotificationHandler,
+    DeveloperNotifier,
+)
 from dzen_commenter.orchestrator import OrchestratorLoop
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -459,7 +464,9 @@ def test_batch_continues_when_article_extraction_raises(loop_factory, comment_fa
     assert harness.repository.enqueue_publication_calls == [1, 2, 3]
 
 
-def test_batch_publication_failure_retries_without_regenerating(loop_factory, comment_factory):
+def test_batch_publication_failure_retries_without_regenerating(
+    loop_factory, comment_factory, caplog
+):
     comments = _batch_comments(comment_factory, 3)
     harness = loop_factory(
         comments=comments,
@@ -470,13 +477,14 @@ def test_batch_publication_failure_retries_without_regenerating(loop_factory, co
 
     def publish_reply(comment, text, *, auto_publish):
         if comment.dzen_comment_id == "comment-2":
-            raise RuntimeError("publication failed")
+            raise LookupError("comment is absent")
         original_publish(comment, text, auto_publish=auto_publish)
 
     harness.page.publish_reply = publish_reply
 
-    harness.loop.run_cycle()
-    harness.loop.run_cycle()
+    with caplog.at_level(logging.WARNING, logger="dzen_commenter.orchestrator.loop"):
+        harness.loop.run_cycle()
+        harness.loop.run_cycle()
 
     assert len(harness.repository.save_batch_outcomes_calls) == 1
     assert len(harness.page.publish_calls) == 2
@@ -485,8 +493,19 @@ def test_batch_publication_failure_retries_without_regenerating(loop_factory, co
     assert harness.repository.replies[1].status is ReplyStatus.GENERATED
     assert harness.repository.replies[3].status is ReplyStatus.GENERATED
     assert harness.repository.fail_publication_calls == [
-        (2, "Dzen reply publication failed: publication failed")
+        (2, "Dzen reply publication failed: comment is absent")
     ]
+    assert harness.repository.publication_queue[2]["state"] == "queued"
+    assert harness.repository.comments[2].status is CommentStatus.ANSWERED
+    assert harness.notifier.errors == []
+    retry_records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "Dzen reply publication retry scheduled"
+    ]
+    assert len(retry_records) == 1
+    assert retry_records[0].levelno == logging.WARNING
+    assert retry_records[0].reply_id == 2
 
 
 def test_batch_pending_publication_does_not_become_skipped_on_next_snapshot(
@@ -508,7 +527,7 @@ def test_batch_pending_publication_does_not_become_skipped_on_next_snapshot(
 
 
 def test_batch_publication_retry_exhaustion_marks_error_never_skipped(
-    loop_factory, comment_factory, monkeypatch
+    loop_factory, comment_factory, monkeypatch, caplog
 ):
     from dzen_commenter.orchestrator import loop as loop_module
 
@@ -532,11 +551,25 @@ def test_batch_publication_retry_exhaustion_marks_error_never_skipped(
         raise LookupError("comment is absent")
 
     harness.page.publish_reply = missing_from_dom
-    harness.loop.run_cycle()
-    harness.page.comments = []
-    harness.loop.run_cycle()
-    current_time[0] += timedelta(minutes=60)
-    harness.loop.run_cycle()
+    transport = harness.notifier
+    notifier = DeveloperNotifier(
+        transport,
+        error_cooldown_provider=lambda: 60,
+        time_fn=lambda: 0,
+    )
+    harness.loop.notifier = notifier
+    publication_logger = logging.getLogger("dzen_commenter.orchestrator.loop")
+    notification_handler = DeveloperNotificationHandler(notifier)
+    publication_logger.addHandler(notification_handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger=publication_logger.name):
+            harness.loop.run_cycle()
+            harness.page.comments = []
+            harness.loop.run_cycle()
+            current_time[0] += timedelta(minutes=60)
+            harness.loop.run_cycle()
+    finally:
+        publication_logger.removeHandler(notification_handler)
 
     assert publish_attempts == ["comment-1", "comment-1"]
     assert len(harness.ai_provider.calls) == 1
@@ -544,6 +577,18 @@ def test_batch_publication_retry_exhaustion_marks_error_never_skipped(
     assert harness.repository.comments[1].status is CommentStatus.ERROR
     assert harness.repository.comments[1].status is not CommentStatus.SKIPPED
     assert len(harness.repository.fail_publication_calls) == 2
+    assert len(transport.errors) == 1
+    message, error = transport.errors[0]
+    assert message == "Dzen reply publication failed"
+    assert isinstance(error, LookupError)
+    terminal_records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "Dzen reply publication failed"
+    ]
+    assert len(terminal_records) == 1
+    assert terminal_records[0].levelno == logging.ERROR
+    assert terminal_records[0].reply_id == 1
 
 
 def test_orchestrator_has_no_direct_imports_from_concrete_layers():

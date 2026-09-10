@@ -8,7 +8,12 @@ import pytest
 
 from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
 from dzen_commenter.config.settings import Settings
-from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import (
+    BatchOutcomeKind,
+    CommentStatus,
+    PublicationFailureOutcome,
+    ReplyStatus,
+)
 from dzen_commenter.contracts.interfaces import PromptContext, ReplyType
 from dzen_commenter.contracts.models import (
     ArticleContext,
@@ -417,7 +422,7 @@ class FakeCommentRepository:
         failed_at: datetime,
         retry_cooldown_minutes: int,
         max_attempts_per_reply: int,
-    ) -> bool:
+    ) -> PublicationFailureOutcome:
         self.fail_publication_calls.append((reply_id, error_reason))
         row = self.publication_queue[reply_id]
         retry = int(row["attempt_count"]) < max_attempts_per_reply
@@ -431,7 +436,11 @@ class FakeCommentRepository:
             self.set_comment_status(
                 self.replies[reply_id].comment_id, CommentStatus.ERROR
             )
-        return retry
+        return (
+            PublicationFailureOutcome.RETRY
+            if retry
+            else PublicationFailureOutcome.TERMINAL
+        )
 
 
 class FakeAIProvider:

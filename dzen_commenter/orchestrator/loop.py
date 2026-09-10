@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -8,7 +9,12 @@ from zoneinfo import ZoneInfo
 
 from dzen_commenter.config.runtime_config import RuntimeConfig
 from dzen_commenter.config.settings import Settings
-from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import (
+    BatchOutcomeKind,
+    CommentStatus,
+    PublicationFailureOutcome,
+    ReplyStatus,
+)
 from dzen_commenter.contracts.exceptions import BatchParseError
 from dzen_commenter.contracts.interfaces import (
     AIProvider,
@@ -39,6 +45,8 @@ CTA_PROMPT_TEMPLATE = (
     "Не выводи его отдельной строкой и не делай отдельным рекламным предложением. "
     "Не добавляй URL, Markdown-ссылки или другой текст ссылки помимо указанного CTA."
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrchestratorLoop:
@@ -312,7 +320,7 @@ class OrchestratorLoop:
                     )
             except Exception as exc:
                 error_reason = f"Dzen reply publication failed: {exc}"
-                self.repository.fail_publication(
+                outcome = self.repository.fail_publication(
                     claimed.reply_id,
                     error_reason=error_reason,
                     failed_at=moscow_now(),
@@ -323,7 +331,25 @@ class OrchestratorLoop:
                         runtime_settings.publication_max_attempts_per_reply
                     ),
                 )
-                self.notifier.notify_error("Dzen reply publication failed", exc)
+                if outcome is PublicationFailureOutcome.RETRY:
+                    logger.warning(
+                        "Dzen reply publication retry scheduled",
+                        extra={
+                            "event": "publication_retry",
+                            "reply_id": claimed.reply_id,
+                            "error": error_reason,
+                        },
+                    )
+                else:
+                    logger.error(
+                        "Dzen reply publication failed",
+                        exc_info=exc,
+                        extra={
+                            "event": "publication_terminal_failure",
+                            "reply_id": claimed.reply_id,
+                            "error": error_reason,
+                        },
+                    )
                 continue
 
             self.repository.complete_publication(
