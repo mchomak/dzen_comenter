@@ -106,6 +106,7 @@ class OrchestratorLoop:
 
         runtime_settings = self.runtime_config.get().settings
         if runtime_settings.batch_replies_enabled:
+            self._run_publication_cycle(runtime_settings)
             self._run_batch_cycle(indexed_comments, runtime_settings)
             return
 
@@ -147,7 +148,6 @@ class OrchestratorLoop:
         queued_at = moscow_now()
         for comment_id, comment in indexed_comments:
             if self.repository.has_generated_reply(comment_id):
-                self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
                 continue
             if self.repository.is_own_reply(comment.post_url, comment.text):
                 self.repository.set_comment_status(comment_id, CommentStatus.SKIPPED)
@@ -180,8 +180,7 @@ class OrchestratorLoop:
         )
         processed_items = 0
         if batch is not None:
-            comments_by_id = dict(indexed_comments)
-            self._generate_batch(batch, comments_by_id, runtime_settings)
+            self._generate_batch(batch, runtime_settings)
             processed_items = len(batch.items)
 
         self._generate_fallback_comments(
@@ -204,45 +203,15 @@ class OrchestratorLoop:
     def _generate_batch(
         self,
         batch: ClaimedBatch,
-        comments_by_id: dict[int, Comment],
         runtime_settings,
     ) -> None:
-        available_items = tuple(
-            BatchItem(
-                batch_id=item.batch_id,
-                comment_id=item.comment_id,
-                item_no=position,
-                post_url=item.post_url,
-                publication_title=item.publication_title,
-                thread_text=item.thread_text,
-                author=item.author,
-                comment_text=item.comment_text,
-            )
-            for position, item in enumerate(
-                (item for item in batch.items if item.comment_id in comments_by_id),
-                start=1,
-            )
-        )
-        unavailable_outcomes = {
-            item.comment_id: BatchOutcome(
-                comment_id=item.comment_id,
-                item_no=item.item_no,
-                kind=BatchOutcomeKind.SKIP,
-            )
-            for item in batch.items
-            if item.comment_id not in comments_by_id
-        }
-        article_text = None
+        items = batch.items
+        article_text = self._get_batch_article_text(batch)
         generated_outcomes: tuple[BatchOutcome, ...] = ()
-        if available_items:
-            try:
-                with self._browser_access():
-                    article_text = self.page.fetch_article_text(batch.post_url)
-            except Exception as exc:
-                self.notifier.notify_error("Dzen article text extraction failed", exc)
+        if items:
             try:
                 prompt = self.batch_prompt_builder.build_batch(
-                    available_items,
+                    items,
                     article_text=article_text or "",
                 )
                 raw = self.ai_provider.generate(
@@ -252,18 +221,18 @@ class OrchestratorLoop:
                 )
                 generated_outcomes = self.batch_reply_parser(
                     raw,
-                    available_items,
+                    items,
                     runtime_settings.max_reply_length,
                 )
             except Exception as exc:
-                if len(available_items) > 1 and isinstance(exc, BatchParseError):
+                if len(items) > 1 and isinstance(exc, BatchParseError):
                     generated_outcomes = self._generate_single_item_batch_outcomes(
-                        available_items,
+                        items,
                         article_text=article_text or "",
                         max_reply_length=runtime_settings.max_reply_length,
                     )
                 else:
-                    generated_outcomes = self._batch_error_outcomes(available_items, exc)
+                    generated_outcomes = self._batch_error_outcomes(items, exc)
 
         original_item_numbers = {
             item.comment_id: item.item_no for item in batch.items
@@ -279,56 +248,88 @@ class OrchestratorLoop:
             for outcome in generated_outcomes
         }
         outcomes = tuple(
-            unavailable_outcomes[item.comment_id]
-            if item.comment_id in unavailable_outcomes
-            else outcomes_by_comment_id[item.comment_id]
+            outcomes_by_comment_id[item.comment_id]
             for item in batch.items
         )
         article_context_status = (
             "article_text_used" if article_text else "without_article_text"
         )
 
-        reply_ids = self.repository.save_batch_outcomes(
+        created_at = moscow_now()
+        self.repository.save_batch_outcomes(
             batch.id,
             outcomes,
             ai_provider=self.settings.AI_PROVIDER,
             ai_model=self.settings.AI_MODEL,
             article_context_status=article_context_status,
-            created_at=moscow_now(),
+            created_at=created_at,
             prompt_tokens=None,
             completion_tokens=None,
             retry_cooldown_minutes=runtime_settings.batch_retry_cooldown_minutes,
             max_attempts_per_comment=runtime_settings.batch_max_attempts_per_comment,
         )
-        for outcome, reply_id in zip(outcomes, reply_ids, strict=True):
-            if outcome.kind is not BatchOutcomeKind.REPLY:
-                continue
-            comment = comments_by_id[outcome.comment_id]
+
+    def _get_batch_article_text(self, batch: ClaimedBatch) -> str:
+        if batch.publication_id is not None:
+            cached_context = self.repository.get_article_context(batch.publication_id)
+            if cached_context is not None and cached_context.text:
+                return cached_context.text
+
+        article_text: str | None = None
+        context_status = "without_article_text"
+        try:
+            with self._browser_access():
+                article_text = self.page.fetch_article_text(batch.post_url)
+            if article_text:
+                context_status = "article_text_used"
+        except Exception as exc:
+            context_status = "article_text_error"
+            self.notifier.notify_error("Dzen article text extraction failed", exc)
+
+        if batch.publication_id is not None:
+            try:
+                self.repository.save_article_context(
+                    batch.publication_id,
+                    text=article_text,
+                    status=context_status,
+                    fetched_at=moscow_now(),
+                )
+            except Exception as exc:
+                self.notifier.notify_error("Dzen article context persistence failed", exc)
+        return article_text or ""
+
+    def _run_publication_cycle(self, runtime_settings) -> None:
+        for _ in range(self.settings.MAX_REPLIES_PER_CYCLE):
+            claimed = self.repository.claim_next_publication(moscow_now())
+            if claimed is None:
+                return
             try:
                 with self._browser_access():
                     self.page.publish_reply(
-                        comment,
-                        outcome.text,
+                        claimed.comment,
+                        claimed.text,
                         auto_publish=runtime_settings.auto_publish,
                     )
             except Exception as exc:
-                self.repository.set_reply_status(
-                    reply_id,
-                    ReplyStatus.ERROR,
-                    "Dzen reply publication failed",
-                )
-                self.repository.set_comment_status(
-                    outcome.comment_id, CommentStatus.ERROR
+                error_reason = f"Dzen reply publication failed: {exc}"
+                self.repository.fail_publication(
+                    claimed.reply_id,
+                    error_reason=error_reason,
+                    failed_at=moscow_now(),
+                    retry_cooldown_minutes=(
+                        runtime_settings.publication_retry_cooldown_minutes
+                    ),
+                    max_attempts_per_reply=(
+                        runtime_settings.publication_max_attempts_per_reply
+                    ),
                 )
                 self.notifier.notify_error("Dzen reply publication failed", exc)
                 continue
 
-            if runtime_settings.auto_publish:
-                self.repository.set_reply_status(
-                    reply_id,
-                    ReplyStatus.PUBLISHED,
-                    published_at=moscow_now(),
-                )
+            self.repository.complete_publication(
+                claimed.reply_id,
+                published_at=(moscow_now() if runtime_settings.auto_publish else None),
+            )
 
     def _generate_single_item_batch_outcomes(
         self,

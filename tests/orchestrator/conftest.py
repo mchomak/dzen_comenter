@@ -11,9 +11,11 @@ from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
 from dzen_commenter.contracts.interfaces import PromptContext, ReplyType
 from dzen_commenter.contracts.models import (
+    ArticleContext,
     BatchItem,
     BatchOutcome,
     ClaimedBatch,
+    ClaimedPublication,
     Comment,
     Publication,
     Reply,
@@ -57,6 +59,11 @@ class FakeCommentRepository:
         self.has_published_reply_calls: list[int] = []
         self.batch_queue: dict[int, dict[str, object]] = {}
         self.claimed_batches: dict[int, ClaimedBatch] = {}
+        self.article_contexts: dict[int, ArticleContext] = {}
+        self.publication_queue: dict[int, dict[str, object]] = {}
+        self.enqueue_publication_calls: list[int] = []
+        self.complete_publication_calls: list[int] = []
+        self.fail_publication_calls: list[tuple[int, str]] = []
         self.save_batch_outcomes_calls: list[tuple[int, tuple[BatchOutcome, ...]]] = []
         self._next_publication_id = 1
         self._next_comment_id = 1
@@ -256,7 +263,13 @@ class FakeCommentRepository:
             )
             for item_no, (comment_id, _) in enumerate(selected, start=1)
         )
-        batch = ClaimedBatch(batch_id, post_url, now, items)
+        batch = ClaimedBatch(
+            batch_id,
+            post_url,
+            now,
+            items,
+            publication_id=self.comments[selected[0][0]].publication_id,
+        )
         self.claimed_batches[batch_id] = batch
         for comment_id, row in selected:
             row["state"] = "claimed"
@@ -306,6 +319,8 @@ class FakeCommentRepository:
                 )
             )
             reply_ids.append(reply_id)
+            if outcome.kind is BatchOutcomeKind.REPLY:
+                self.enqueue_publication(reply_id, created_at=created_at)
             self.comments[outcome.comment_id].status = {
                 BatchOutcomeKind.REPLY: CommentStatus.ANSWERED,
                 BatchOutcomeKind.SKIP: CommentStatus.SKIPPED,
@@ -324,6 +339,99 @@ class FakeCommentRepository:
                 else None
             )
         return tuple(reply_ids)
+
+    def get_article_context(self, publication_id: int) -> ArticleContext | None:
+        return self.article_contexts.get(publication_id)
+
+    def save_article_context(
+        self,
+        publication_id: int,
+        *,
+        text: str | None,
+        status: str,
+        fetched_at: datetime,
+    ) -> ArticleContext:
+        context = ArticleContext(
+            publication_id=publication_id,
+            text=text,
+            status=status,
+            fetched_at=fetched_at,
+            content_hash=None,
+        )
+        self.article_contexts[publication_id] = context
+        return context
+
+    def enqueue_publication(self, reply_id: int, *, created_at: datetime) -> bool:
+        self.enqueue_publication_calls.append(reply_id)
+        if reply_id in self.publication_queue:
+            return False
+        self.publication_queue[reply_id] = {
+            "state": "queued",
+            "attempt_count": 0,
+            "next_attempt_at": None,
+            "last_error": None,
+            "created_at": created_at,
+        }
+        return True
+
+    def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+        ready = [
+            (reply_id, row)
+            for reply_id, row in self.publication_queue.items()
+            if row["state"] == "queued"
+            and (
+                row["next_attempt_at"] is None
+                or row["next_attempt_at"] <= now
+            )
+        ]
+        if not ready:
+            return None
+        reply_id, row = min(ready, key=lambda entry: (entry[1]["created_at"], entry[0]))
+        row["state"] = "claimed"
+        row["attempt_count"] = int(row["attempt_count"]) + 1
+        reply = self.replies[reply_id]
+        return ClaimedPublication(
+            reply_id=reply_id,
+            comment=self.comments[reply.comment_id],
+            text=reply.generated_text,
+        )
+
+    def complete_publication(
+        self, reply_id: int, *, published_at: datetime | None
+    ) -> None:
+        self.complete_publication_calls.append(reply_id)
+        self.publication_queue[reply_id]["state"] = "completed"
+        self.publication_queue[reply_id]["next_attempt_at"] = None
+        if published_at is not None:
+            self.set_reply_status(
+                reply_id,
+                ReplyStatus.PUBLISHED,
+                published_at=published_at,
+            )
+
+    def fail_publication(
+        self,
+        reply_id: int,
+        *,
+        error_reason: str,
+        failed_at: datetime,
+        retry_cooldown_minutes: int,
+        max_attempts_per_reply: int,
+    ) -> bool:
+        self.fail_publication_calls.append((reply_id, error_reason))
+        row = self.publication_queue[reply_id]
+        retry = int(row["attempt_count"]) < max_attempts_per_reply
+        row["state"] = "queued" if retry else "completed"
+        row["next_attempt_at"] = (
+            failed_at + timedelta(minutes=retry_cooldown_minutes) if retry else None
+        )
+        row["last_error"] = error_reason
+        if not retry:
+            self.set_reply_status(reply_id, ReplyStatus.ERROR, error_reason)
+            self.set_comment_status(
+                self.replies[reply_id].comment_id, CommentStatus.ERROR
+            )
+        return retry
 
 
 class FakeAIProvider:
@@ -639,6 +747,12 @@ def loop_factory(
                     ),
                     batch_max_attempts_per_comment=runtime_overrides.get(
                         "BATCH_MAX_ATTEMPTS_PER_COMMENT", 2
+                    ),
+                    publication_retry_cooldown_minutes=runtime_overrides.get(
+                        "PUBLICATION_RETRY_COOLDOWN_MINUTES", 60
+                    ),
+                    publication_max_attempts_per_reply=runtime_overrides.get(
+                        "PUBLICATION_MAX_ATTEMPTS_PER_REPLY", 3
                     ),
                 ),
                 prompt=load_brand_config(None),

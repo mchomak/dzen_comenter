@@ -96,7 +96,8 @@ def test_batch_generates_three_comments_with_one_article_and_model_call(
     assert harness.batch_prompt_builder.calls[0][1] == "текст статьи"
     assert harness.page.article_text_urls == [comments[0].post_url]
     assert len(harness.repository.save_batch_outcomes_calls) == 1
-    assert len(harness.page.publish_calls) == 3
+    assert harness.page.publish_calls == []
+    assert harness.repository.enqueue_publication_calls == [1, 2, 3]
     assert harness.notifier.errors == []
 
 
@@ -125,7 +126,7 @@ def test_batch_waits_for_timeout_before_claiming_incomplete_article_group(
     assert len(harness.repository.save_batch_outcomes_calls[0][1]) == 2
 
 
-def test_batch_skips_ready_comment_missing_from_current_dzen_snapshot(
+def test_batch_generates_ready_comment_missing_from_current_dzen_snapshot(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -149,16 +150,16 @@ def test_batch_skips_ready_comment_missing_from_current_dzen_snapshot(
     harness.loop.run_cycle()
 
     assert len(harness.repository.save_batch_outcomes_calls) == 1
-    assert harness.ai_provider.calls == []
+    assert len(harness.ai_provider.calls) == 1
     assert harness.page.publish_calls == []
     assert harness.notifier.errors == []
     outcomes = harness.repository.save_batch_outcomes_calls[0][1]
-    assert [outcome.kind.value for outcome in outcomes] == ["skip"]
+    assert [outcome.kind.value for outcome in outcomes] == ["reply"]
     assert harness.repository.batch_queue[stale_comment_id]["state"] == "completed"
     assert harness.repository.batch_queue[stale_comment_id]["next_attempt_at"] is None
 
 
-def test_batch_processes_available_items_while_skipping_missing_items(
+def test_batch_processes_missing_and_current_items_from_claimed_db_data(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -169,7 +170,7 @@ def test_batch_processes_available_items_while_skipping_missing_items(
     harness = loop_factory(
         comments=[current_comment],
         settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=2),
-        ai_responses=["current reply"],
+        ai_responses=["C01\tREPLY\tСохранённый\nC02\tREPLY\tТекущий"],
     )
     stale_comment_id = harness.repository.upsert_comment(stale_comment)
     harness.repository.enqueue_batch_comment(
@@ -186,12 +187,12 @@ def test_batch_processes_available_items_while_skipping_missing_items(
     ]
     assert [
         item.comment_id for item in harness.batch_prompt_builder.calls[0][0]
-    ] == [current_comment_id]
+    ] == [stale_comment_id, current_comment_id]
     assert [outcome.kind.value for outcome in harness.repository.save_batch_outcomes_calls[0][1]] == [
-        "skip",
+        "reply",
         "reply",
     ]
-    assert [call[0].id for call in harness.page.publish_calls] == [current_comment_id]
+    assert harness.page.publish_calls == []
     assert harness.repository.batch_queue[stale_comment_id]["state"] == "completed"
 
 
@@ -256,7 +257,7 @@ def test_malformed_multi_item_batch_falls_back_to_single_item_generations(
     assert [item.item_no for item in harness.batch_prompt_builder.calls[2][0]] == [1]
     assert [item.item_no for item in harness.batch_prompt_builder.calls[3][0]] == [1]
     assert len(harness.repository.save_batch_outcomes_calls) == 1
-    assert len(harness.page.publish_calls) == 3
+    assert harness.repository.enqueue_publication_calls == [1, 2, 3]
     assert harness.notifier.errors == []
 
 
@@ -280,7 +281,7 @@ def test_single_item_fallback_failure_saves_error_and_notifies(
     outcomes = harness.repository.save_batch_outcomes_calls[0][1]
     assert [outcome.kind.value for outcome in outcomes] == ["reply", "error", "reply"]
     assert len(harness.repository.save_batch_outcomes_calls) == 1
-    assert len(harness.page.publish_calls) == 2
+    assert harness.repository.enqueue_publication_calls == [1, 3]
     assert len(harness.notifier.errors) == 1
     assert harness.notifier.errors[0][0] == (
         "Batch reply generation failed: Batch row has an unknown outcome kind"
@@ -386,6 +387,55 @@ def test_batch_uses_no_article_fallback(loop_factory, comment_factory):
     } == {"without_article_text"}
 
 
+def test_batch_article_context_is_cached_after_first_fetch(
+    loop_factory, comment_factory
+):
+    first, second = _batch_comments(comment_factory, 2)
+    harness = loop_factory(
+        comments=[first],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
+        ai_responses=["C01\tREPLY\tПервый", "C01\tREPLY\tВторой"],
+    )
+    harness.page.article_text_by_url[first.post_url] = "кеш статьи"
+    harness.loop.run_cycle()
+    harness.page.comments = [second]
+    harness.loop.run_cycle()
+
+    assert harness.page.article_text_urls == [first.post_url]
+    assert harness.batch_prompt_builder.calls[0][1] == "кеш статьи"
+    assert harness.batch_prompt_builder.calls[1][1] == "кеш статьи"
+    assert harness.repository.article_contexts[1].text == "кеш статьи"
+
+
+def test_batch_retries_article_fetch_after_cached_extraction_error(
+    loop_factory, comment_factory
+):
+    first, second = _batch_comments(comment_factory, 2)
+    harness = loop_factory(
+        comments=[first],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
+        ai_responses=["C01\tREPLY\tПервый", "C01\tREPLY\tВторой"],
+    )
+    fetch_attempts: list[str] = []
+
+    def fetch_article_text(post_url):
+        fetch_attempts.append(post_url)
+        if len(fetch_attempts) == 1:
+            raise RuntimeError("temporary extraction failure")
+        return "текст после повтора"
+
+    harness.page.fetch_article_text = fetch_article_text
+
+    harness.loop.run_cycle()
+    harness.page.comments = [second]
+    harness.loop.run_cycle()
+
+    assert fetch_attempts == [first.post_url, second.post_url]
+    assert harness.batch_prompt_builder.calls[0][1] == ""
+    assert harness.batch_prompt_builder.calls[1][1] == "текст после повтора"
+    assert harness.repository.article_contexts[1].text == "текст после повтора"
+
+
 def test_batch_continues_when_article_extraction_raises(loop_factory, comment_factory):
     comments = _batch_comments(comment_factory, 3)
     harness = loop_factory(
@@ -406,10 +456,10 @@ def test_batch_continues_when_article_extraction_raises(loop_factory, comment_fa
     assert {row["state"] for row in harness.repository.batch_queue.values()} == {
         "completed"
     }
-    assert harness.page.publish_calls
+    assert harness.repository.enqueue_publication_calls == [1, 2, 3]
 
 
-def test_batch_continues_after_one_publication_failure(loop_factory, comment_factory):
+def test_batch_publication_failure_retries_without_regenerating(loop_factory, comment_factory):
     comments = _batch_comments(comment_factory, 3)
     harness = loop_factory(
         comments=comments,
@@ -426,12 +476,74 @@ def test_batch_continues_after_one_publication_failure(loop_factory, comment_fac
     harness.page.publish_reply = publish_reply
 
     harness.loop.run_cycle()
+    harness.loop.run_cycle()
 
     assert len(harness.repository.save_batch_outcomes_calls) == 1
     assert len(harness.page.publish_calls) == 2
-    assert harness.repository.replies[2].status is ReplyStatus.ERROR
+    assert len(harness.ai_provider.calls) == 1
+    assert harness.repository.replies[2].status is ReplyStatus.GENERATED
     assert harness.repository.replies[1].status is ReplyStatus.GENERATED
     assert harness.repository.replies[3].status is ReplyStatus.GENERATED
+    assert harness.repository.fail_publication_calls == [
+        (2, "Dzen reply publication failed: publication failed")
+    ]
+
+
+def test_batch_pending_publication_does_not_become_skipped_on_next_snapshot(
+    loop_factory, comment_factory
+):
+    comment = _batch_comments(comment_factory, 1)[0]
+    harness = loop_factory(
+        comments=[comment],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
+        ai_responses=["C01\tREPLY\tОтвет"],
+    )
+
+    harness.loop.run_cycle()
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert harness.repository.comments[1].status is CommentStatus.ANSWERED
+    assert harness.repository.replies[1].status is ReplyStatus.GENERATED
+
+
+def test_batch_publication_retry_exhaustion_marks_error_never_skipped(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 8, 1, 12, 0, 0)
+    current_time = [now]
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
+    comment = _batch_comments(comment_factory, 1)[0]
+    harness = loop_factory(
+        comments=[comment],
+        settings_overrides=_batch_settings(
+            BATCH_MAX_COMMENTS=1,
+            PUBLICATION_RETRY_COOLDOWN_MINUTES=60,
+            PUBLICATION_MAX_ATTEMPTS_PER_REPLY=2,
+        ),
+        ai_responses=["C01\tREPLY\tОтвет"],
+    )
+    publish_attempts: list[str] = []
+
+    def missing_from_dom(comment, text, *, auto_publish):
+        publish_attempts.append(comment.dzen_comment_id)
+        raise LookupError("comment is absent")
+
+    harness.page.publish_reply = missing_from_dom
+    harness.loop.run_cycle()
+    harness.page.comments = []
+    harness.loop.run_cycle()
+    current_time[0] += timedelta(minutes=60)
+    harness.loop.run_cycle()
+
+    assert publish_attempts == ["comment-1", "comment-1"]
+    assert len(harness.ai_provider.calls) == 1
+    assert harness.repository.replies[1].status is ReplyStatus.ERROR
+    assert harness.repository.comments[1].status is CommentStatus.ERROR
+    assert harness.repository.comments[1].status is not CommentStatus.SKIPPED
+    assert len(harness.repository.fail_publication_calls) == 2
 
 
 def test_orchestrator_has_no_direct_imports_from_concrete_layers():
