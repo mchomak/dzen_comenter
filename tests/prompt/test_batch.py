@@ -68,6 +68,12 @@ def test_build_single_item_batch_requests_unlabeled_output():
     assert "Cnn" not in protocol
 
 
+def test_batch_prompt_ends_with_no_metadata_rule():
+    prompt = DameoBatchPromptBuilder().build_batch((make_item(1),), article_text="text")
+
+    assert prompt.endswith("type:, status:, answer:.")
+
+
 def test_parse_single_item_batch_accepts_unlabeled_reply_and_skip():
     item = make_item(1)
 
@@ -77,6 +83,35 @@ def test_parse_single_item_batch_accepts_unlabeled_reply_and_skip():
     assert reply[0].kind is BatchOutcomeKind.REPLY
     assert reply[0].text == "Автор 1, ответ"
     assert skip[0].kind is BatchOutcomeKind.SKIP
+
+
+def test_parse_batch_strips_leading_model_metadata_and_preserves_reply_text():
+    outcome = parse_batch(
+        "\u0442\u0438\u043f: \u0432\u043e\u0432\u043b\u0435\u043a\u0430\u044e\u0449\u0438\u0439 \u043e\u0442\u0432\u0435\u0442: \u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442",
+        (make_item(1),),
+        max_length=100,
+    )
+
+    assert outcome[0].kind is BatchOutcomeKind.REPLY
+    assert outcome[0].text.endswith("\u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442")
+    assert "\u0442\u0438\u043f:" not in outcome[0].text.casefold()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a \u043e\u0442\u0432\u0435\u0442: SKIP",
+        "\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a; \u043e\u0442\u0432\u0435\u0442: \u043b\u044e\u0431\u043e\u0439 \u0442\u0435\u043a\u0441\u0442",
+        "\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a (\u043d\u0435 \u043e\u0442\u0432\u0435\u0447\u0430\u0442\u044c)",
+        "C01 | \u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a \u043e\u0442\u0432\u0435\u0442: SKIP\nC02 | \u043e\u0442\u0432\u0435\u0442",
+    ],
+)
+def test_parse_batch_treats_label_prefixed_skip_as_skip(raw):
+    items = (make_item(1),) if "C02" not in raw else (make_item(1), make_item(2))
+
+    outcomes = parse_batch(raw, items, max_length=100)
+
+    assert outcomes[0].kind is BatchOutcomeKind.SKIP
 
 
 def test_parse_single_item_batch_keeps_labeled_legacy_compatibility():

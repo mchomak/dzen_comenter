@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from dzen_commenter.contracts.enums import BatchOutcomeKind
 from dzen_commenter.contracts.exceptions import BatchParseError
 from dzen_commenter.contracts.models import BatchItem, BatchOutcome
+from dzen_commenter.contracts.reply_text import sanitize_model_reply
 from dzen_commenter.prompt.classifier import classify_reply_type
 from dzen_commenter.prompt.config_loader import PromptBrandConfig, load_brand_config
 
@@ -73,6 +74,10 @@ class DameoBatchPromptBuilder:
                 article_block,
                 protocol,
                 "КАРТОЧКИ КОММЕНТАРИЕВ:\n" + cards,
+                "ПОСЛЕДНЕЕ ПРАВИЛО ФОРМАТА: после `Cnn |` верни только готовый "
+                "текст для публикации или ровно SKIP. Не добавляй метки, "
+                "заголовки или пояснения: «тип:», «статус:», «ответ:», "
+                "type:, status:, answer:.",
             )
         ).replace("{cta_link}", config.cta_link)
 
@@ -151,9 +156,10 @@ def _looks_like_labeled_batch_row(line: str) -> bool:
 def _parse_single_outcome(
     line: str, item: BatchItem, max_length: int
 ) -> BatchOutcome:
-    if line == "SKIP":
+    text = sanitize_model_reply(line)
+    if text is None:
         return BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
-    return _reply_outcome(item, line, max_length)
+    return _reply_outcome(item, text, max_length)
 
 
 def _parse_single_item_output(
@@ -192,7 +198,7 @@ def _parse_labeled_outcomes(
             )
             continue
         if is_legacy and normalized_kind == "SKIP":
-            if text:
+            if text and sanitize_model_reply(text) is not None:
                 raise BatchParseError("SKIP rows must have an empty text column")
             outcomes.append(
                 BatchOutcome(item.comment_id, item.item_no, BatchOutcomeKind.SKIP)
@@ -200,7 +206,7 @@ def _parse_labeled_outcomes(
             continue
         if is_legacy and normalized_kind != "REPLY" and not text.strip():
             raise BatchParseError("Batch row has an unknown outcome kind")
-        outcomes.append(_reply_outcome(item, text, max_length))
+        outcomes.append(_parse_single_outcome(text, item, max_length))
     return tuple(outcomes)
 
 

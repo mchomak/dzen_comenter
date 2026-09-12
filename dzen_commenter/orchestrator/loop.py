@@ -37,6 +37,7 @@ from dzen_commenter.contracts.models import (
     Publication,
     Reply,
 )
+from dzen_commenter.contracts.reply_text import sanitize_model_reply
 from dzen_commenter.time_utils import moscow_now
 
 CTA_PROMPT_TEMPLATE = (
@@ -648,15 +649,7 @@ class OrchestratorLoop:
     @staticmethod
     def _extract_reply_text(raw_text: str) -> str:
         """Extract the publishable answer from the model's typed response."""
-        raw_text = raw_text.strip()
-        for line in raw_text.splitlines():
-            normalized = line.strip().lower()
-            if normalized.startswith("тип:") and "пропуск" in normalized:
-                return ""
-        for line in raw_text.splitlines():
-            if line.strip().lower().startswith("ответ:"):
-                return line.split(":", 1)[1].strip()
-        return raw_text
+        return sanitize_model_reply(raw_text) or ""
 
     @staticmethod
     def _format_reply_text(text: str, author_prefix: str) -> str:

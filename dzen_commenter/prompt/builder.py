@@ -4,6 +4,11 @@ from dzen_commenter.contracts.interfaces import PromptContext
 from dzen_commenter.prompt.config_loader import PromptBrandConfig, load_brand_config
 
 _THREAD_CONTEXT_LIMIT = 400
+_OUTPUT_RULE = (
+    "ФОРМАТ РЕЗУЛЬТАТА: верни только готовый текст для публикации или ровно SKIP. "
+    "Не добавляй пояснения, метки или заголовки: «тип:», «статус:», «ответ:», "
+    "type:, status:, answer:."
+)
 
 
 class DameoPromptBuilder:
@@ -63,6 +68,7 @@ class DameoPromptBuilder:
             context_block,
             article_block,
             task,
+            _OUTPUT_RULE,
         ]
         text = "\n\n".join(block for block in blocks if block)
         return text.replace("{cta_link}", config.cta_link)

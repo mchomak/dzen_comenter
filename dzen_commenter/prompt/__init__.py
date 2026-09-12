@@ -1,4 +1,5 @@
 from dzen_commenter.contracts.exceptions import BatchParseError
+from dzen_commenter.contracts.reply_text import sanitize_model_reply
 from dzen_commenter.prompt.batch import DameoBatchPromptBuilder, parse_batch
 from dzen_commenter.prompt.builder import DameoPromptBuilder
 from dzen_commenter.prompt.classifier import classify_reply_type, is_cta_candidate_title
@@ -13,4 +14,5 @@ __all__ = [
     "is_cta_candidate_title",
     "load_brand_config",
     "parse_batch",
+    "sanitize_model_reply",
 ]

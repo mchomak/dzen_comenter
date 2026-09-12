@@ -19,6 +19,11 @@ from dzen_commenter.prompt.config_loader import (
 
 PUB_TITLE = "publication title"
 THREAD_TEXT = "thread text"
+_OUTPUT_RULE = (
+    "ФОРМАТ РЕЗУЛЬТАТА: верни только готовый текст для публикации или ровно SKIP. "
+    "Не добавляй пояснения, метки или заголовки: «тип:», «статус:», «ответ:», "
+    "type:, status:, answer:."
+)
 
 
 def make_context(reply_type):
@@ -41,6 +46,7 @@ def _expected_default_prompt(task: str) -> str:
                 f"Ветка обсуждения: {THREAD_TEXT}"
             ),
             task,
+            _OUTPUT_RULE,
         ]
     ).replace("{cta_link}", DEFAULT_CTA_LINK)
 
@@ -205,8 +211,8 @@ def test_default_anti_rules_skip_every_requested_restricted_topic():
         "медицинские препараты", "государственные органы", "зарплаты", "пенсии",
     ):
         assert topic in DEFAULT_ANTI_RULES.lower()
-    assert "тип: пропуск" in DEFAULT_ANTI_RULES.lower()
-    assert "пуст" in DEFAULT_ANTI_RULES.lower()
+    assert "тип: пропуск" not in DEFAULT_ANTI_RULES.lower()
+    assert "skip" in DEFAULT_ANTI_RULES.lower()
 
 
 def test_file_anti_rules_skip_every_requested_restricted_topic():
@@ -234,6 +240,13 @@ def test_file_anti_rules_skip_every_requested_restricted_topic():
 def test_anti_rules_present(reply_type):
     result = DameoPromptBuilder().build(make_context(reply_type))
     assert DEFAULT_ANTI_RULES in result
+
+
+@pytest.mark.parametrize("reply_type", ["lead", "engage"])
+def test_prompt_ends_with_publishable_output_protocol(reply_type):
+    result = DameoPromptBuilder().build(make_context(reply_type))
+
+    assert result.endswith("type:, status:, answer:.")
 
 
 def test_default_language_is_russian():

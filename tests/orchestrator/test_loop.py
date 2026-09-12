@@ -164,6 +164,23 @@ def test_batch_generates_ready_comment_missing_from_current_dzen_snapshot(
     assert harness.repository.batch_queue[stale_comment_id]["next_attempt_at"] is None
 
 
+def test_batch_label_prefixed_skip_never_enqueues_or_publishes(
+    loop_factory, comment_factory
+):
+    comment = _batch_comments(comment_factory, 1)[0]
+    harness = loop_factory(
+        comments=[comment],
+        settings_overrides=_batch_settings(BATCH_MAX_COMMENTS=1),
+        ai_responses=["\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a (\u043d\u0435 \u043e\u0442\u0432\u0435\u0447\u0430\u0442\u044c)"],
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.save_batch_outcomes_calls[0][1][0].kind.value == "skip"
+    assert harness.repository.enqueue_publication_calls == []
+    assert harness.page.publish_calls == []
+
+
 def test_batch_processes_missing_and_current_items_from_claimed_db_data(
     loop_factory, comment_factory, monkeypatch
 ):
@@ -1046,6 +1063,35 @@ def test_extract_reply_text_removes_structured_type_line():
 def test_extract_reply_text_skips_explicit_pass():
     raw = "\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a\n\u043e\u0442\u0432\u0435\u0442:"
     assert OrchestratorLoop._extract_reply_text(raw) == ""
+
+
+def test_single_reply_strips_inline_metadata_without_regenerating(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=[
+            "\u0442\u0438\u043f: \u0432\u043e\u0432\u043b\u0435\u043a\u0430\u044e\u0449\u0438\u0439 \u043e\u0442\u0432\u0435\u0442: \u041a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442"
+        ],
+    )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert harness.page.publish_calls[0][1].endswith("\u043a\u043e\u0440\u043e\u0442\u043a\u0438\u0439 \u043e\u0442\u0432\u0435\u0442")
+    assert "\u0442\u0438\u043f:" not in harness.page.publish_calls[0][1].casefold()
+
+
+def test_single_label_prefixed_skip_is_not_published(loop_factory, comment_factory):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["\u0442\u0438\u043f: \u043f\u0440\u043e\u043f\u0443\u0441\u043a; \u043e\u0442\u0432\u0435\u0442: \u043b\u044e\u0431\u043e\u0439 \u0442\u0435\u043a\u0441\u0442"],
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[1].status is CommentStatus.SKIPPED
+    assert harness.page.publish_calls == []
 
 
 def test_run_cycle_saves_manual_session_after_ready_confirmation(
