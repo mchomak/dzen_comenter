@@ -573,6 +573,50 @@ class PostgresCommentRepository:
         with self._engine.begin() as conn:
             return conn.execute(stmt).scalar_one_or_none() is not None
 
+    def expire_stale_publications(
+        self,
+        now: datetime,
+        oldest_allowed_comment_fetched_at: datetime,
+    ) -> int:
+        """Complete queued replies whose source comments are too old to publish."""
+        with self._engine.begin() as conn:
+            reply_ids = conn.execute(
+                select(ReplyPublicationQueueTable.reply_id)
+                .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
+                .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+                .where(
+                    ReplyPublicationQueueTable.state == "queued",
+                    CommentTable.fetched_at < oldest_allowed_comment_fetched_at,
+                )
+                .with_for_update(skip_locked=True, of=ReplyPublicationQueueTable)
+            ).scalars().all()
+            if not reply_ids:
+                return 0
+
+            conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(
+                    ReplyPublicationQueueTable.reply_id.in_(reply_ids),
+                    ReplyPublicationQueueTable.state == "queued",
+                )
+                .values(state="completed", next_attempt_at=None)
+            )
+            conn.execute(
+                update(ReplyTable)
+                .where(ReplyTable.id.in_(reply_ids))
+                .values(status=ReplyStatus.SKIPPED.value)
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(
+                    CommentTable.id.in_(
+                        select(ReplyTable.comment_id).where(ReplyTable.id.in_(reply_ids))
+                    )
+                )
+                .values(status=CommentStatus.SKIPPED.value)
+            )
+            return len(reply_ids)
+
     def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
         ready = (ReplyPublicationQueueTable.state == "queued") & (
             (ReplyPublicationQueueTable.next_attempt_at.is_(None))

@@ -188,6 +188,7 @@ def test_publication_queue_contract_is_exposed():
         "get_article_context",
         "save_article_context",
         "enqueue_publication",
+        "expire_stale_publications",
         "claim_next_publication",
         "complete_publication",
         "fail_publication",

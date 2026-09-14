@@ -113,6 +113,13 @@ class CommentRepository(Protocol):
     def enqueue_publication(self, reply_id: int, *, created_at: datetime) -> bool:
         ...
 
+    def expire_stale_publications(
+        self,
+        now: datetime,
+        oldest_allowed_comment_fetched_at: datetime,
+    ) -> int:
+        ...
+
     def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
         ...
 

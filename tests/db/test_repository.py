@@ -310,6 +310,7 @@ def test_repository_fulfils_contract(repo):
         "get_article_context",
         "save_article_context",
         "enqueue_publication",
+        "expire_stale_publications",
         "claim_next_publication",
         "complete_publication",
         "fail_publication",
@@ -1184,6 +1185,68 @@ def test_claim_next_publication_claims_ready_reply_without_dom_filter(repo, engi
             ).where(ReplyPublicationQueueTable.reply_id == reply_id)
         ).one()
     assert queue == ("claimed", 1)
+
+
+def test_expire_stale_publications_completes_only_queued_stale_jobs(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    cutoff = now - timedelta(days=1)
+
+    claimed_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="claimed-stale", fetched_at=cutoff - timedelta(seconds=1))
+    )
+    claimed_reply_id = repo.save_reply(_make_reply(claimed_comment_id))
+    assert repo.enqueue_publication(claimed_reply_id, created_at=now)
+    assert repo.claim_next_publication(now) is not None
+
+    stale_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="queued-stale", fetched_at=cutoff - timedelta(seconds=1))
+    )
+    stale_reply_id = repo.save_reply(_make_reply(stale_comment_id))
+    assert repo.enqueue_publication(stale_reply_id, created_at=now)
+
+    fresh_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="fresh", fetched_at=cutoff)
+    )
+    fresh_reply_id = repo.save_reply(_make_reply(fresh_comment_id))
+    assert repo.enqueue_publication(fresh_reply_id, created_at=now)
+
+    expired = repo.expire_stale_publications(now, cutoff)
+
+    assert expired == 1
+    with engine.connect() as conn:
+        queue_states = dict(
+            conn.execute(
+                select(
+                    ReplyPublicationQueueTable.reply_id,
+                    ReplyPublicationQueueTable.state,
+                )
+            ).all()
+        )
+        reply_states = dict(conn.execute(select(ReplyTable.id, ReplyTable.status)).all())
+        comment_states = dict(
+            conn.execute(select(CommentTable.id, CommentTable.status)).all()
+        )
+    assert queue_states == {
+        claimed_reply_id: "claimed",
+        stale_reply_id: "completed",
+        fresh_reply_id: "queued",
+    }
+    assert reply_states == {
+        claimed_reply_id: "generated",
+        stale_reply_id: "skipped",
+        fresh_reply_id: "generated",
+    }
+    assert comment_states == {
+        claimed_comment_id: "new",
+        stale_comment_id: "skipped",
+        fresh_comment_id: "new",
+    }
+
+    claimed_fresh = repo.claim_next_publication(now)
+
+    assert claimed_fresh is not None
+    assert claimed_fresh.reply_id == fresh_reply_id
 
 
 def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo):
