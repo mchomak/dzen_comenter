@@ -86,10 +86,30 @@ class FakeGroup:
         return []
 
 
+class FakeMouse:
+    def __init__(self, page: "FakePage") -> None:
+        self._page = page
+        self.wheel_calls: list[tuple[float, float]] = []
+
+    def wheel(self, delta_x: float, delta_y: float) -> None:
+        self.wheel_calls.append((delta_x, delta_y))
+        self._page.load_next_scroll_screen()
+
+
 class FakePage:
-    def __init__(self, groups: list[FakeGroup]) -> None:
+    def __init__(
+        self,
+        groups: list[FakeGroup],
+        *,
+        scroll_groups: list[list[FakeGroup]] | None = None,
+        cleanup_error: Exception | None = None,
+    ) -> None:
         self._groups = groups
+        self._scroll_groups = list(scroll_groups or [])
+        self._cleanup_error = cleanup_error
         self.waited_ms: list[float] = []
+        self.evaluate_calls: list[str] = []
+        self.mouse = FakeMouse(self)
         self.context = FakeBrowserContext()
 
     def query_selector_all(self, selector: str):
@@ -99,6 +119,15 @@ class FakePage:
 
     def wait_for_timeout(self, timeout_ms: float) -> None:
         self.waited_ms.append(timeout_ms)
+
+    def load_next_scroll_screen(self) -> None:
+        if self._scroll_groups:
+            self._groups = self._scroll_groups.pop(0)
+
+    def evaluate(self, script: str) -> None:
+        self.evaluate_calls.append(script)
+        if self._cleanup_error is not None:
+            raise self._cleanup_error
 
 
 class FakeBrowserContext:
@@ -319,6 +348,8 @@ def test_publish_reply_targets_matching_node():
     assert node0.reply_button.clicks == 0
     assert node0.reply_input.filled == []
     assert node0.reply_submit.clicks == 0
+    assert fake.mouse.wheel_calls == []
+    assert fake.evaluate_calls == []
 
 
 def test_publish_reply_fills_draft_and_waits_without_submitting():
@@ -337,7 +368,8 @@ def test_publish_reply_fills_draft_and_waits_without_submitting():
 
 def test_publish_reply_unmatched_raises_lookup_error():
     groups = [FakeGroup("/a/post1", [make_node(0)])]
-    page = DzenStudioPage(FakePage(groups))
+    fake = FakePage(groups)
+    page = DzenStudioPage(fake)
     comment = Comment(
         id=None,
         dzen_comment_id="deadbeef-not-on-page",
@@ -351,6 +383,89 @@ def test_publish_reply_unmatched_raises_lookup_error():
     )
     with pytest.raises(LookupError):
         page.publish_reply(comment, "ответ", auto_publish=True)
+    assert len(fake.mouse.wheel_calls) == 2
+    assert fake.waited_ms == [500, 500]
+    assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+
+
+def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
+    target_node = make_node(1)
+    fake = FakePage(
+        [FakeGroup("/a/post1", [make_node(0)])],
+        scroll_groups=[[FakeGroup("/a/post1", [target_node])]],
+    )
+    page = DzenStudioPage(fake)
+    target = Comment(
+        id=None,
+        dzen_comment_id=synthetic_id("/a/post1", "/user/u1", "text1"),
+        publication_id=0,
+        author="author1",
+        text="text1",
+        parent_comment_id=None,
+        posted_at=None,
+        fetched_at=datetime.now(timezone.utc),
+        status=CommentStatus.NEW,
+    )
+
+    page.publish_reply(target, "готовый ответ", auto_publish=True)
+
+    assert len(fake.mouse.wheel_calls) == 1
+    assert fake.waited_ms == [500]
+    assert target_node.reply_input.filled == ["готовый ответ"]
+    assert target_node.reply_submit.clicks == 1
+    assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+
+
+def test_publish_reply_stops_after_twenty_scrolls_with_new_comments():
+    fake = FakePage(
+        [FakeGroup("/a/post1", [make_node(0)])],
+        scroll_groups=[
+            [FakeGroup("/a/post1", [make_node(index)])]
+            for index in range(1, 21)
+        ],
+    )
+    page = DzenStudioPage(fake)
+    comment = Comment(
+        id=None,
+        dzen_comment_id="deadbeef-not-on-page",
+        publication_id=0,
+        author="a",
+        text="t",
+        parent_comment_id=None,
+        posted_at=None,
+        fetched_at=datetime.now(timezone.utc),
+        status=CommentStatus.NEW,
+    )
+
+    with pytest.raises(LookupError):
+        page.publish_reply(comment, "ответ", auto_publish=True)
+
+    assert len(fake.mouse.wheel_calls) == 20
+    assert fake.waited_ms == [500] * 20
+
+
+def test_publish_reply_keeps_lookup_error_when_scroll_cleanup_fails():
+    fake = FakePage(
+        [FakeGroup("/a/post1", [make_node(0)])],
+        cleanup_error=RuntimeError("cleanup failed"),
+    )
+    page = DzenStudioPage(fake)
+    comment = Comment(
+        id=None,
+        dzen_comment_id="deadbeef-not-on-page",
+        publication_id=0,
+        author="a",
+        text="t",
+        parent_comment_id=None,
+        posted_at=None,
+        fetched_at=datetime.now(timezone.utc),
+        status=CommentStatus.NEW,
+    )
+
+    with pytest.raises(LookupError):
+        page.publish_reply(comment, "ответ", auto_publish=True)
+
+    assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
 
 
 # Acceptance 8 — пустая страница.

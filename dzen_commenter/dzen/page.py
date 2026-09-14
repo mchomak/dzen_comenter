@@ -38,6 +38,10 @@ _PROMOTIONAL_ARTICLE_MARKERS = (
     "посмотреть больше работ",
     "советует начать свой ремонт",
 )
+_REPLY_SEARCH_MAX_SCROLLS = 20
+_REPLY_SEARCH_WAIT_MS = 500
+_REPLY_SEARCH_MAX_STALLED_SCREENS = 2
+_REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 
 
 def _post_url(post_href: str) -> str | None:
@@ -248,21 +252,56 @@ class DzenStudioPage:
     def publish_reply(
         self, comment: Comment, text: str, *, auto_publish: bool
     ) -> None:
+        node, seen_ids = self._find_comment_node(comment.dzen_comment_id)
+        if node is not None:
+            self._submit_reply(node, text, auto_publish=auto_publish)
+            return
+
+        try:
+            stalled_screens = 0
+            for _ in range(_REPLY_SEARCH_MAX_SCROLLS):
+                self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
+                self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                node, loaded_ids = self._find_comment_node(comment.dzen_comment_id)
+                if node is not None:
+                    self._submit_reply(node, text, auto_publish=auto_publish)
+                    return
+                if loaded_ids - seen_ids:
+                    seen_ids.update(loaded_ids)
+                    stalled_screens = 0
+                else:
+                    stalled_screens += 1
+                    if stalled_screens >= _REPLY_SEARCH_MAX_STALLED_SCREENS:
+                        break
+            raise LookupError(
+                f"comment {comment.dzen_comment_id!r} not found on page for reply"
+            )
+        finally:
+            try:
+                self._page.evaluate("window.scrollTo(0, 0)")
+            except Exception:
+                pass
+
+    def _find_comment_node(self, comment_id: str):
+        seen_ids: set[str] = set()
         for node, post_href in self._iter_comment_nodes():
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
             author_href = author_link.get_attribute("href") or "" if author_link else ""
             text_el = node.query_selector(selectors.COMMENT_TEXT)
             node_text = text_el.inner_text() if text_el else ""
-            if synthetic_id(post_href, author_href, node_text) != comment.dzen_comment_id:
-                continue
-            node.query_selector(selectors.COMMENT_REPLY_BUTTON).click()
-            node.query_selector(selectors.REPLY_INPUT).fill(text)
-            if auto_publish:
-                node.query_selector(selectors.REPLY_SUBMIT).click()
-            else:
-                self._page.wait_for_timeout(5_000)
-            return
-        raise LookupError(f"comment {comment.dzen_comment_id!r} not found on page for reply")
+            node_id = synthetic_id(post_href, author_href, node_text)
+            seen_ids.add(node_id)
+            if node_id == comment_id:
+                return node, seen_ids
+        return None, seen_ids
+
+    def _submit_reply(self, node, text: str, *, auto_publish: bool) -> None:
+        node.query_selector(selectors.COMMENT_REPLY_BUTTON).click()
+        node.query_selector(selectors.REPLY_INPUT).fill(text)
+        if auto_publish:
+            node.query_selector(selectors.REPLY_SUBMIT).click()
+        else:
+            self._page.wait_for_timeout(5_000)
 
     def _iter_comment_nodes(self):
         for group in self._page.query_selector_all(selectors.POST_GROUP):
