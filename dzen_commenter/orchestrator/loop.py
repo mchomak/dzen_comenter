@@ -115,16 +115,13 @@ class OrchestratorLoop:
 
         runtime_settings = self.runtime_config.get().settings
         if runtime_settings.batch_replies_enabled:
-            visible_comment_ids = {comment_id for comment_id, _ in indexed_comments}
             self._run_publication_cycle(
                 runtime_settings,
-                visible_comment_ids=visible_comment_ids,
                 max_publications=self.settings.MAX_REPLIES_PER_CYCLE,
             )
             self._run_batch_cycle(indexed_comments, runtime_settings)
             self._run_publication_cycle(
                 runtime_settings,
-                visible_comment_ids=visible_comment_ids,
                 max_publications=self.settings.MAX_REPLIES_PER_CYCLE,
             )
             return
@@ -321,14 +318,11 @@ class OrchestratorLoop:
         self,
         runtime_settings,
         *,
-        visible_comment_ids: set[int],
         max_publications: int,
     ) -> int:
         publication_attempts = 0
         for _ in range(max_publications):
-            claimed = self.repository.claim_next_publication(
-                moscow_now(), visible_comment_ids=visible_comment_ids
-            )
+            claimed = self.repository.claim_next_publication(moscow_now())
             if claimed is None:
                 return publication_attempts
             publication_attempts += 1

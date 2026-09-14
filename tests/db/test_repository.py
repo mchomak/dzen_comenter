@@ -1146,13 +1146,13 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
         max_attempts_per_comment=2,
     )[0]
 
-    claimed = repo.claim_next_publication(now, visible_comment_ids={comment_id})
+    claimed = repo.claim_next_publication(now)
 
     assert claimed is not None
     assert claimed.reply_id == reply_id
     assert claimed.comment.id == comment_id
     assert claimed.text == "готово"
-    assert repo.claim_next_publication(now, visible_comment_ids={comment_id}) is None
+    assert repo.claim_next_publication(now) is None
     with engine.connect() as conn:
         queue = conn.execute(
             select(
@@ -1163,34 +1163,27 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
     assert queue == ("claimed", 1)
 
 
-def test_claim_next_publication_leaves_invisible_reply_queued(repo, engine):
+def test_claim_next_publication_claims_ready_reply_without_dom_filter(repo, engine):
     publication_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 9, 10, 10, 0, 0)
-    invisible_comment_id = repo.upsert_comment(
-        _make_comment(publication_id, dzen_id="invisible", fetched_at=now)
+    comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="missing-from-dom", fetched_at=now)
     )
-    visible_comment_id = repo.upsert_comment(
-        _make_comment(publication_id, dzen_id="visible", fetched_at=now)
-    )
-    invisible_reply_id = repo.save_reply(_make_reply(invisible_comment_id))
-    visible_reply_id = repo.save_reply(_make_reply(visible_comment_id))
-    assert repo.enqueue_publication(invisible_reply_id, created_at=now)
-    assert repo.enqueue_publication(visible_reply_id, created_at=now)
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
 
-    claimed = repo.claim_next_publication(
-        now, visible_comment_ids={visible_comment_id}
-    )
+    claimed = repo.claim_next_publication(now)
 
     assert claimed is not None
-    assert claimed.reply_id == visible_reply_id
+    assert claimed.reply_id == reply_id
     with engine.connect() as conn:
-        invisible_queue = conn.execute(
+        queue = conn.execute(
             select(
                 ReplyPublicationQueueTable.state,
                 ReplyPublicationQueueTable.attempt_count,
-            ).where(ReplyPublicationQueueTable.reply_id == invisible_reply_id)
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
         ).one()
-    assert invisible_queue == ("queued", 0)
+    assert queue == ("claimed", 1)
 
 
 def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo):
@@ -1201,14 +1194,10 @@ def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo)
     )
     reply_id = repo.save_reply(_make_reply(comment_id))
     assert repo.enqueue_publication(reply_id, created_at=now)
-    assert repo.claim_next_publication(now, visible_comment_ids={comment_id}) is not None
+    assert repo.claim_next_publication(now) is not None
 
-    assert repo.claim_next_publication(
-        now + timedelta(seconds=1), visible_comment_ids={comment_id}
-    ) is None
-    recovered = repo.claim_next_publication(
-        now + timedelta(hours=1), visible_comment_ids={comment_id}
-    )
+    assert repo.claim_next_publication(now + timedelta(seconds=1)) is None
+    recovered = repo.claim_next_publication(now + timedelta(hours=1))
 
     assert recovered is not None
     assert recovered.reply_id == reply_id
@@ -1232,7 +1221,7 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     )
     reply_id = repo.save_reply(_make_reply(comment_id))
     assert repo.enqueue_publication(reply_id, created_at=now)
-    assert repo.claim_next_publication(now, visible_comment_ids={comment_id}) is not None
+    assert repo.claim_next_publication(now) is not None
 
     retry_outcome = repo.fail_publication(
         reply_id,
@@ -1258,12 +1247,8 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     assert retry_reply_status == "generated"
     assert retry_comment_status == "new"
     assert retry_queue == ("queued", "comment not in DOM")
-    assert repo.claim_next_publication(
-        now + timedelta(minutes=59), visible_comment_ids={comment_id}
-    ) is None
-    assert repo.claim_next_publication(
-        now + timedelta(minutes=60), visible_comment_ids={comment_id}
-    ) is not None
+    assert repo.claim_next_publication(now + timedelta(minutes=59)) is None
+    assert repo.claim_next_publication(now + timedelta(minutes=60)) is not None
     terminal_outcome = repo.fail_publication(
         reply_id,
         error_reason="comment not in DOM",

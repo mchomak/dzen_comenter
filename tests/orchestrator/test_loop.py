@@ -131,7 +131,7 @@ def test_batch_waits_for_timeout_before_claiming_incomplete_article_group(
     assert len(harness.repository.save_batch_outcomes_calls[0][1]) == 2
 
 
-def test_batch_generates_ready_comment_missing_from_current_dzen_snapshot(
+def test_batch_publishes_ready_comment_missing_from_current_dzen_snapshot(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -156,7 +156,7 @@ def test_batch_generates_ready_comment_missing_from_current_dzen_snapshot(
 
     assert len(harness.repository.save_batch_outcomes_calls) == 1
     assert len(harness.ai_provider.calls) == 1
-    assert harness.page.publish_calls == []
+    assert [call[0].id for call in harness.page.publish_calls] == [stale_comment_id]
     assert harness.notifier.errors == []
     outcomes = harness.repository.save_batch_outcomes_calls[0][1]
     assert [outcome.kind.value for outcome in outcomes] == ["reply"]
@@ -214,14 +214,17 @@ def test_batch_processes_missing_and_current_items_from_claimed_db_data(
         "reply",
         "reply",
     ]
-    assert [call[0].id for call in harness.page.publish_calls] == [current_comment_id]
+    assert [call[0].id for call in harness.page.publish_calls] == [
+        stale_comment_id,
+        current_comment_id,
+    ]
     assert harness.repository.batch_queue[stale_comment_id]["state"] == "completed"
-    assert harness.repository.publication_queue[1]["state"] == "queued"
-    assert harness.repository.publication_queue[1]["attempt_count"] == 0
+    assert harness.repository.publication_queue[1]["state"] == "completed"
+    assert harness.repository.publication_queue[1]["attempt_count"] == 1
     assert harness.notifier.errors == []
 
 
-def test_batch_publication_waits_for_comment_to_reappear_in_current_snapshot(
+def test_batch_publication_attempts_missing_comment_and_schedules_retry(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -244,20 +247,19 @@ def test_batch_publication_waits_for_comment_to_reappear_in_current_snapshot(
     )
     harness.repository.enqueue_publication(reply_id, created_at=now)
 
+    def missing_from_dom(comment, text, *, auto_publish):
+        raise LookupError("comment is absent")
+
+    harness.page.publish_reply = missing_from_dom
     harness.loop.run_cycle()
 
     assert harness.page.publish_calls == []
-    assert harness.repository.fail_publication_calls == []
+    assert harness.repository.fail_publication_calls == [
+        (reply_id, "Dzen reply publication failed: comment is absent")
+    ]
     assert harness.repository.publication_queue[reply_id]["state"] == "queued"
     assert harness.repository.replies[reply_id].status is ReplyStatus.GENERATED
     assert harness.repository.comments[comment_id].status is not CommentStatus.SKIPPED
-
-    harness.page.comments = [missing_comment]
-    harness.loop.run_cycle()
-
-    assert [call[0].id for call in harness.page.publish_calls] == [comment_id]
-    assert harness.repository.publication_queue[reply_id]["state"] == "completed"
-    assert harness.repository.fail_publication_calls == []
 
 
 def test_batch_claim_is_limited_by_remaining_hourly_quota(
