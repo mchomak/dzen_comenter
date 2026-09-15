@@ -262,6 +262,74 @@ def test_batch_publication_attempts_missing_comment_and_schedules_retry(
     assert harness.repository.comments[comment_id].status is not CommentStatus.SKIPPED
 
 
+def test_batch_publication_expires_stale_job_before_claim_and_keeps_fresh_retry(
+    loop_factory, comment_factory, monkeypatch, caplog
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 8, 1, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    stale_comment = comment_factory(1)
+    stale_comment.fetched_at = now - timedelta(days=2)
+    fresh_comment = comment_factory(2)
+    fresh_comment.fetched_at = now - timedelta(hours=12)
+    harness = loop_factory(
+        comments=[],
+        settings_overrides=_batch_settings(
+            BATCH_MAX_COMMENTS=1,
+            MAX_COMMENT_AGE_DAYS=1,
+        ),
+    )
+    stale_comment_id = harness.repository.upsert_comment(stale_comment)
+    fresh_comment_id = harness.repository.upsert_comment(fresh_comment)
+    stale_reply_id = harness.repository.save_reply(
+        harness.loop._make_reply(
+            comment_id=stale_comment_id,
+            text="stale reply",
+            status=ReplyStatus.GENERATED,
+            error_reason=None,
+        )
+    )
+    fresh_reply_id = harness.repository.save_reply(
+        harness.loop._make_reply(
+            comment_id=fresh_comment_id,
+            text="fresh reply",
+            status=ReplyStatus.GENERATED,
+            error_reason=None,
+        )
+    )
+    harness.repository.enqueue_publication(stale_reply_id, created_at=now)
+    harness.repository.enqueue_publication(fresh_reply_id, created_at=now)
+
+    def fail_fresh_publish(comment, text, *, auto_publish):
+        raise LookupError("comment is absent")
+
+    harness.page.publish_reply = fail_fresh_publish
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.orchestrator.loop"):
+        harness.loop.run_cycle()
+
+    assert harness.repository.expire_stale_publications_calls[0] == (
+        now,
+        now - timedelta(days=1),
+    )
+    assert harness.repository.publication_queue[stale_reply_id]["state"] == "completed"
+    assert harness.repository.replies[stale_reply_id].status is ReplyStatus.SKIPPED
+    assert harness.repository.comments[stale_comment_id].status is CommentStatus.SKIPPED
+    assert harness.repository.fail_publication_calls == [
+        (fresh_reply_id, "Dzen reply publication failed: comment is absent")
+    ]
+    assert harness.repository.publication_queue[fresh_reply_id]["state"] == "queued"
+    expiration_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "publication_stale_expired"
+    ]
+    assert len(expiration_records) == 1
+    assert expiration_records[0].levelno == logging.INFO
+    assert expiration_records[0].expired_count == 1
+
+
 def test_batch_claim_is_limited_by_remaining_hourly_quota(
     loop_factory, comment_factory, monkeypatch
 ):

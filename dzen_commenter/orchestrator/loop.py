@@ -320,6 +320,23 @@ class OrchestratorLoop:
         *,
         max_publications: int,
     ) -> int:
+        now = moscow_now()
+        oldest_allowed_comment_fetched_at = now - timedelta(
+            days=runtime_settings.max_comment_age_days
+        )
+        expired_count = self.repository.expire_stale_publications(
+            now,
+            oldest_allowed_comment_fetched_at,
+        )
+        if expired_count:
+            logger.info(
+                "Expired stale reply publications",
+                extra={
+                    "event": "publication_stale_expired",
+                    "expired_count": expired_count,
+                },
+            )
+
         publication_attempts = 0
         for _ in range(max_publications):
             claimed = self.repository.claim_next_publication(moscow_now())

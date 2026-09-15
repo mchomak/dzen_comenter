@@ -67,6 +67,7 @@ class FakeCommentRepository:
         self.article_contexts: dict[int, ArticleContext] = {}
         self.publication_queue: dict[int, dict[str, object]] = {}
         self.enqueue_publication_calls: list[int] = []
+        self.expire_stale_publications_calls: list[tuple[datetime, datetime]] = []
         self.complete_publication_calls: list[int] = []
         self.fail_publication_calls: list[tuple[int, str]] = []
         self.save_batch_outcomes_calls: list[tuple[int, tuple[BatchOutcome, ...]]] = []
@@ -378,6 +379,32 @@ class FakeCommentRepository:
             "created_at": created_at,
         }
         return True
+
+    def expire_stale_publications(
+        self,
+        now: datetime,
+        oldest_allowed_comment_fetched_at: datetime,
+    ) -> int:
+        self.expire_stale_publications_calls.append(
+            (now, oldest_allowed_comment_fetched_at)
+        )
+        stale_reply_ids = [
+            reply_id
+            for reply_id, row in self.publication_queue.items()
+            if row["state"] == "queued"
+            and (
+                fetched_at := self.comments[self.replies[reply_id].comment_id].fetched_at
+            ) is not None
+            and fetched_at < oldest_allowed_comment_fetched_at
+        ]
+        for reply_id in stale_reply_ids:
+            self.publication_queue[reply_id]["state"] = "completed"
+            self.publication_queue[reply_id]["next_attempt_at"] = None
+            self.set_reply_status(reply_id, ReplyStatus.SKIPPED)
+            self.set_comment_status(
+                self.replies[reply_id].comment_id, CommentStatus.SKIPPED
+            )
+        return len(stale_reply_ids)
 
     def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
         ready = [
