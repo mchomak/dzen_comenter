@@ -5,7 +5,12 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
-from dzen_commenter.db.models import CommentTable, ReplyTable
+from dzen_commenter.db.models import (
+    CommentTable,
+    ReplyGenerationQueueTable,
+    ReplyPublicationQueueTable,
+    ReplyTable,
+)
 
 
 @dataclass(frozen=True)
@@ -14,6 +19,7 @@ class FeedRow:
 
     author: str | None
     comment_text: str | None
+    comment_status: str
     thread_text: str | None
     post_title: str | None
     post_url: str | None
@@ -23,6 +29,8 @@ class FeedRow:
     reply_status: str | None  # None → ответа ещё нет
     error_reason: str | None
     article_context_status: str | None
+    generation_last_error: str | None
+    publication_last_error: str | None
 
 
 def parse_thread_messages(thread_text: str | None) -> list[tuple[str, str]]:
@@ -147,6 +155,7 @@ def _load_feed(
             CommentTable.id,
             CommentTable.author,
             CommentTable.text,
+            CommentTable.status,
             CommentTable.thread_text,
             CommentTable.post_title,
             CommentTable.post_url,
@@ -166,9 +175,19 @@ def _load_feed(
 
         comment_ids = [row.id for row in comment_rows]
         last_reply: dict[int, object] = {}
+        generation_jobs: dict[int, object] = {}
         if comment_ids:
+            generation_rows = conn.execute(
+                select(
+                    ReplyGenerationQueueTable.comment_id,
+                    ReplyGenerationQueueTable.last_error,
+                ).where(ReplyGenerationQueueTable.comment_id.in_(comment_ids))
+            ).all()
+            for generation_job in generation_rows:
+                generation_jobs[generation_job.comment_id] = generation_job
             reply_rows = conn.execute(
                 select(
+                    ReplyTable.id,
                     ReplyTable.comment_id,
                     ReplyTable.generated_text,
                     ReplyTable.status,
@@ -182,14 +201,29 @@ def _load_feed(
             for reply in reply_rows:
                 last_reply[reply.comment_id] = reply
 
+        publication_jobs: dict[int, object] = {}
+        reply_ids = [reply.id for reply in last_reply.values()]
+        if reply_ids:
+            publication_rows = conn.execute(
+                select(
+                    ReplyPublicationQueueTable.reply_id,
+                    ReplyPublicationQueueTable.last_error,
+                ).where(ReplyPublicationQueueTable.reply_id.in_(reply_ids))
+            ).all()
+            for publication_job in publication_rows:
+                publication_jobs[publication_job.reply_id] = publication_job
+
     feed: list[FeedRow] = []
     for row in comment_rows:
         reply = last_reply.get(row.id)
+        generation_job = generation_jobs.get(row.id)
+        publication_job = publication_jobs.get(reply.id) if reply else None
         post_url = _post_url(row.post_url)
         feed.append(
             FeedRow(
                 author=row.author,
                 comment_text=row.text,
+                comment_status=row.status,
                 thread_text=row.thread_text,
                 post_title=row.post_title,
                 post_url=post_url,
@@ -199,6 +233,12 @@ def _load_feed(
                 reply_status=reply.status if reply else None,
                 error_reason=reply.error_reason if reply else None,
                 article_context_status=reply.article_context_status if reply else None,
+                generation_last_error=(
+                    generation_job.last_error if generation_job else None
+                ),
+                publication_last_error=(
+                    publication_job.last_error if publication_job else None
+                ),
             )
         )
     return feed

@@ -232,8 +232,32 @@ def test_file_anti_rules_skip_every_requested_restricted_topic():
             "медицинские препараты", "государственные органы", "зарплаты", "пенсии",
         ):
             assert topic in anti_rules.lower()
-        assert "тип: пропуск" in anti_rules.lower()
-        assert "пуст" in anti_rules.lower()
+        assert "ровно skip" in anti_rules.lower()
+        assert "тип:" not in anti_rules.lower()
+        assert "пропуск" not in anti_rules.lower()
+
+
+@pytest.mark.parametrize(
+    ("path", "prompt_key"),
+    [
+        ("runtime_config.example.json", "prompt"),
+        ("config/runtime_config.json", "prompt"),
+        ("prompt_config.example.json", None),
+    ],
+)
+def test_tracked_deployable_prompts_use_the_single_reply_output_contract(
+    path, prompt_key
+):
+    repo_root = Path(__file__).resolve().parents[2]
+    prompt = json.loads((repo_root / path).read_text(encoding="utf-8"))
+    if prompt_key is not None:
+        prompt = prompt[prompt_key]
+    instructions = "\n".join(prompt.values()).casefold()
+
+    assert "готовый к публикации текст или ровно skip" in instructions
+    assert "тип:" not in instructions
+    assert "верни тип" not in instructions
+    assert "пропуск" not in instructions
 
 
 @pytest.mark.parametrize("reply_type", ["lead", "engage"])

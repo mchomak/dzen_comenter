@@ -14,7 +14,14 @@ from dzen_commenter.admin.queries import (
     fetch_status_counts,
     parse_thread_messages,
 )
-from dzen_commenter.db.models import Base, CommentTable, PublicationTable, ReplyTable
+from dzen_commenter.db.models import (
+    Base,
+    CommentTable,
+    PublicationTable,
+    ReplyGenerationQueueTable,
+    ReplyPublicationQueueTable,
+    ReplyTable,
+)
 
 PASSWORD = "correct-horse-battery"
 
@@ -34,7 +41,16 @@ def engine():
 
 
 def _add_comment(
-    engine, *, cid, author, text, post_url, fetched_at, thread_text=None, post_title=None
+    engine,
+    *,
+    cid,
+    author,
+    text,
+    post_url,
+    fetched_at,
+    thread_text=None,
+    post_title=None,
+    status="new",
 ):
     with engine.begin() as conn:
         conn.execute(
@@ -48,7 +64,7 @@ def _add_comment(
                 post_url=post_url,
                 thread_text=thread_text,
                 fetched_at=fetched_at,
-                status="new",
+                status=status,
             )
         )
 
@@ -72,6 +88,32 @@ def _add_reply(
                 status=status,
                 error_reason=error_reason,
                 article_context_status=article_context_status,
+            )
+        )
+
+
+def _add_generation_job(engine, *, comment_id, state, last_error):
+    with engine.begin() as conn:
+        conn.execute(
+            insert(ReplyGenerationQueueTable).values(
+                comment_id=comment_id,
+                state=state,
+                attempt_count=1,
+                last_error=last_error,
+                created_at=datetime(2026, 9, 18, 12, 0, 0),
+            )
+        )
+
+
+def _add_publication_job(engine, *, reply_id, state, last_error):
+    with engine.begin() as conn:
+        conn.execute(
+            insert(ReplyPublicationQueueTable).values(
+                reply_id=reply_id,
+                state=state,
+                attempt_count=1,
+                last_error=last_error,
+                created_at=datetime(2026, 9, 18, 12, 0, 0),
             )
         )
 
@@ -134,6 +176,105 @@ def client(engine) -> TestClient:
     client = TestClient(app, follow_redirects=False)
     client.post("/login", data={"password": PASSWORD})
     return client
+
+
+def test_history_shows_generation_retry_and_error_with_the_last_technical_error(
+    client, engine
+):
+    _add_comment(
+        engine,
+        cid=1,
+        author="retrying",
+        text="hi",
+        post_url="/a/p",
+        fetched_at=datetime.now(),
+        status="generation_retry",
+    )
+    _add_reply(
+        engine,
+        rid=1,
+        comment_id=1,
+        generated_text="",
+        status="error",
+        error_reason="AI unavailable",
+    )
+    _add_generation_job(engine, comment_id=1, state="queued", last_error="AI unavailable")
+    _add_comment(
+        engine,
+        cid=2,
+        author="failed",
+        text="hi",
+        post_url="/a/p",
+        fetched_at=datetime.now(),
+        status="generation_error",
+    )
+    _add_reply(
+        engine,
+        rid=2,
+        comment_id=2,
+        generated_text="",
+        status="error",
+        error_reason="AI rate limited",
+    )
+    _add_generation_job(engine, comment_id=2, state="completed", last_error="AI rate limited")
+
+    body = client.get("/comments").text
+
+    assert "Повтор генерации" in body
+    assert "Ошибка генерации" in body
+    assert "Техническая ошибка: AI unavailable" in body
+    assert "Техническая ошибка: AI rate limited" in body
+
+
+def test_history_shows_publication_retry_and_error_with_the_last_technical_error(
+    client, engine
+):
+    _add_comment(
+        engine,
+        cid=1,
+        author="retrying",
+        text="hi",
+        post_url="/a/p",
+        fetched_at=datetime.now(),
+        status="publication_retry",
+    )
+    _add_reply(
+        engine,
+        rid=1,
+        comment_id=1,
+        generated_text="saved reply",
+        status="generated",
+    )
+    _add_publication_job(
+        engine, reply_id=1, state="queued", last_error="comment not in DOM"
+    )
+    _add_comment(
+        engine,
+        cid=2,
+        author="failed",
+        text="hi",
+        post_url="/a/p",
+        fetched_at=datetime.now(),
+        status="publication_error",
+    )
+    _add_reply(
+        engine,
+        rid=2,
+        comment_id=2,
+        generated_text="saved reply",
+        status="error",
+        error_reason="Browser disconnected",
+    )
+    _add_publication_job(
+        engine, reply_id=2, state="completed", last_error="Browser disconnected"
+    )
+
+    body = client.get("/comments").text
+
+    assert "Повтор публикации" in body
+    assert "Ошибка публикации" in body
+    assert "Техническая ошибка: comment not in DOM" in body
+    assert "Техническая ошибка: Browser disconnected" in body
 
 
 # --- parse_thread_messages unit ---
@@ -412,14 +553,51 @@ def test_comments_page_shows_video_note_next_to_video_post_link(client, engine):
     assert "Ссылка отсутствует" not in body
 
 
-def test_comments_page_shows_no_reply_label(client, engine):
+def test_comments_page_shows_new_comment_label(client, engine):
     _add_comment(
         engine, cid=1, author="alice", text="hmm", post_url="http://post/1",
         fetched_at=datetime(2026, 1, 1, 12, 0, 0),
     )
     resp = client.get("/comments")
-    assert "Нет ответа" in resp.text
-    assert 'class="status-badge status-no-reply"' in resp.text
+    assert "Новый комментарий" in resp.text
+    assert 'class="status-badge status-generated"' in resp.text
+
+
+@pytest.mark.parametrize(
+    ("comment_status", "reply_status", "label"),
+    [
+        ("new", None, "Новый комментарий"),
+        ("generating", None, "Генерация ответа"),
+        ("publishing", "generated", "Публикация ответа"),
+    ],
+)
+def test_comments_page_shows_live_comment_phase_not_reply_fallback(
+    client, engine, comment_status, reply_status, label
+):
+    _add_comment(
+        engine,
+        cid=1,
+        author="alice",
+        text="hmm",
+        post_url="http://post/1",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+        status=comment_status,
+    )
+    if reply_status is not None:
+        _add_reply(
+            engine,
+            rid=1,
+            comment_id=1,
+            generated_text="saved reply",
+            status=reply_status,
+        )
+
+    body = client.get("/comments").text
+    row = re.search(r"<tbody>\s*(<tr.*?</tr>)", body, flags=re.DOTALL).group(1)
+
+    assert label in row
+    assert "Нет ответа" not in row
+    assert "Сгенерирован" not in row
 
 
 def test_comments_page_omits_unsafe_post_link(client, engine):

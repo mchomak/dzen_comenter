@@ -1,11 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from dzen_commenter.contracts.enums import (
-    BatchOutcomeKind,
-    CommentStatus,
-    ReplyStatus,
-)
+from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 
 
 @dataclass
@@ -57,37 +53,15 @@ class Reply:
 
 
 @dataclass(frozen=True)
-class BatchItem:
-    batch_id: int
-    comment_id: int
-    item_no: int
-    post_url: str
-    publication_title: str
-    thread_text: str
-    author: str
-    comment_text: str
-
-
-@dataclass(frozen=True)
-class ClaimedBatch:
-    id: int
-    post_url: str
-    created_at: datetime
-    items: tuple[BatchItem, ...]
-    publication_id: int | None = None
-
-
-@dataclass(frozen=True)
 class ClaimedPublication:
     reply_id: int
     comment: Comment
     text: str
+    claim_token: str
 
 
 @dataclass(frozen=True)
-class BatchOutcome:
-    comment_id: int
-    item_no: int
-    kind: BatchOutcomeKind
-    text: str = ""
-    error_reason: str | None = None
+class ClaimedGeneration:
+    comment: Comment
+    attempt_count: int
+    claim_token: str

@@ -87,12 +87,8 @@ def _form() -> dict[str, object]:
         "error_email_list": ["one@example.com", "two@example.com"],
         "error_notification_cooldown": "15m",
         "telegram_proxy_url": "",
-        "batch_replies_enabled": "on",
-        "batch_cutover_at": "2026-08-30T12:00:00+03:00",
-        "batch_max_comments": "3",
-        "batch_wait_hours": "12",
-        "batch_retry_cooldown_minutes": "60",
-        "batch_max_attempts_per_comment": "2",
+        "generation_retry_cooldown_minutes": "60",
+        "generation_max_attempts_per_comment": "3",
         "publication_retry_cooldown_minutes": "60",
         "publication_max_attempts_per_reply": "3",
         "role": "new role",
@@ -171,14 +167,12 @@ def test_settings_saves_and_renders_notification_interval_and_telegram_proxy(cli
     assert 'name="telegram_proxy_url" value="socks5h://proxy.example:1080"' in reloaded.text
 
 
-def test_settings_saves_and_renders_batching_configuration(client, settings):
+def test_settings_saves_and_renders_generation_retry_configuration(client, settings):
     data = _form()
     data.update(
         {
-            "batch_max_comments": "5",
-            "batch_wait_hours": "6",
-            "batch_retry_cooldown_minutes": "30",
-            "batch_max_attempts_per_comment": "3",
+            "generation_retry_cooldown_minutes": "30",
+            "generation_max_attempts_per_comment": "4",
         }
     )
 
@@ -186,16 +180,44 @@ def test_settings_saves_and_renders_batching_configuration(client, settings):
 
     assert response.status_code == 302
     saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
-    assert saved["settings"]["batch_replies_enabled"] is True
-    assert saved["settings"]["batch_cutover_at"] == "2026-08-30T12:00:00+03:00"
-    assert saved["settings"]["batch_max_comments"] == 5
-    assert saved["settings"]["batch_wait_hours"] == 6
-    assert saved["settings"]["batch_retry_cooldown_minutes"] == 30
-    assert saved["settings"]["batch_max_attempts_per_comment"] == 3
+    assert saved["settings"]["generation_retry_cooldown_minutes"] == 30
+    assert saved["settings"]["generation_max_attempts_per_comment"] == 4
 
     reloaded = client.get("/settings")
-    assert 'name="batch_replies_enabled" checked' in reloaded.text
-    assert 'name="batch_max_comments" value="5"' in reloaded.text
+    assert 'name="generation_retry_cooldown_minutes" value="30"' in reloaded.text
+    assert 'name="generation_max_attempts_per_comment" value="4"' in reloaded.text
+
+
+def test_settings_page_explains_retry_phases_without_batch_controls(client):
+    response = client.get("/settings")
+
+    assert "Повторная генерация снова запрашивает ответ у AI." in response.text
+    assert "Повторная публикация использует уже созданный ответ." in response.text
+    assert 'name="batch_' not in response.text
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("generation_retry_cooldown_minutes", "0"),
+        ("generation_retry_cooldown_minutes", "1441"),
+        ("generation_max_attempts_per_comment", "0"),
+        ("generation_max_attempts_per_comment", "11"),
+    ),
+)
+def test_generation_retry_controls_reject_values_outside_their_bounds(field, value):
+    form = _form()
+    form.update(
+        {
+            "generation_retry_cooldown_minutes": "60",
+            "generation_max_attempts_per_comment": "3",
+        }
+    )
+    form[field] = value
+
+    _, errors = validate_settings_form(form)
+
+    assert field in errors
 
 
 def test_settings_saves_renders_and_validates_publication_retry_configuration(client, settings):
@@ -226,15 +248,6 @@ def test_settings_saves_renders_and_validates_publication_retry_configuration(cl
     data["publication_max_attempts_per_reply"] = "0"
     _, errors = validate_settings_form(data)
     assert "publication_max_attempts_per_reply" in errors
-
-
-def test_batching_requires_a_timezone_aware_cutover_when_enabled():
-    data = _form()
-    data["batch_cutover_at"] = "2026-08-30T12:00:00"
-
-    _, errors = validate_settings_form(data)
-
-    assert "batch_cutover_at" in errors
 
 
 def test_settings_rejects_invalid_proxy_without_losing_form_values(client):

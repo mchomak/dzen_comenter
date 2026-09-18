@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -6,14 +5,13 @@ from typing import Literal, Protocol
 
 from dzen_commenter.contracts.enums import (
     CommentStatus,
+    GenerationFailureOutcome,
     PublicationFailureOutcome,
     ReplyStatus,
 )
 from dzen_commenter.contracts.models import (
     ArticleContext,
-    BatchItem,
-    BatchOutcome,
-    ClaimedBatch,
+    ClaimedGeneration,
     ClaimedPublication,
     Comment,
     Publication,
@@ -40,10 +38,21 @@ class CommentRepository(Protocol):
     def upsert_comment(self, comment: Comment) -> int:
         ...
 
+    def upsert_eligible_comment(
+        self, comment: Comment, *, queued_at: datetime
+    ) -> int:
+        ...
+
+    def enqueue_pending_generations(self, *, queued_at: datetime) -> int:
+        ...
+
     def save_reply(self, reply: Reply) -> int:
         ...
 
     def set_comment_status(self, comment_id: int, status: CommentStatus) -> None:
+        ...
+
+    def skip_comment_if_new(self, comment_id: int) -> bool:
         ...
 
     def set_reply_status(
@@ -61,40 +70,52 @@ class CommentRepository(Protocol):
     def count_ai_attempts_since(self, since: datetime) -> int:
         ...
 
-    def enqueue_batch_comment(
+    def enqueue_generation(self, comment_id: int, *, queued_at: datetime) -> bool:
+        ...
+
+    def claim_next_generation(self, now: datetime) -> ClaimedGeneration | None:
+        ...
+
+    def complete_generation(
         self,
         comment_id: int,
-        post_url: str,
         *,
-        queued_at: datetime,
-        cutover_at: datetime,
-    ) -> bool:
-        ...
-
-    def claim_next_batch(
-        self,
-        now: datetime,
-        *,
-        max_comments: int,
-        wait_hours: int,
-        quota_remaining: int,
-    ) -> ClaimedBatch | None:
-        ...
-
-    def save_batch_outcomes(
-        self,
-        batch_id: int,
-        outcomes: tuple[BatchOutcome, ...],
-        *,
+        claim_token: str,
+        text: str,
         ai_provider: str,
         ai_model: str,
         article_context_status: str,
         created_at: datetime,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
+        is_cta_candidate: bool,
+    ) -> int:
+        ...
+
+    def skip_generation(
+        self,
+        comment_id: int,
+        *,
+        claim_token: str,
+        reason: str,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        created_at: datetime,
+    ) -> int:
+        ...
+
+    def fail_generation(
+        self,
+        comment_id: int,
+        *,
+        claim_token: str,
+        error_reason: str,
+        failed_at: datetime,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
         retry_cooldown_minutes: int,
         max_attempts_per_comment: int,
-    ) -> tuple[int, ...]:
+    ) -> GenerationFailureOutcome:
         ...
 
     def get_article_context(self, publication_id: int) -> ArticleContext | None:
@@ -124,7 +145,11 @@ class CommentRepository(Protocol):
         ...
 
     def complete_publication(
-        self, reply_id: int, *, published_at: datetime | None
+        self,
+        reply_id: int,
+        *,
+        claim_token: str,
+        published_at: datetime | None,
     ) -> None:
         ...
 
@@ -132,6 +157,7 @@ class CommentRepository(Protocol):
         self,
         reply_id: int,
         *,
+        claim_token: str,
         error_reason: str,
         failed_at: datetime,
         retry_cooldown_minutes: int,
@@ -159,21 +185,6 @@ class AIProvider(Protocol):
 
 class PromptBuilder(Protocol):
     def build(self, context: PromptContext) -> str:
-        ...
-
-
-class BatchPromptBuilder(Protocol):
-    def build_batch(self, items: Sequence[BatchItem], *, article_text: str) -> str:
-        ...
-
-
-class BatchReplyParser(Protocol):
-    def __call__(
-        self,
-        raw: str,
-        items: Sequence[BatchItem],
-        max_length: int,
-    ) -> tuple[BatchOutcome, ...]:
         ...
 
 

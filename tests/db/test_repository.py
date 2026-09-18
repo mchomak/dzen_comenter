@@ -3,14 +3,19 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import IntegrityError
 
 import dzen_commenter.db.repository as repository_module
-from dzen_commenter.contracts.enums import BatchOutcomeKind, CommentStatus, ReplyStatus
+from dzen_commenter.contracts.enums import (
+    CommentStatus,
+    GenerationFailureOutcome,
+    ReplyStatus,
+)
 from dzen_commenter.contracts.interfaces import CommentRepository
-from dzen_commenter.contracts.models import BatchOutcome, Comment, Publication, Reply
+from dzen_commenter.contracts.models import Comment, Publication, Reply
 from dzen_commenter.db.models import (
-    CommentBatchQueueTable,
     CommentTable,
+    ReplyGenerationQueueTable,
     ReplyPublicationQueueTable,
     ReplyTable,
 )
@@ -126,6 +131,136 @@ def test_tables_exist_with_columns(engine):
         "article_context_status",
         "is_cta_candidate",
     } <= rep_cols
+
+
+def test_generation_queue_migration_preserves_batch_tables(engine):
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+
+    assert {
+        "comment_batch_queue",
+        "reply_batch_items",
+        "reply_batches",
+        "reply_generation_queue",
+    } <= tables
+    assert {
+        "comment_id",
+        "state",
+        "attempt_count",
+        "next_attempt_at",
+        "last_error",
+        "created_at",
+        "claimed_at",
+        "claim_token",
+    } <= {column["name"] for column in inspector.get_columns("reply_generation_queue")}
+    assert inspector.get_pk_constraint("reply_generation_queue")["constrained_columns"] == [
+        "comment_id"
+    ]
+    assert any(
+        index["name"] == "ix_reply_generation_queue_ready"
+        for index in inspector.get_indexes("reply_generation_queue")
+    )
+    assert "claim_token" in {
+        column["name"] for column in inspector.get_columns("reply_publication_queue")
+    }
+
+
+def test_generation_queue_migration_preserves_seeded_batch_era_rows(engine):
+    from alembic import command
+    from alembic.config import Config
+
+    config = Config(str(REPO_ROOT / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(REPO_ROOT / "dzen_commenter" / "db" / "migrations")
+    )
+    command.downgrade(config, "0009_article_publication_queue")
+    queued_at = datetime(2026, 9, 18, 12, 0, 0)
+    with engine.begin() as conn:
+        publication_id = conn.execute(
+            text(
+                "INSERT INTO publications (dzen_publication_id, title, url) "
+                "VALUES ('batch-era-publication', 'Batch title', 'http://batch') "
+                "RETURNING id"
+            )
+        ).scalar_one()
+        comment_id = conn.execute(
+            text(
+                "INSERT INTO comments (dzen_comment_id, publication_id, author, text, "
+                "status, post_url) VALUES "
+                "('batch-era-comment', :publication_id, 'alice', 'question', "
+                "'generating', 'http://batch') RETURNING id"
+            ),
+            {"publication_id": publication_id},
+        ).scalar_one()
+        reply_id = conn.execute(
+            text(
+                "INSERT INTO replies (comment_id, generated_text, status, created_at, "
+                "article_context_status, is_cta_candidate) VALUES "
+                "(:comment_id, 'answer', 'generated', :queued_at, "
+                "'article_text_used', true) RETURNING id"
+            ),
+            {"comment_id": comment_id, "queued_at": queued_at},
+        ).scalar_one()
+        batch_id = conn.execute(
+            text(
+                "INSERT INTO reply_batches (post_url, created_at, status, item_count, "
+                "article_context_status, prompt_tokens, completion_tokens, error_reason) "
+                "VALUES ('http://batch', :queued_at, 'processing', 1, "
+                "'article_text_used', 21, 34, NULL) RETURNING id"
+            ),
+            {"queued_at": queued_at},
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO comment_batch_queue "
+                "(comment_id, post_url, queued_at, state, attempt_count, next_attempt_at, "
+                "claimed_batch_id) VALUES "
+                "(:comment_id, 'http://batch', :queued_at, 'claimed', 2, NULL, :batch_id)"
+            ),
+            {"comment_id": comment_id, "queued_at": queued_at, "batch_id": batch_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO reply_batch_items "
+                "(batch_id, comment_id, item_no, status, reply_id) VALUES "
+                "(:batch_id, :comment_id, 1, 'generated', :reply_id)"
+            ),
+            {"batch_id": batch_id, "comment_id": comment_id, "reply_id": reply_id},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.connect() as conn:
+        batch = conn.execute(
+            text(
+                "SELECT post_url, created_at, status, item_count, article_context_status, "
+                "prompt_tokens, completion_tokens, error_reason FROM reply_batches"
+            )
+        ).one()
+        queue = conn.execute(
+            text(
+                "SELECT comment_id, post_url, queued_at, state, attempt_count, "
+                "next_attempt_at, claimed_batch_id FROM comment_batch_queue"
+            )
+        ).one()
+        item = conn.execute(
+            text(
+                "SELECT batch_id, comment_id, item_no, status, reply_id "
+                "FROM reply_batch_items"
+            )
+        ).one()
+    assert batch == (
+        "http://batch",
+        queued_at,
+        "processing",
+        1,
+        "article_text_used",
+        21,
+        34,
+        None,
+    )
+    assert queue == (comment_id, "http://batch", queued_at, "claimed", 2, None, batch_id)
+    assert item == (batch_id, comment_id, 1, "generated", reply_id)
 
 
 def test_article_context_migration_preserves_existing_publications(engine):
@@ -295,8 +430,11 @@ def test_repository_fulfils_contract(repo):
     for method in (
         "upsert_publication",
         "upsert_comment",
+        "upsert_eligible_comment",
+        "enqueue_pending_generations",
         "save_reply",
         "set_comment_status",
+        "skip_comment_if_new",
         "set_reply_status",
         "has_generated_reply",
         "has_published_reply",
@@ -304,9 +442,11 @@ def test_repository_fulfils_contract(repo):
         "count_published_replies_since",
         "count_ai_attempts_since",
         "count_cta_candidates_produced",
-        "enqueue_batch_comment",
-        "claim_next_batch",
-        "save_batch_outcomes",
+        "enqueue_generation",
+        "claim_next_generation",
+        "complete_generation",
+        "skip_generation",
+        "fail_generation",
         "get_article_context",
         "save_article_context",
         "enqueue_publication",
@@ -350,6 +490,22 @@ def test_upsert_comment_idempotent(repo, engine):
     assert count == 1
 
 
+def test_upsert_eligible_comment_rolls_back_comment_when_queue_insert_fails(
+    repo, engine
+):
+    publication_id = repo.upsert_publication(_make_publication())
+    comment = _make_comment(publication_id, dzen_id="atomic-generation")
+
+    with pytest.raises(IntegrityError):
+        repo.upsert_eligible_comment(comment, queued_at=None)
+
+    with engine.connect() as conn:
+        comment_count = conn.execute(
+            text("SELECT COUNT(*) FROM comments WHERE dzen_comment_id = 'atomic-generation'")
+        ).scalar_one()
+    assert comment_count == 0
+
+
 # --- Acceptance 7: upsert updates, not duplicates ---
 
 
@@ -357,7 +513,7 @@ def test_upsert_comment_updates(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     cid = repo.upsert_comment(_make_comment(pub_id, text="old", status=CommentStatus.NEW))
     repo.upsert_comment(
-        _make_comment(pub_id, text="new", status=CommentStatus.ANSWERED)
+        _make_comment(pub_id, text="new", status=CommentStatus.GENERATED)
     )
 
     with engine.begin() as conn:
@@ -366,7 +522,7 @@ def test_upsert_comment_updates(repo, engine):
         ).one()
         count = conn.execute(text("SELECT COUNT(*) FROM comments")).scalar_one()
     assert row.text == "new"
-    assert row.status == CommentStatus.ANSWERED.value
+    assert row.status == CommentStatus.GENERATED.value
     assert count == 1
 
 
@@ -387,6 +543,30 @@ def test_upsert_comment_keeps_first_seen_fetched_at_on_rescrape(repo, engine):
             text("SELECT fetched_at FROM comments WHERE id = :id"), {"id": cid}
         ).scalar_one()
     assert stored == first_seen
+
+
+def test_upsert_comment_preserves_queue_derived_status_on_rescrape(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+    assert repo.claim_next_generation(now) is not None
+
+    repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            text="updated from rescrape",
+            status=CommentStatus.NEW,
+        )
+    )
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            select(CommentTable.text, CommentTable.status).where(
+                CommentTable.id == comment_id
+            )
+        ).one()
+    assert row == ("updated from rescrape", CommentStatus.GENERATING.value)
 
 
 # --- Acceptance 09: upsert stores and updates post_url ---
@@ -523,6 +703,28 @@ def test_set_comment_status(repo, engine):
     assert status == CommentStatus.SKIPPED.value
 
 
+def test_skip_comment_if_new_cannot_overwrite_a_queue_derived_status(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    new_comment_id = repo.upsert_comment(_make_comment(publication_id, dzen_id="new"))
+    active_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="active")
+    )
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    assert repo.enqueue_generation(active_comment_id, queued_at=now)
+    assert repo.claim_next_generation(now) is not None
+
+    assert repo.skip_comment_if_new(new_comment_id)
+    assert not repo.skip_comment_if_new(active_comment_id)
+
+    with engine.connect() as conn:
+        statuses = conn.execute(
+            select(CommentTable.dzen_comment_id, CommentTable.status).order_by(
+                CommentTable.dzen_comment_id
+            )
+        ).all()
+    assert statuses == [("active", "generating"), ("new", "skipped")]
+
+
 def test_set_reply_status_with_error(repo, engine):
     pub_id = repo.upsert_publication(_make_publication())
     cid = repo.upsert_comment(_make_comment(pub_id))
@@ -585,6 +787,283 @@ def test_has_generated_reply_ignores_errors(repo):
     assert repo.has_generated_reply(cid) is False
 
 
+def test_generation_queue_enqueues_once_and_claims_the_earliest_ready_comment(
+    repo, engine
+):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    first_id = repo.upsert_comment(_make_comment(publication_id, dzen_id="first"))
+    second_id = repo.upsert_comment(_make_comment(publication_id, dzen_id="second"))
+
+    assert repo.enqueue_generation(second_id, queued_at=now)
+    assert repo.enqueue_generation(first_id, queued_at=now - timedelta(seconds=1))
+    assert not repo.enqueue_generation(first_id, queued_at=now)
+
+    claimed = repo.claim_next_generation(now)
+
+    assert claimed is not None
+    assert claimed.comment.id == first_id
+    assert claimed.attempt_count == 1
+    assert claimed.claim_token
+    with engine.connect() as conn:
+        first_queue = conn.execute(
+            select(
+                ReplyGenerationQueueTable.state,
+                ReplyGenerationQueueTable.attempt_count,
+                ReplyGenerationQueueTable.claimed_at,
+            ).where(ReplyGenerationQueueTable.comment_id == first_id)
+        ).one()
+        first_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == first_id)
+        ).scalar_one()
+    assert first_queue == ("claimed", 1, now)
+    assert first_status == "generating"
+    assert repo.claim_next_generation(now).comment.id == second_id
+
+
+def test_enqueue_pending_generations_recovers_saved_new_comments_without_terminal_reply(
+    repo, engine
+):
+    publication_id = repo.upsert_publication(_make_publication())
+    recover_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="saved-before-deploy")
+    )
+    terminal_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="already-skipped")
+    )
+    repo.save_reply(_make_reply(terminal_id, status=ReplyStatus.SKIPPED))
+    now = datetime(2026, 9, 18, 12, 0, 0)
+
+    recovered = repo.enqueue_pending_generations(queued_at=now)
+
+    assert recovered == 1
+    with engine.connect() as conn:
+        queue_comment_ids = conn.execute(
+            select(ReplyGenerationQueueTable.comment_id).order_by(
+                ReplyGenerationQueueTable.comment_id
+            )
+        ).scalars().all()
+    assert queue_comment_ids == [recover_id]
+    assert repo.enqueue_pending_generations(queued_at=now) == 0
+
+
+def test_complete_generation_saves_reply_and_publication_job_atomically(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+    claim = repo.claim_next_generation(now)
+    assert claim is not None
+
+    reply_id = repo.complete_generation(
+        comment_id,
+        claim_token=claim.claim_token,
+        text="Готовый ответ",
+        ai_provider="test",
+        ai_model="test-model",
+        article_context_status="article_text_used",
+        created_at=now,
+        is_cta_candidate=True,
+    )
+
+    with engine.connect() as conn:
+        reply = conn.execute(
+            select(
+                ReplyTable.generated_text,
+                ReplyTable.status,
+                ReplyTable.article_context_status,
+                ReplyTable.is_cta_candidate,
+            ).where(ReplyTable.id == reply_id)
+        ).one()
+        publication_state = conn.execute(
+            select(ReplyPublicationQueueTable.state).where(
+                ReplyPublicationQueueTable.reply_id == reply_id
+            )
+        ).scalar_one()
+        generation_state = conn.execute(
+            select(ReplyGenerationQueueTable.state).where(
+                ReplyGenerationQueueTable.comment_id == comment_id
+            )
+        ).scalar_one()
+        comment_state = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+    assert reply == ("Готовый ответ", "generated", "article_text_used", True)
+    assert publication_state == "queued"
+    assert generation_state == "completed"
+    assert comment_state == "generated"
+
+
+def test_skip_generation_is_terminal_without_a_publication_job(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+    claim = repo.claim_next_generation(now)
+    assert claim is not None
+
+    reply_id = repo.skip_generation(
+        comment_id,
+        claim_token=claim.claim_token,
+        reason="Не требует ответа",
+        ai_provider="test",
+        ai_model="test-model",
+        article_context_status="without_article_text",
+        created_at=now,
+    )
+
+    with engine.connect() as conn:
+        reply = conn.execute(
+            select(ReplyTable.status, ReplyTable.error_reason).where(
+                ReplyTable.id == reply_id
+            )
+        ).one()
+        publication_count = conn.execute(
+            select(ReplyPublicationQueueTable.reply_id).where(
+                ReplyPublicationQueueTable.reply_id == reply_id
+            )
+        ).scalar_one_or_none()
+        generation_state = conn.execute(
+            select(ReplyGenerationQueueTable.state).where(
+                ReplyGenerationQueueTable.comment_id == comment_id
+            )
+        ).scalar_one()
+        comment_state = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+    assert reply == ("skipped", "Не требует ответа")
+    assert publication_count is None
+    assert generation_state == "completed"
+    assert comment_state == "skipped"
+
+
+def test_generation_failure_retries_then_becomes_a_terminal_generation_error(
+    repo, engine
+):
+    publication_id = repo.upsert_publication(_make_publication())
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+    claim = repo.claim_next_generation(now)
+    assert claim is not None
+
+    retry_outcome = repo.fail_generation(
+        comment_id,
+        claim_token=claim.claim_token,
+        error_reason="AI unavailable",
+        failed_at=now,
+        ai_provider="test",
+        ai_model="test-model",
+        article_context_status="without_article_text",
+        retry_cooldown_minutes=60,
+        max_attempts_per_comment=2,
+    )
+
+    assert retry_outcome is GenerationFailureOutcome.RETRY
+    with engine.connect() as conn:
+        retry_queue = conn.execute(
+            select(
+                ReplyGenerationQueueTable.state,
+                ReplyGenerationQueueTable.next_attempt_at,
+                ReplyGenerationQueueTable.last_error,
+            ).where(ReplyGenerationQueueTable.comment_id == comment_id)
+        ).one()
+        retry_comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+    assert retry_queue == ("queued", now + timedelta(minutes=60), "AI unavailable")
+    assert retry_comment_status == "generation_retry"
+    assert repo.claim_next_generation(now + timedelta(minutes=59)) is None
+    claim = repo.claim_next_generation(now + timedelta(minutes=60))
+    assert claim is not None
+
+    terminal_outcome = repo.fail_generation(
+        comment_id,
+        claim_token=claim.claim_token,
+        error_reason="AI unavailable",
+        failed_at=now + timedelta(minutes=60),
+        ai_provider="test",
+        ai_model="test-model",
+        article_context_status="without_article_text",
+        retry_cooldown_minutes=60,
+        max_attempts_per_comment=2,
+    )
+
+    assert terminal_outcome is GenerationFailureOutcome.TERMINAL
+    with engine.connect() as conn:
+        terminal_queue = conn.execute(
+            select(
+                ReplyGenerationQueueTable.state,
+                ReplyGenerationQueueTable.last_error,
+            ).where(ReplyGenerationQueueTable.comment_id == comment_id)
+        ).one()
+        terminal_comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+        replies = conn.execute(
+            select(ReplyTable.status, ReplyTable.error_reason)
+            .where(ReplyTable.comment_id == comment_id)
+            .order_by(ReplyTable.id)
+        ).all()
+        publication_count = conn.execute(
+            select(ReplyPublicationQueueTable.reply_id).join(
+                ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id
+            ).where(ReplyTable.comment_id == comment_id)
+        ).all()
+    assert terminal_queue == ("completed", "AI unavailable")
+    assert terminal_comment_status == "generation_error"
+    assert replies == [("error", "AI unavailable"), ("error", "AI unavailable")]
+    assert publication_count == []
+
+
+@pytest.mark.parametrize("finish", ("complete", "skip", "fail"))
+def test_stale_generation_claim_cannot_finish_a_newer_claim(repo, finish):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+    first_claim = repo.claim_next_generation(now)
+    assert first_claim is not None
+    second_claim = repo.claim_next_generation(now + timedelta(minutes=6))
+    assert second_claim is not None
+    assert first_claim.claim_token != second_claim.claim_token
+
+    with pytest.raises(ValueError, match="claim"):
+        if finish == "complete":
+            repo.complete_generation(
+                comment_id,
+                claim_token=first_claim.claim_token,
+                text="Готовый ответ",
+                ai_provider="test",
+                ai_model="test-model",
+                article_context_status="article_text_used",
+                created_at=now,
+                is_cta_candidate=False,
+            )
+        elif finish == "skip":
+            repo.skip_generation(
+                comment_id,
+                claim_token=first_claim.claim_token,
+                reason="Не требует ответа",
+                ai_provider="test",
+                ai_model="test-model",
+                article_context_status="without_article_text",
+                created_at=now,
+            )
+        else:
+            repo.fail_generation(
+                comment_id,
+                claim_token=first_claim.claim_token,
+                error_reason="stale worker",
+                failed_at=now,
+                ai_provider="test",
+                ai_model="test-model",
+                article_context_status="without_article_text",
+                retry_cooldown_minutes=60,
+                max_attempts_per_comment=3,
+            )
+
+
 # --- Acceptance 10: is_own_reply detects our own reply re-scraped as a comment ---
 
 
@@ -614,485 +1093,6 @@ def test_is_own_reply_ignores_unrelated_text_or_post(repo):
     assert repo.is_own_reply(None, "reply text") is False
 
 
-# --- Batch storage ---
-
-
-def _enqueue(repo, comment_id, post_url, *, queued_at, cutover_at):
-    assert repo.enqueue_batch_comment(
-        comment_id,
-        post_url,
-        queued_at=queued_at,
-        cutover_at=cutover_at,
-    )
-
-
-def test_enqueue_batch_comment_excludes_old_and_answered_comments(repo):
-    pub_id = repo.upsert_publication(_make_publication())
-    cutover = datetime(2026, 8, 28, 12, 0, 0)
-    old_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="old", fetched_at=cutover - timedelta(seconds=1))
-    )
-    fresh_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="fresh", fetched_at=cutover)
-    )
-    answered_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="answered", fetched_at=cutover)
-    )
-    repo.save_reply(_make_reply(answered_id))
-
-    assert not repo.enqueue_batch_comment(
-        old_id, "http://post/1", queued_at=cutover, cutover_at=cutover
-    )
-    assert repo.enqueue_batch_comment(
-        fresh_id, "http://post/1", queued_at=cutover, cutover_at=cutover
-    )
-    assert not repo.enqueue_batch_comment(
-        fresh_id, "http://post/1", queued_at=cutover, cutover_at=cutover
-    )
-    assert not repo.enqueue_batch_comment(
-        answered_id, "http://post/1", queued_at=cutover, cutover_at=cutover
-    )
-
-
-def test_enqueue_batch_comment_persists_datetime_literal(repo, engine):
-    pub_id = repo.upsert_publication(_make_publication())
-    queued_at = datetime(2026, 8, 29, 9, 15, 30)
-    comment_id = repo.upsert_comment(
-        _make_comment(pub_id, fetched_at=queued_at)
-    )
-
-    assert repo.enqueue_batch_comment(
-        comment_id,
-        "http://post/1",
-        queued_at=queued_at,
-        cutover_at=queued_at,
-    )
-
-    with engine.connect() as conn:
-        stored_queued_at = conn.execute(
-            select(CommentBatchQueueTable.queued_at).where(
-                CommentBatchQueueTable.comment_id == comment_id
-            )
-        ).scalar_one()
-
-    assert stored_queued_at == queued_at
-
-
-def test_claim_next_batch_extracts_joined_rows_in_order(repo, engine):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(minutes=1)
-    first_post_ids = [
-        repo.upsert_comment(
-            _make_comment(
-                pub_id,
-                dzen_id=f"first-{number}",
-                post_url="http://post/first",
-                fetched_at=now,
-            )
-        )
-        for number in range(3)
-    ]
-    second_post_id = repo.upsert_comment(
-        _make_comment(
-            pub_id,
-            dzen_id="second",
-            post_url="http://post/second",
-            fetched_at=now,
-        )
-    )
-    for comment_id in first_post_ids:
-        _enqueue(
-            repo, comment_id, "http://post/first", queued_at=now, cutover_at=cutover
-        )
-    _enqueue(
-        repo, second_post_id, "http://post/second", queued_at=now, cutover_at=cutover
-    )
-
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=10,
-    )
-
-    assert batch is not None
-    assert batch.post_url == "http://post/first"
-    assert [(item.comment_id, item.item_no) for item in batch.items] == list(
-        zip(first_post_ids, (1, 2, 3), strict=True)
-    )
-    with engine.connect() as conn:
-        states = conn.execute(
-            select(CommentBatchQueueTable.state)
-            .where(CommentBatchQueueTable.comment_id.in_(first_post_ids))
-            .order_by(CommentBatchQueueTable.comment_id)
-        ).scalars().all()
-    assert states == ["claimed", "claimed", "claimed"]
-
-
-def test_claim_next_batch_skips_unexpired_incomplete_post_for_full_post(repo):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    older_incomplete_ids = [
-        repo.upsert_comment(
-            _make_comment(
-                pub_id,
-                dzen_id=f"older-incomplete-{number}",
-                post_url="http://post/older-incomplete",
-                fetched_at=now,
-            )
-        )
-        for number in range(2)
-    ]
-    full_post_ids = [
-        repo.upsert_comment(
-            _make_comment(
-                pub_id,
-                dzen_id=f"full-post-{number}",
-                post_url="http://post/full",
-                fetched_at=now,
-            )
-        )
-        for number in range(3)
-    ]
-    for comment_id in older_incomplete_ids:
-        _enqueue(
-            repo,
-            comment_id,
-            "http://post/older-incomplete",
-            queued_at=now - timedelta(hours=1),
-            cutover_at=cutover,
-        )
-    for comment_id in full_post_ids:
-        _enqueue(
-            repo,
-            comment_id,
-            "http://post/full",
-            queued_at=now,
-            cutover_at=cutover,
-        )
-
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=3,
-    )
-
-    assert batch is not None
-    assert batch.post_url == "http://post/full"
-    assert [item.comment_id for item in batch.items] == full_post_ids
-
-
-def test_claim_next_batch_prioritizes_full_post_over_timeout_incomplete_post(repo):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    timeout_incomplete_ids = [
-        repo.upsert_comment(
-            _make_comment(
-                pub_id,
-                dzen_id=f"timeout-incomplete-{number}",
-                post_url="http://post/timeout-incomplete",
-                fetched_at=now,
-            )
-        )
-        for number in range(2)
-    ]
-    full_post_ids = [
-        repo.upsert_comment(
-            _make_comment(
-                pub_id,
-                dzen_id=f"full-overflow-{number}",
-                post_url="http://post/full-overflow",
-                fetched_at=now,
-            )
-        )
-        for number in range(4)
-    ]
-    for comment_id in timeout_incomplete_ids:
-        _enqueue(
-            repo,
-            comment_id,
-            "http://post/timeout-incomplete",
-            queued_at=now - timedelta(hours=12),
-            cutover_at=cutover,
-        )
-    for comment_id in full_post_ids:
-        _enqueue(
-            repo,
-            comment_id,
-            "http://post/full-overflow",
-            queued_at=now,
-            cutover_at=cutover,
-        )
-
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=3,
-    )
-
-    assert batch is not None
-    assert batch.post_url == "http://post/full-overflow"
-    assert [item.comment_id for item in batch.items] == full_post_ids[:3]
-
-
-def test_claim_next_batch_claims_oldest_ready_comment_without_page_snapshot(repo, engine):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    unavailable_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="unavailable", fetched_at=now)
-    )
-    available_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="available", fetched_at=now)
-    )
-    _enqueue(
-        repo,
-        unavailable_id,
-        "http://post/1",
-        queued_at=now - timedelta(hours=12),
-        cutover_at=cutover,
-    )
-    _enqueue(
-        repo,
-        available_id,
-        "http://post/1",
-        queued_at=now - timedelta(hours=12),
-        cutover_at=cutover,
-    )
-
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=1,
-        wait_hours=12,
-        quota_remaining=1,
-    )
-
-    assert batch is not None
-    assert [item.comment_id for item in batch.items] == [unavailable_id]
-    with engine.connect() as conn:
-        unavailable_state = conn.execute(
-            select(CommentBatchQueueTable.state).where(
-                CommentBatchQueueTable.comment_id == unavailable_id
-            )
-        ).scalar_one()
-    assert unavailable_state == "claimed"
-
-
-def test_claim_next_batch_waits_for_timeout_and_respects_quota(repo):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    recent_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="recent", fetched_at=now)
-    )
-    _enqueue(repo, recent_id, "http://post/1", queued_at=now, cutover_at=cutover)
-
-    assert repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=3,
-    ) is None
-
-    old_ids = [recent_id]
-    for number in range(2):
-        comment_id = repo.upsert_comment(
-            _make_comment(pub_id, dzen_id=f"old-{number}", fetched_at=now)
-        )
-        old_ids.append(comment_id)
-        _enqueue(
-            repo,
-            comment_id,
-            "http://post/1",
-            queued_at=now - timedelta(hours=12),
-            cutover_at=cutover,
-        )
-
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=5,
-        wait_hours=12,
-        quota_remaining=2,
-    )
-
-    assert batch is not None
-    assert len(batch.items) == 2
-    assert {item.comment_id for item in batch.items} <= set(old_ids)
-
-
-def test_claimed_comments_cannot_be_claimed_twice(repo):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    comment_ids = [
-        repo.upsert_comment(
-            _make_comment(pub_id, dzen_id=f"comment-{number}", fetched_at=now)
-        )
-        for number in range(6)
-    ]
-    for comment_id in comment_ids:
-        _enqueue(repo, comment_id, "http://post/1", queued_at=now, cutover_at=cutover)
-
-    first = repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=3,
-    )
-    second = repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=3,
-    )
-
-    assert first is not None and second is not None
-    assert {item.comment_id for item in first.items}.isdisjoint(
-        {item.comment_id for item in second.items}
-    )
-
-
-def test_save_batch_outcomes_is_atomic_and_counts_skips_and_errors(repo, engine):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    comment_ids = [
-        repo.upsert_comment(
-            _make_comment(pub_id, dzen_id=f"outcome-{number}", fetched_at=now)
-        )
-        for number in range(3)
-    ]
-    for comment_id in comment_ids:
-        _enqueue(repo, comment_id, "http://post/1", queued_at=now, cutover_at=cutover)
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=3,
-        wait_hours=12,
-        quota_remaining=3,
-    )
-    assert batch is not None
-
-    reply_ids = repo.save_batch_outcomes(
-        batch.id,
-        (
-            BatchOutcome(comment_ids[0], 1, BatchOutcomeKind.REPLY, text="готово"),
-            BatchOutcome(comment_ids[1], 2, BatchOutcomeKind.SKIP),
-            BatchOutcome(
-                comment_ids[2], 3, BatchOutcomeKind.ERROR, error_reason="bad output"
-            ),
-        ),
-        ai_provider="test",
-        ai_model="test-model",
-        article_context_status="article_text_used",
-        created_at=now,
-        prompt_tokens=100,
-        completion_tokens=30,
-        retry_cooldown_minutes=60,
-        max_attempts_per_comment=1,
-    )
-
-    assert len(reply_ids) == 3
-    assert repo.count_ai_attempts_since(now - timedelta(seconds=1)) == 3
-    with engine.begin() as conn:
-        statuses = conn.execute(
-            text("SELECT status FROM replies ORDER BY comment_id")
-        ).scalars().all()
-        batch_status = conn.execute(
-            text("SELECT status FROM reply_batches WHERE id = :id"), {"id": batch.id}
-        ).scalar_one()
-    assert statuses == ["generated", "skipped", "error"]
-    assert batch_status == "error"
-
-
-def test_save_batch_outcomes_reads_core_table_results_by_mapping(repo, monkeypatch):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    comment_id = repo.upsert_comment(
-        _make_comment(pub_id, dzen_id="core-result", fetched_at=now)
-    )
-    _enqueue(
-        repo,
-        comment_id,
-        "http://post/1",
-        queued_at=now,
-        cutover_at=now - timedelta(days=1),
-    )
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=1,
-        wait_hours=12,
-        quota_remaining=1,
-    )
-    assert batch is not None
-
-    monkeypatch.setattr(
-        repository_module, "ReplyBatchItemTable", repository_module.ReplyBatchItemTable.__table__
-    )
-    monkeypatch.setattr(
-        repository_module,
-        "CommentBatchQueueTable",
-        repository_module.CommentBatchQueueTable.__table__,
-    )
-
-    reply_ids = repo.save_batch_outcomes(
-        batch.id,
-        (BatchOutcome(comment_id, 1, BatchOutcomeKind.REPLY, text="готово"),),
-        ai_provider="test",
-        ai_model="test-model",
-        article_context_status="article_text_used",
-        created_at=now,
-        prompt_tokens=1,
-        completion_tokens=1,
-        retry_cooldown_minutes=60,
-        max_attempts_per_comment=1,
-    )
-
-    assert len(reply_ids) == 1
-
-
-def test_save_batch_outcomes_rejects_partial_data_without_writes(repo, engine):
-    pub_id = repo.upsert_publication(_make_publication())
-    now = datetime(2026, 8, 28, 12, 0, 0)
-    cutover = now - timedelta(days=1)
-    comment_ids = [
-        repo.upsert_comment(
-            _make_comment(pub_id, dzen_id=f"partial-{number}", fetched_at=now)
-        )
-        for number in range(2)
-    ]
-    for comment_id in comment_ids:
-        _enqueue(repo, comment_id, "http://post/1", queued_at=now, cutover_at=cutover)
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=2,
-        wait_hours=12,
-        quota_remaining=2,
-    )
-    assert batch is not None
-
-    with pytest.raises(ValueError, match="claimed item order"):
-        repo.save_batch_outcomes(
-            batch.id,
-            (BatchOutcome(comment_ids[0], 1, BatchOutcomeKind.REPLY, text="one"),),
-            ai_provider="test",
-            ai_model="test-model",
-            article_context_status="article_text_used",
-            created_at=now,
-            prompt_tokens=1,
-            completion_tokens=1,
-            retry_cooldown_minutes=60,
-            max_attempts_per_comment=1,
-        )
-
-    with engine.begin() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM replies")).scalar_one() == 0
-
-
 def test_article_context_is_persisted_on_the_publication(repo):
     publication_id = repo.upsert_publication(_make_publication())
     fetched_at = datetime(2026, 9, 10, 10, 0, 0)
@@ -1120,32 +1120,19 @@ def test_claimed_generated_reply_is_queued_once_for_publication(repo, engine):
     comment_id = repo.upsert_comment(
         _make_comment(publication_id, fetched_at=now)
     )
-    _enqueue(
-        repo,
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+    generation = repo.claim_next_generation(now)
+    assert generation is not None
+    reply_id = repo.complete_generation(
         comment_id,
-        "http://post/1",
-        queued_at=now,
-        cutover_at=now - timedelta(days=1),
-    )
-    batch = repo.claim_next_batch(
-        now,
-        max_comments=1,
-        wait_hours=12,
-        quota_remaining=1,
-    )
-    assert batch is not None
-    reply_id = repo.save_batch_outcomes(
-        batch.id,
-        (BatchOutcome(comment_id, 1, BatchOutcomeKind.REPLY, text="готово"),),
+        claim_token=generation.claim_token,
+        text="готово",
         ai_provider="test",
         ai_model="test-model",
         article_context_status="article_text_used",
         created_at=now,
-        prompt_tokens=1,
-        completion_tokens=1,
-        retry_cooldown_minutes=60,
-        max_attempts_per_comment=2,
-    )[0]
+        is_cta_candidate=False,
+    )
 
     claimed = repo.claim_next_publication(now)
 
@@ -1197,7 +1184,8 @@ def test_expire_stale_publications_completes_only_queued_stale_jobs(repo, engine
     )
     claimed_reply_id = repo.save_reply(_make_reply(claimed_comment_id))
     assert repo.enqueue_publication(claimed_reply_id, created_at=now)
-    assert repo.claim_next_publication(now) is not None
+    publication_claim = repo.claim_next_publication(now)
+    assert publication_claim is not None
 
     stale_comment_id = repo.upsert_comment(
         _make_comment(publication_id, dzen_id="queued-stale", fetched_at=cutoff - timedelta(seconds=1))
@@ -1257,7 +1245,8 @@ def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo)
     )
     reply_id = repo.save_reply(_make_reply(comment_id))
     assert repo.enqueue_publication(reply_id, created_at=now)
-    assert repo.claim_next_publication(now) is not None
+    publication_claim = repo.claim_next_publication(now)
+    assert publication_claim is not None
 
     assert repo.claim_next_publication(now + timedelta(seconds=1)) is None
     recovered = repo.claim_next_publication(now + timedelta(hours=1))
@@ -1274,7 +1263,40 @@ def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo)
     assert queue == ("claimed", 2)
 
 
-def test_publication_failure_retries_without_new_generation_and_ends_as_error(
+@pytest.mark.parametrize("finish", ("complete", "fail"))
+def test_stale_publication_claim_cannot_finish_a_newer_claim(repo, finish):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(
+        _make_comment(publication_id, fetched_at=now)
+    )
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+    first_claim = repo.claim_next_publication(now)
+    assert first_claim is not None
+    second_claim = repo.claim_next_publication(now + timedelta(minutes=6))
+    assert second_claim is not None
+    assert first_claim.claim_token != second_claim.claim_token
+
+    with pytest.raises(ValueError, match="claim"):
+        if finish == "complete":
+            repo.complete_publication(
+                reply_id,
+                claim_token=first_claim.claim_token,
+                published_at=now,
+            )
+        else:
+            repo.fail_publication(
+                reply_id,
+                claim_token=first_claim.claim_token,
+                error_reason="stale worker",
+                failed_at=now,
+                retry_cooldown_minutes=60,
+                max_attempts_per_reply=3,
+            )
+
+
+def test_publication_failure_retries_without_new_generation_and_ends_as_publication_error(
     repo, engine
 ):
     publication_id = repo.upsert_publication(_make_publication())
@@ -1284,10 +1306,12 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
     )
     reply_id = repo.save_reply(_make_reply(comment_id))
     assert repo.enqueue_publication(reply_id, created_at=now)
-    assert repo.claim_next_publication(now) is not None
+    publication_claim = repo.claim_next_publication(now)
+    assert publication_claim is not None
 
     retry_outcome = repo.fail_publication(
         reply_id,
+        claim_token=publication_claim.claim_token,
         error_reason="comment not in DOM",
         failed_at=now,
         retry_cooldown_minutes=60,
@@ -1308,12 +1332,14 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
             ).where(ReplyPublicationQueueTable.reply_id == reply_id)
         ).one()
     assert retry_reply_status == "generated"
-    assert retry_comment_status == "new"
+    assert retry_comment_status == "publication_retry"
     assert retry_queue == ("queued", "comment not in DOM")
     assert repo.claim_next_publication(now + timedelta(minutes=59)) is None
-    assert repo.claim_next_publication(now + timedelta(minutes=60)) is not None
+    terminal_claim = repo.claim_next_publication(now + timedelta(minutes=60))
+    assert terminal_claim is not None
     terminal_outcome = repo.fail_publication(
         reply_id,
+        claim_token=terminal_claim.claim_token,
         error_reason="comment not in DOM",
         failed_at=now + timedelta(minutes=60),
         retry_cooldown_minutes=60,
@@ -1336,12 +1362,12 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_error(
         ).one()
         reply_count = conn.execute(text("SELECT COUNT(*) FROM replies")).scalar_one()
         generation_state = conn.execute(
-            select(CommentBatchQueueTable.state).where(
-                CommentBatchQueueTable.comment_id == comment_id
+            select(ReplyGenerationQueueTable.state).where(
+                ReplyGenerationQueueTable.comment_id == comment_id
             )
         ).scalar_one_or_none()
     assert reply_status == "error"
-    assert comment_status == "error"
+    assert comment_status == "publication_error"
     assert queue == ("completed", "comment not in DOM")
     assert reply_count == 1
     assert generation_state is None

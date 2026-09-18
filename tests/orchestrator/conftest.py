@@ -9,24 +9,21 @@ import pytest
 from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import (
-    BatchOutcomeKind,
     CommentStatus,
+    GenerationFailureOutcome,
     PublicationFailureOutcome,
     ReplyStatus,
 )
 from dzen_commenter.contracts.interfaces import PromptContext, ReplyType
 from dzen_commenter.contracts.models import (
     ArticleContext,
-    BatchItem,
-    BatchOutcome,
-    ClaimedBatch,
+    ClaimedGeneration,
     ClaimedPublication,
     Comment,
     Publication,
     Reply,
 )
 from dzen_commenter.orchestrator import OrchestratorLoop
-from dzen_commenter.prompt import parse_batch
 from dzen_commenter.prompt.config_loader import load_brand_config
 
 _MISSING = object()
@@ -58,23 +55,23 @@ class FakeCommentRepository:
         self.published_reply_comment_ids = set(published_reply_comment_ids or set())
         self.upsert_publication_calls: list[Publication] = []
         self.upsert_comment_calls: list[Comment] = []
+        self.upsert_eligible_comment_calls: list[Comment] = []
         self.set_comment_status_calls: list[tuple[int, CommentStatus]] = []
         self.set_reply_status_calls: list[tuple[int, ReplyStatus, str | None]] = []
         self.has_generated_reply_calls: list[int] = []
         self.has_published_reply_calls: list[int] = []
-        self.batch_queue: dict[int, dict[str, object]] = {}
-        self.claimed_batches: dict[int, ClaimedBatch] = {}
+        self.generation_queue: dict[int, dict[str, object]] = {}
         self.article_contexts: dict[int, ArticleContext] = {}
         self.publication_queue: dict[int, dict[str, object]] = {}
         self.enqueue_publication_calls: list[int] = []
         self.expire_stale_publications_calls: list[tuple[datetime, datetime]] = []
         self.complete_publication_calls: list[int] = []
         self.fail_publication_calls: list[tuple[int, str]] = []
-        self.save_batch_outcomes_calls: list[tuple[int, tuple[BatchOutcome, ...]]] = []
         self._next_publication_id = 1
         self._next_comment_id = 1
         self._next_reply_id = 1
-        self._next_batch_id = 1
+        self._next_generation_claim_token = 1
+        self._next_publication_claim_token = 1
 
     def upsert_publication(self, pub: Publication) -> int:
         self.upsert_publication_calls.append(pub)
@@ -93,6 +90,12 @@ class FakeCommentRepository:
         self.upsert_comment_calls.append(comment)
         existing_id = self.comment_ids_by_dzen_id.get(comment.dzen_comment_id)
         if existing_id is not None:
+            existing = self.comments[existing_id]
+            if (
+                comment.status is CommentStatus.NEW
+                and existing.status is not CommentStatus.NEW
+            ):
+                comment.status = existing.status
             comment.id = existing_id
             self.comments[existing_id] = comment
             return existing_id
@@ -103,6 +106,18 @@ class FakeCommentRepository:
         self.comments[comment_id] = comment
         self.comment_ids_by_dzen_id[comment.dzen_comment_id] = comment_id
         return comment_id
+
+    def upsert_eligible_comment(self, comment: Comment, *, queued_at: datetime) -> int:
+        self.upsert_eligible_comment_calls.append(comment)
+        comment_id = self.upsert_comment(comment)
+        self.enqueue_generation(comment_id, queued_at=queued_at)
+        return comment_id
+
+    def enqueue_pending_generations(self, *, queued_at: datetime) -> int:
+        return sum(
+            self.enqueue_generation(comment_id, queued_at=queued_at)
+            for comment_id in sorted(self.comments)
+        )
 
     def save_reply(self, reply: Reply) -> int:
         reply_id = self._next_reply_id
@@ -116,6 +131,12 @@ class FakeCommentRepository:
     def set_comment_status(self, comment_id: int, status: CommentStatus) -> None:
         self.set_comment_status_calls.append((comment_id, status))
         self.comments[comment_id].status = status
+
+    def skip_comment_if_new(self, comment_id: int) -> bool:
+        if self.comments[comment_id].status is not CommentStatus.NEW:
+            return False
+        self.set_comment_status(comment_id, CommentStatus.SKIPPED)
+        return True
 
     def set_reply_status(
         self,
@@ -185,166 +206,196 @@ class FakeCommentRepository:
             for reply in self.replies.values()
         )
 
-    def enqueue_batch_comment(
-        self,
-        comment_id: int,
-        post_url: str,
-        *,
-        queued_at: datetime,
-        cutover_at: datetime,
-    ) -> bool:
+    def enqueue_generation(self, comment_id: int, *, queued_at: datetime) -> bool:
         comment = self.comments[comment_id]
         if (
             comment.status is not CommentStatus.NEW
-            or comment.post_url != post_url
-            or comment.fetched_at is None
-            or comment.fetched_at < cutover_at
-            or self.has_generated_reply(comment_id)
-            or comment_id in self.batch_queue
+            or any(
+                reply.comment_id == comment_id
+                and reply.status
+                in (
+                    ReplyStatus.GENERATED,
+                    ReplyStatus.PUBLISHED,
+                    ReplyStatus.SKIPPED,
+                    ReplyStatus.ERROR,
+                )
+                for reply in self.replies.values()
+            )
+            or comment_id in self.generation_queue
         ):
             return False
-        self.batch_queue[comment_id] = {
-            "post_url": post_url,
-            "queued_at": queued_at,
+        self.generation_queue[comment_id] = {
             "state": "queued",
             "attempt_count": 0,
-            "claimed_batch_id": None,
             "next_attempt_at": None,
+            "last_error": None,
+            "created_at": queued_at,
+            "claimed_at": None,
+            "claim_token": None,
         }
         return True
 
-    def claim_next_batch(
-        self,
-        now: datetime,
-        *,
-        max_comments: int,
-        wait_hours: int,
-        quota_remaining: int,
-    ) -> ClaimedBatch | None:
-        limit = min(max_comments, quota_remaining)
-        if limit <= 0:
-            return None
-        queued = [
+    def claim_next_generation(self, now: datetime) -> ClaimedGeneration | None:
+        for comment_id, row in self.generation_queue.items():
+            if row["state"] == "claimed" and (
+                row["claimed_at"] is None
+                or row["claimed_at"] <= now - timedelta(minutes=5)
+            ):
+                row["state"] = "queued"
+                row["claimed_at"] = None
+                row["claim_token"] = None
+                self.set_comment_status(comment_id, CommentStatus.GENERATION_RETRY)
+        ready = [
             (comment_id, row)
-            for comment_id, row in self.batch_queue.items()
+            for comment_id, row in self.generation_queue.items()
             if row["state"] == "queued"
-            and (row["next_attempt_at"] is None or row["next_attempt_at"] <= now)
-        ]
-        if not queued:
-            return None
-        queued.sort(key=lambda entry: (entry[1]["queued_at"], entry[0]))
-        queued_by_post: dict[str, list[tuple[int, dict[str, object]]]] = {}
-        for entry in queued:
-            post_url = str(entry[1]["post_url"])
-            queued_by_post.setdefault(post_url, []).append(entry)
-        candidates = [
-            (post_url, entries)
-            for post_url, entries in queued_by_post.items()
-            if len(entries) >= limit
-            or entries[0][1]["queued_at"] <= now - timedelta(hours=wait_hours)
-        ]
-        if not candidates:
-            return None
-        post_url, selected = min(
-            candidates,
-            key=lambda candidate: (
-                max(limit - len(candidate[1]), 0),
-                candidate[1][0][1]["queued_at"],
-                candidate[0],
-            ),
-        )
-        selected = selected[:limit]
-        batch_id = self._next_batch_id
-        self._next_batch_id += 1
-        items = tuple(
-            BatchItem(
-                batch_id=batch_id,
-                comment_id=comment_id,
-                item_no=item_no,
-                post_url=post_url,
-                publication_title=self.comments[comment_id].publication_title,
-                thread_text=self.comments[comment_id].thread_text,
-                author=self.comments[comment_id].author,
-                comment_text=self.comments[comment_id].text,
+            and (
+                row["next_attempt_at"] is None
+                or row["next_attempt_at"] <= now
             )
-            for item_no, (comment_id, _) in enumerate(selected, start=1)
+        ]
+        if not ready:
+            return None
+        comment_id, row = min(
+            ready,
+            key=lambda entry: (entry[1]["next_attempt_at"] or entry[1]["created_at"], entry[1]["created_at"], entry[0]),
         )
-        batch = ClaimedBatch(
-            batch_id,
-            post_url,
-            now,
-            items,
-            publication_id=self.comments[selected[0][0]].publication_id,
+        row["state"] = "claimed"
+        row["attempt_count"] = int(row["attempt_count"]) + 1
+        row["claimed_at"] = now
+        claim_token = f"generation-{self._next_generation_claim_token}"
+        self._next_generation_claim_token += 1
+        row["claim_token"] = claim_token
+        self.set_comment_status(comment_id, CommentStatus.GENERATING)
+        return ClaimedGeneration(
+            comment=self.comments[comment_id],
+            attempt_count=int(row["attempt_count"]),
+            claim_token=claim_token,
         )
-        self.claimed_batches[batch_id] = batch
-        for comment_id, row in selected:
-            row["state"] = "claimed"
-            row["claimed_batch_id"] = batch_id
-            row["attempt_count"] = int(row["attempt_count"]) + 1
-        return batch
 
-    def save_batch_outcomes(
+    def complete_generation(
         self,
-        batch_id: int,
-        outcomes: tuple[BatchOutcome, ...],
+        comment_id: int,
         *,
+        claim_token: str,
+        text: str,
         ai_provider: str,
         ai_model: str,
         article_context_status: str,
         created_at: datetime,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
+        is_cta_candidate: bool,
+    ) -> int:
+        queue = self.generation_queue[comment_id]
+        if queue["state"] != "claimed" or queue["claim_token"] != claim_token:
+            raise ValueError("Generation queue claim is no longer active")
+        reply_id = self.save_reply(
+            Reply(
+                id=None,
+                comment_id=comment_id,
+                generated_text=text,
+                ai_provider=ai_provider,
+                ai_model=ai_model,
+                status=ReplyStatus.GENERATED,
+                published_at=None,
+                error_reason=None,
+                created_at=created_at,
+                article_context_status=article_context_status,
+                is_cta_candidate=is_cta_candidate,
+            )
+        )
+        self.enqueue_publication(reply_id, created_at=created_at)
+        queue["state"] = "completed"
+        queue["next_attempt_at"] = None
+        queue["last_error"] = None
+        queue["claimed_at"] = None
+        queue["claim_token"] = None
+        self.set_comment_status(comment_id, CommentStatus.GENERATED)
+        return reply_id
+
+    def skip_generation(
+        self,
+        comment_id: int,
+        *,
+        claim_token: str,
+        reason: str,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        created_at: datetime,
+    ) -> int:
+        queue = self.generation_queue[comment_id]
+        if queue["state"] != "claimed" or queue["claim_token"] != claim_token:
+            raise ValueError("Generation queue claim is no longer active")
+        reply_id = self.save_reply(
+            Reply(
+                id=None,
+                comment_id=comment_id,
+                generated_text="",
+                ai_provider=ai_provider,
+                ai_model=ai_model,
+                status=ReplyStatus.SKIPPED,
+                published_at=None,
+                error_reason=reason,
+                created_at=created_at,
+                article_context_status=article_context_status,
+            )
+        )
+        queue["state"] = "completed"
+        queue["next_attempt_at"] = None
+        queue["claimed_at"] = None
+        queue["claim_token"] = None
+        self.set_comment_status(comment_id, CommentStatus.SKIPPED)
+        return reply_id
+
+    def fail_generation(
+        self,
+        comment_id: int,
+        *,
+        claim_token: str,
+        error_reason: str,
+        failed_at: datetime,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
         retry_cooldown_minutes: int,
         max_attempts_per_comment: int,
-    ) -> tuple[int, ...]:
-        batch = self.claimed_batches[batch_id]
-        expected = [(item.comment_id, item.item_no) for item in batch.items]
-        actual = [(outcome.comment_id, outcome.item_no) for outcome in outcomes]
-        if actual != expected:
-            raise ValueError("Batch outcomes do not match the claimed item order")
-        self.save_batch_outcomes_calls.append((batch_id, outcomes))
-        reply_ids: list[int] = []
-        for outcome in outcomes:
-            status = {
-                BatchOutcomeKind.REPLY: ReplyStatus.GENERATED,
-                BatchOutcomeKind.SKIP: ReplyStatus.SKIPPED,
-                BatchOutcomeKind.ERROR: ReplyStatus.ERROR,
-            }[outcome.kind]
-            reply_id = self.save_reply(
-                Reply(
-                    id=None,
-                    comment_id=outcome.comment_id,
-                    generated_text=outcome.text,
-                    ai_provider=ai_provider,
-                    ai_model=ai_model,
-                    status=status,
-                    published_at=None,
-                    error_reason=outcome.error_reason,
-                    created_at=created_at,
-                    article_context_status=article_context_status,
-                )
+    ) -> GenerationFailureOutcome:
+        queue = self.generation_queue[comment_id]
+        if queue["state"] != "claimed" or queue["claim_token"] != claim_token:
+            raise ValueError("Generation queue claim is no longer active")
+        retry = int(queue["attempt_count"]) < max_attempts_per_comment
+        self.save_reply(
+            Reply(
+                id=None,
+                comment_id=comment_id,
+                generated_text="",
+                ai_provider=ai_provider,
+                ai_model=ai_model,
+                status=ReplyStatus.ERROR,
+                published_at=None,
+                error_reason=error_reason,
+                created_at=failed_at,
+                article_context_status=article_context_status,
             )
-            reply_ids.append(reply_id)
-            if outcome.kind is BatchOutcomeKind.REPLY:
-                self.enqueue_publication(reply_id, created_at=created_at)
-            self.comments[outcome.comment_id].status = {
-                BatchOutcomeKind.REPLY: CommentStatus.ANSWERED,
-                BatchOutcomeKind.SKIP: CommentStatus.SKIPPED,
-                BatchOutcomeKind.ERROR: CommentStatus.ERROR,
-            }[outcome.kind]
-            queue = self.batch_queue[outcome.comment_id]
-            retry = (
-                outcome.kind is BatchOutcomeKind.ERROR
-                and int(queue["attempt_count"]) < max_attempts_per_comment
-            )
-            queue["state"] = "queued" if retry else "completed"
-            queue["claimed_batch_id"] = None if retry else batch_id
-            queue["next_attempt_at"] = (
-                created_at + timedelta(minutes=retry_cooldown_minutes)
-                if retry
-                else None
-            )
-        return tuple(reply_ids)
+        )
+        queue["state"] = "queued" if retry else "completed"
+        queue["next_attempt_at"] = (
+            failed_at + timedelta(minutes=retry_cooldown_minutes) if retry else None
+        )
+        queue["last_error"] = error_reason
+        queue["claimed_at"] = None
+        queue["claim_token"] = None
+        self.set_comment_status(
+            comment_id,
+            CommentStatus.GENERATION_RETRY
+            if retry
+            else CommentStatus.GENERATION_ERROR,
+        )
+        return (
+            GenerationFailureOutcome.RETRY
+            if retry
+            else GenerationFailureOutcome.TERMINAL
+        )
 
     def get_article_context(self, publication_id: int) -> ArticleContext | None:
         return self.article_contexts.get(publication_id)
@@ -377,6 +428,8 @@ class FakeCommentRepository:
             "next_attempt_at": None,
             "last_error": None,
             "created_at": created_at,
+            "claimed_at": None,
+            "claim_token": None,
         }
         return True
 
@@ -407,6 +460,14 @@ class FakeCommentRepository:
         return len(stale_reply_ids)
 
     def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
+        for row in self.publication_queue.values():
+            if row["state"] == "claimed" and (
+                row["claimed_at"] is None
+                or row["claimed_at"] <= now - timedelta(minutes=5)
+            ):
+                row["state"] = "queued"
+                row["claimed_at"] = None
+                row["claim_token"] = None
         ready = [
             (reply_id, row)
             for reply_id, row in self.publication_queue.items()
@@ -421,30 +482,53 @@ class FakeCommentRepository:
         reply_id, row = min(ready, key=lambda entry: (entry[1]["created_at"], entry[0]))
         row["state"] = "claimed"
         row["attempt_count"] = int(row["attempt_count"]) + 1
+        row["claimed_at"] = now
+        claim_token = f"publication-{self._next_publication_claim_token}"
+        self._next_publication_claim_token += 1
+        row["claim_token"] = claim_token
         reply = self.replies[reply_id]
+        self.set_comment_status(reply.comment_id, CommentStatus.PUBLISHING)
         return ClaimedPublication(
             reply_id=reply_id,
             comment=self.comments[reply.comment_id],
             text=reply.generated_text,
+            claim_token=claim_token,
         )
 
     def complete_publication(
-        self, reply_id: int, *, published_at: datetime | None
+        self,
+        reply_id: int,
+        *,
+        claim_token: str,
+        published_at: datetime | None,
     ) -> None:
         self.complete_publication_calls.append(reply_id)
-        self.publication_queue[reply_id]["state"] = "completed"
-        self.publication_queue[reply_id]["next_attempt_at"] = None
+        row = self.publication_queue[reply_id]
+        if row["state"] != "claimed" or row["claim_token"] != claim_token:
+            raise ValueError("Publication queue claim is no longer active")
+        row["state"] = "completed"
+        row["next_attempt_at"] = None
+        row["claimed_at"] = None
+        row["claim_token"] = None
         if published_at is not None:
             self.set_reply_status(
                 reply_id,
                 ReplyStatus.PUBLISHED,
                 published_at=published_at,
             )
+            self.set_comment_status(
+                self.replies[reply_id].comment_id, CommentStatus.PUBLISHED
+            )
+        else:
+            self.set_comment_status(
+                self.replies[reply_id].comment_id, CommentStatus.GENERATED
+            )
 
     def fail_publication(
         self,
         reply_id: int,
         *,
+        claim_token: str,
         error_reason: str,
         failed_at: datetime,
         retry_cooldown_minutes: int,
@@ -452,17 +536,24 @@ class FakeCommentRepository:
     ) -> PublicationFailureOutcome:
         self.fail_publication_calls.append((reply_id, error_reason))
         row = self.publication_queue[reply_id]
+        if row["state"] != "claimed" or row["claim_token"] != claim_token:
+            raise ValueError("Publication queue claim is no longer active")
         retry = int(row["attempt_count"]) < max_attempts_per_reply
         row["state"] = "queued" if retry else "completed"
         row["next_attempt_at"] = (
             failed_at + timedelta(minutes=retry_cooldown_minutes) if retry else None
         )
         row["last_error"] = error_reason
+        row["claimed_at"] = None
+        row["claim_token"] = None
+        self.set_comment_status(
+            self.replies[reply_id].comment_id,
+            CommentStatus.PUBLICATION_RETRY
+            if retry
+            else CommentStatus.PUBLICATION_ERROR,
+        )
         if not retry:
             self.set_reply_status(reply_id, ReplyStatus.ERROR, error_reason)
-            self.set_comment_status(
-                self.replies[reply_id].comment_id, CommentStatus.ERROR
-            )
         return (
             PublicationFailureOutcome.RETRY
             if retry
@@ -490,16 +581,6 @@ class FakePromptBuilder:
     def build(self, context: PromptContext) -> str:
         self.contexts.append(context)
         return f"prompt:{context.reply_type}:{context.thread_text}"
-
-
-class FakeBatchPromptBuilder:
-    def __init__(self) -> None:
-        self.calls: list[tuple[tuple[BatchItem, ...], str]] = []
-
-    def build_batch(self, items, *, article_text: str) -> str:
-        item_tuple = tuple(items)
-        self.calls.append((item_tuple, article_text))
-        return "batch prompt"
 
 
 class FakeSessionManager:
@@ -649,7 +730,6 @@ class LoopHarness:
     repository: FakeCommentRepository
     ai_provider: FakeAIProvider
     prompt_builder: FakePromptBuilder
-    batch_prompt_builder: FakeBatchPromptBuilder
     session: FakeSessionManager
     page: FakeDzenPage
     notifier: FakeNotifier
@@ -745,7 +825,6 @@ def loop_factory(
         repository = repository or FakeCommentRepository()
         ai_provider = FakeAIProvider(ai_responses)
         prompt_builder = FakePromptBuilder()
-        batch_prompt_builder = FakeBatchPromptBuilder()
         session = session or FakeSessionManager()
         page = FakeDzenPage(comments)
         notifier = FakeNotifier()
@@ -772,17 +851,11 @@ def loop_factory(
                         "DEVELOPER_TELEGRAM_CHAT_ID_LIST", ""
                     ),
                     error_email_list=runtime_overrides.get("EMAIL_FALLBACK_LIST", ""),
-                    batch_replies_enabled=runtime_overrides.get(
-                        "BATCH_REPLIES_ENABLED", False
+                    generation_retry_cooldown_minutes=runtime_overrides.get(
+                        "GENERATION_RETRY_COOLDOWN_MINUTES", 60
                     ),
-                    batch_cutover_at=runtime_overrides.get("BATCH_CUTOVER_AT"),
-                    batch_max_comments=runtime_overrides.get("BATCH_MAX_COMMENTS", 3),
-                    batch_wait_hours=runtime_overrides.get("BATCH_WAIT_HOURS", 12),
-                    batch_retry_cooldown_minutes=runtime_overrides.get(
-                        "BATCH_RETRY_COOLDOWN_MINUTES", 60
-                    ),
-                    batch_max_attempts_per_comment=runtime_overrides.get(
-                        "BATCH_MAX_ATTEMPTS_PER_COMMENT", 2
+                    generation_max_attempts_per_comment=runtime_overrides.get(
+                        "GENERATION_MAX_ATTEMPTS_PER_COMMENT", 3
                     ),
                     publication_retry_cooldown_minutes=runtime_overrides.get(
                         "PUBLICATION_RETRY_COOLDOWN_MINUTES", 60
@@ -800,8 +873,6 @@ def loop_factory(
             repository=repository,
             ai_provider=ai_provider,
             prompt_builder=prompt_builder,
-            batch_prompt_builder=batch_prompt_builder,
-            batch_reply_parser=parse_batch,
             session=session,
             page=page,
             notifier=notifier,
@@ -818,7 +889,6 @@ def loop_factory(
             repository=repository,
             ai_provider=ai_provider,
             prompt_builder=prompt_builder,
-            batch_prompt_builder=batch_prompt_builder,
             session=session,
             page=page,
             notifier=notifier,

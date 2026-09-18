@@ -107,7 +107,21 @@
         </div>
       </td>
       <td>
-        {% if row.reply_status is none %}
+        {% if row.comment_status == "new" and row.reply_status is none %}
+          <span class="status-badge status-generated">Новый комментарий</span>
+        {% elif row.comment_status == "generating" %}
+          <span class="status-badge status-generated">Генерация ответа</span>
+        {% elif row.comment_status == "publishing" %}
+          <span class="status-badge status-generated">Публикация ответа</span>
+        {% elif row.comment_status == "generation_retry" %}
+          <span class="status-badge status-error">Повтор генерации</span>{% if row.generation_last_error %}<span class="error-reason"> Техническая ошибка: {{ row.generation_last_error }}</span>{% endif %}
+        {% elif row.comment_status == "generation_error" %}
+          <span class="status-badge status-error">Ошибка генерации</span>{% if row.generation_last_error %}<span class="error-reason"> Техническая ошибка: {{ row.generation_last_error }}</span>{% endif %}
+        {% elif row.comment_status == "publication_retry" %}
+          <span class="status-badge status-error">Повтор публикации</span>{% if row.publication_last_error %}<span class="error-reason"> Техническая ошибка: {{ row.publication_last_error }}</span>{% endif %}
+        {% elif row.comment_status == "publication_error" %}
+          <span class="status-badge status-error">Ошибка публикации</span>{% if row.publication_last_error %}<span class="error-reason"> Техническая ошибка: {{ row.publication_last_error }}</span>{% endif %}
+        {% elif row.reply_status is none %}
           <span class="status-badge status-no-reply">Нет ответа</span>
         {% elif row.reply_status == "error" %}
           <span class="status-badge status-error">Ошибка</span>{% if row.error_reason %}<span class="error-reason"> — {{ row.error_reason }}</span>{% endif %}

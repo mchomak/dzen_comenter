@@ -206,6 +206,58 @@ def test_runtime_settings_include_publication_retry_defaults_and_reload(tmp_path
     assert reloaded.publication_max_attempts_per_reply == 4
 
 
+def test_runtime_settings_include_generation_retry_defaults_and_reload(tmp_path):
+    path = tmp_path / "runtime.json"
+    path.write_text(json.dumps({"settings": {}, "prompt": {}}), encoding="utf-8")
+    runtime_config = RuntimeConfig(str(path))
+
+    defaults = runtime_config.get().settings
+
+    assert defaults.generation_retry_cooldown_minutes == 60
+    assert defaults.generation_max_attempts_per_comment == 3
+
+    path.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    "generation_retry_cooldown_minutes": 15,
+                    "generation_max_attempts_per_comment": 4,
+                },
+                "prompt": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    stat = path.stat()
+    os.utime(path, (stat.st_atime + 10, stat.st_mtime + 10))
+
+    reloaded = runtime_config.get().settings
+
+    assert reloaded.generation_retry_cooldown_minutes == 15
+    assert reloaded.generation_max_attempts_per_comment == 4
+
+
+@pytest.mark.parametrize(
+    "settings",
+    (
+        {"generation_retry_cooldown_minutes": 0},
+        {"generation_retry_cooldown_minutes": 1441},
+        {"generation_max_attempts_per_comment": 0},
+        {"generation_max_attempts_per_comment": 11},
+    ),
+)
+def test_invalid_generation_retry_settings_fall_back_to_safe_defaults(tmp_path, settings):
+    path = tmp_path / "runtime.json"
+    path.write_text(
+        json.dumps({"settings": settings, "prompt": {}}), encoding="utf-8"
+    )
+
+    parsed = RuntimeConfig(str(path)).get().settings
+
+    assert parsed.generation_retry_cooldown_minutes == 60
+    assert parsed.generation_max_attempts_per_comment == 3
+
+
 @pytest.mark.parametrize(
     "settings",
     (
@@ -227,39 +279,30 @@ def test_invalid_publication_retry_settings_fall_back_to_safe_defaults(tmp_path,
     assert parsed.publication_max_attempts_per_reply == 3
 
 
-def test_batching_requires_a_timezone_aware_cutover_timestamp(tmp_path):
+def test_runtime_config_ignores_legacy_batch_keys_when_resaved(tmp_path):
     path = tmp_path / "runtime.json"
-
-    for raw_cutover in (None, "", "not-a-date", "2026-08-28T12:00:00"):
-        path.write_text(
-            json.dumps(
-                {
-                    "settings": {
-                        "batch_replies_enabled": True,
-                        "batch_cutover_at": raw_cutover,
-                    },
-                    "prompt": {},
-                }
-            ),
-            encoding="utf-8",
-        )
-        assert RuntimeConfig(str(path)).get().settings.batch_replies_enabled is False
-
     path.write_text(
         json.dumps(
             {
                 "settings": {
                     "batch_replies_enabled": True,
                     "batch_cutover_at": "2026-08-28T12:00:00+03:00",
+                    "batch_max_comments": 5,
+                    "batch_wait_hours": 6,
+                    "batch_retry_cooldown_minutes": 30,
+                    "batch_max_attempts_per_comment": 4,
                 },
                 "prompt": {},
             }
         ),
         encoding="utf-8",
     )
-    settings = RuntimeConfig(str(path)).get().settings
-    assert settings.batch_replies_enabled is True
-    assert settings.batch_cutover_at == "2026-08-28T12:00:00+03:00"
+
+    data = RuntimeConfig(str(path)).get()
+    RuntimeConfig(str(path)).save(data)
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert not any(name.startswith("batch_") for name in saved["settings"])
 
 
 def test_ensure_does_not_overwrite_existing(tmp_path):

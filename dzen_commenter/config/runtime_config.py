@@ -12,7 +12,6 @@ import logging
 import os
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 
 from dzen_commenter.prompt.config_loader import (
@@ -28,6 +27,8 @@ from dzen_commenter.prompt.config_loader import (
 
 logger = logging.getLogger(__name__)
 
+MAX_GENERATION_RETRY_COOLDOWN_MINUTES = 24 * 60
+MAX_GENERATION_ATTEMPTS_PER_COMMENT = 10
 MAX_PUBLICATION_RETRY_COOLDOWN_MINUTES = 24 * 60
 MAX_PUBLICATION_ATTEMPTS_PER_REPLY = 10
 
@@ -43,12 +44,8 @@ class RuntimeSettings:
     error_email_list: str = ""
     error_notification_cooldown_seconds: int = 900
     telegram_proxy_url: str = ""
-    batch_replies_enabled: bool = False
-    batch_cutover_at: str | None = None
-    batch_max_comments: int = 3
-    batch_wait_hours: int = 12
-    batch_retry_cooldown_minutes: int = 60
-    batch_max_attempts_per_comment: int = 2
+    generation_retry_cooldown_minutes: int = 60
+    generation_max_attempts_per_comment: int = 3
     publication_retry_cooldown_minutes: int = 60
     publication_max_attempts_per_reply: int = 3
 
@@ -76,19 +73,6 @@ def _defaults() -> RuntimeConfigData:
     return RuntimeConfigData(settings=RuntimeSettings(), prompt=_default_prompt())
 
 
-def _parse_batch_cutover(value: object) -> str | None:
-    if value is None:
-        return None
-    cutover_at = str(value).strip()
-    if not cutover_at:
-        return None
-    try:
-        parsed = datetime.fromisoformat(cutover_at)
-    except ValueError:
-        return None
-    return cutover_at if parsed.tzinfo is not None else None
-
-
 def _parse_positive_integer(
     raw: dict, name: str, default: int, maximum: int
 ) -> int:
@@ -100,7 +84,6 @@ def _parse_positive_integer(
 
 def _parse_settings(raw: dict) -> RuntimeSettings:
     base = RuntimeSettings()
-    batch_cutover_at = _parse_batch_cutover(raw.get("batch_cutover_at"))
     return RuntimeSettings(
         auto_publish=bool(raw.get("auto_publish", base.auto_publish)),
         max_comment_age_days=int(raw.get("max_comment_age_days", base.max_comment_age_days)),
@@ -122,22 +105,17 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
             )
         ),
         telegram_proxy_url=str(raw.get("telegram_proxy_url", base.telegram_proxy_url)),
-        batch_replies_enabled=(
-            bool(raw.get("batch_replies_enabled", base.batch_replies_enabled))
-            and batch_cutover_at is not None
+        generation_retry_cooldown_minutes=_parse_positive_integer(
+            raw,
+            "generation_retry_cooldown_minutes",
+            base.generation_retry_cooldown_minutes,
+            MAX_GENERATION_RETRY_COOLDOWN_MINUTES,
         ),
-        batch_cutover_at=batch_cutover_at,
-        batch_max_comments=int(raw.get("batch_max_comments", base.batch_max_comments)),
-        batch_wait_hours=int(raw.get("batch_wait_hours", base.batch_wait_hours)),
-        batch_retry_cooldown_minutes=int(
-            raw.get(
-                "batch_retry_cooldown_minutes", base.batch_retry_cooldown_minutes
-            )
-        ),
-        batch_max_attempts_per_comment=int(
-            raw.get(
-                "batch_max_attempts_per_comment", base.batch_max_attempts_per_comment
-            )
+        generation_max_attempts_per_comment=_parse_positive_integer(
+            raw,
+            "generation_max_attempts_per_comment",
+            base.generation_max_attempts_per_comment,
+            MAX_GENERATION_ATTEMPTS_PER_COMMENT,
         ),
         publication_retry_cooldown_minutes=_parse_positive_integer(
             raw,

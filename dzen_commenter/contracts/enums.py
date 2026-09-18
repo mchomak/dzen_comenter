@@ -3,9 +3,16 @@ from enum import Enum
 
 class CommentStatus(str, Enum):
     NEW = "new"
-    ANSWERED = "answered"
+    GENERATING = "generating"
+    GENERATED = "generated"
+    PUBLISHING = "publishing"
+    PUBLISHED = "published"
     SKIPPED = "skipped"
-    ERROR = "error"
+    GENERATION_RETRY = "generation_retry"
+    GENERATION_ERROR = "generation_error"
+    PUBLICATION_RETRY = "publication_retry"
+    PUBLICATION_ERROR = "publication_error"
+
 
 
 class ReplyStatus(str, Enum):
@@ -15,12 +22,11 @@ class ReplyStatus(str, Enum):
     SKIPPED = "skipped"
 
 
-class BatchOutcomeKind(str, Enum):
-    REPLY = "reply"
-    SKIP = "skip"
-    ERROR = "error"
-
-
 class PublicationFailureOutcome(str, Enum):
+    RETRY = "retry"
+    TERMINAL = "terminal"
+
+
+class GenerationFailureOutcome(str, Enum):
     RETRY = "retry"
     TERMINAL = "terminal"

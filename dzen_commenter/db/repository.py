@@ -1,32 +1,29 @@
 from datetime import datetime, timedelta
 from hashlib import sha256
+from uuid import uuid4
 
 from sqlalchemy import case, exists, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
 from dzen_commenter.contracts.enums import (
-    BatchOutcomeKind,
     CommentStatus,
+    GenerationFailureOutcome,
     PublicationFailureOutcome,
     ReplyStatus,
 )
 from dzen_commenter.contracts.models import (
     ArticleContext,
-    BatchItem,
-    BatchOutcome,
-    ClaimedBatch,
+    ClaimedGeneration,
     ClaimedPublication,
     Comment,
     Publication,
     Reply,
 )
 from dzen_commenter.db.models import (
-    CommentBatchQueueTable,
     CommentTable,
     PublicationTable,
-    ReplyBatchItemTable,
-    ReplyBatchTable,
+    ReplyGenerationQueueTable,
     ReplyPublicationQueueTable,
     ReplyTable,
 )
@@ -39,6 +36,7 @@ class PostgresCommentRepository:
         self._engine = engine
 
     _PUBLICATION_CLAIM_LEASE = timedelta(minutes=5)
+    _GENERATION_CLAIM_LEASE = timedelta(minutes=5)
 
     def upsert_publication(self, pub: Publication) -> int:
         stmt = (
@@ -57,7 +55,8 @@ class PostgresCommentRepository:
         with self._engine.begin() as conn:
             return conn.execute(stmt).scalar_one()
 
-    def upsert_comment(self, comment: Comment) -> int:
+    @staticmethod
+    def _upsert_comment_statement(comment: Comment):
         stmt = (
             insert(CommentTable)
             .values(
@@ -83,7 +82,14 @@ class PostgresCommentRepository:
                     "text": comment.text,
                     "parent_comment_id": comment.parent_comment_id,
                     "posted_at": comment.posted_at,
-                    "status": comment.status.value,
+                    "status": case(
+                        (
+                            (stmt.excluded.status == CommentStatus.NEW.value)
+                            & (CommentTable.status != CommentStatus.NEW.value),
+                            CommentTable.status,
+                        ),
+                        else_=stmt.excluded.status,
+                    ),
                     "post_title": case(
                         (
                             stmt.excluded.post_title.is_(None),
@@ -110,8 +116,56 @@ class PostgresCommentRepository:
             )
             .returning(CommentTable.id)
         )
+        return stmt
+
+    def upsert_comment(self, comment: Comment) -> int:
+        stmt = self._upsert_comment_statement(comment)
         with self._engine.begin() as conn:
             return conn.execute(stmt).scalar_one()
+
+    def upsert_eligible_comment(self, comment: Comment, *, queued_at: datetime) -> int:
+        with self._engine.begin() as conn:
+            comment_id = conn.execute(
+                self._upsert_comment_statement(comment)
+            ).scalar_one()
+            conn.execute(self._enqueue_generation_statement(comment_id, queued_at))
+            return comment_id
+
+    def enqueue_pending_generations(self, *, queued_at: datetime) -> int:
+        terminal_reply = exists(
+            select(ReplyTable.id).where(
+                ReplyTable.comment_id == CommentTable.id,
+                ReplyTable.status.in_(
+                    [
+                        ReplyStatus.GENERATED.value,
+                        ReplyStatus.PUBLISHED.value,
+                        ReplyStatus.SKIPPED.value,
+                        ReplyStatus.ERROR.value,
+                    ]
+                ),
+            )
+        )
+        stmt = (
+            insert(ReplyGenerationQueueTable)
+            .from_select(
+                ["comment_id", "state", "attempt_count", "created_at"],
+                select(
+                    CommentTable.id,
+                    literal("queued"),
+                    literal(0),
+                    literal(queued_at),
+                ).where(
+                    CommentTable.status == CommentStatus.NEW.value,
+                    ~terminal_reply,
+                ),
+            )
+            .on_conflict_do_nothing(
+                index_elements=[ReplyGenerationQueueTable.comment_id]
+            )
+            .returning(ReplyGenerationQueueTable.comment_id)
+        )
+        with self._engine.begin() as conn:
+            return len(conn.execute(stmt).scalars().all())
 
     def save_reply(self, reply: Reply) -> int:
         stmt = (
@@ -141,6 +195,19 @@ class PostgresCommentRepository:
         )
         with self._engine.begin() as conn:
             conn.execute(stmt)
+
+    def skip_comment_if_new(self, comment_id: int) -> bool:
+        stmt = (
+            update(CommentTable)
+            .where(
+                CommentTable.id == comment_id,
+                CommentTable.status == CommentStatus.NEW.value,
+            )
+            .values(status=CommentStatus.SKIPPED.value)
+            .returning(CommentTable.id)
+        )
+        with self._engine.begin() as conn:
+            return conn.execute(stmt).scalar_one_or_none() is not None
 
     def set_reply_status(
         self,
@@ -181,316 +248,338 @@ class PostgresCommentRepository:
         with self._engine.begin() as conn:
             return int(conn.execute(stmt).scalar_one())
 
-    def enqueue_batch_comment(
-        self,
-        comment_id: int,
-        post_url: str,
-        *,
-        queued_at: datetime,
-        cutover_at: datetime,
-    ) -> bool:
-        """Queue a fresh, eligible comment once without reviving historical rows."""
-        successful_reply = exists(
+    @staticmethod
+    def _enqueue_generation_statement(comment_id: int, queued_at: datetime):
+        terminal_reply = exists(
             select(ReplyTable.id).where(
                 ReplyTable.comment_id == CommentTable.id,
                 ReplyTable.status.in_(
-                    [ReplyStatus.GENERATED.value, ReplyStatus.PUBLISHED.value]
+                    [
+                        ReplyStatus.GENERATED.value,
+                        ReplyStatus.PUBLISHED.value,
+                        ReplyStatus.SKIPPED.value,
+                        ReplyStatus.ERROR.value,
+                    ]
                 ),
             )
         )
         eligible = select(CommentTable.id).where(
             CommentTable.id == comment_id,
-            CommentTable.post_url == post_url,
             CommentTable.status == CommentStatus.NEW.value,
-            CommentTable.fetched_at >= cutover_at,
-            ~successful_reply,
+            ~terminal_reply,
         )
         stmt = (
-            insert(CommentBatchQueueTable)
+            insert(ReplyGenerationQueueTable)
             .from_select(
-                ["comment_id", "post_url", "queued_at", "state", "attempt_count"],
+                ["comment_id", "state", "attempt_count", "created_at"],
                 select(
                     CommentTable.id,
-                    CommentTable.post_url,
-                    literal(queued_at),
                     literal("queued"),
                     literal(0),
+                    literal(queued_at),
                 ).where(CommentTable.id.in_(eligible)),
             )
-            .on_conflict_do_nothing(index_elements=[CommentBatchQueueTable.comment_id])
-            .returning(CommentBatchQueueTable.comment_id)
+            .on_conflict_do_nothing(
+                index_elements=[ReplyGenerationQueueTable.comment_id]
+            )
+            .returning(ReplyGenerationQueueTable.comment_id)
         )
+        return stmt
+
+    def enqueue_generation(self, comment_id: int, *, queued_at: datetime) -> bool:
+        stmt = self._enqueue_generation_statement(comment_id, queued_at)
         with self._engine.begin() as conn:
             return conn.execute(stmt).scalar_one_or_none() is not None
 
-    def claim_next_batch(
-        self,
-        now: datetime,
-        *,
-        max_comments: int,
-        wait_hours: int,
-        quota_remaining: int,
-    ) -> ClaimedBatch | None:
-        """Claim one post-local batch under row locks in a stable item order."""
-        limit = min(max_comments, quota_remaining)
-        if limit <= 0:
-            return None
-
-        ready = (
-            (CommentBatchQueueTable.state == "queued")
-            & (CommentBatchQueueTable.claimed_batch_id.is_(None))
-            & (
-                (CommentBatchQueueTable.next_attempt_at.is_(None))
-                | (CommentBatchQueueTable.next_attempt_at <= now)
-            )
+    def claim_next_generation(self, now: datetime) -> ClaimedGeneration | None:
+        ready = (ReplyGenerationQueueTable.state == "queued") & (
+            (ReplyGenerationQueueTable.next_attempt_at.is_(None))
+            | (ReplyGenerationQueueTable.next_attempt_at <= now)
         )
         with self._engine.begin() as conn:
-            ready_count = func.count(CommentBatchQueueTable.comment_id)
-            oldest_queued_at = func.min(CommentBatchQueueTable.queued_at)
-            next_post_url = conn.execute(
-                select(CommentBatchQueueTable.post_url)
-                .where(ready)
-                .group_by(CommentBatchQueueTable.post_url)
-                .having(
-                    (ready_count >= limit)
-                    | (oldest_queued_at <= now - timedelta(hours=wait_hours))
-                )
-                .order_by(
-                    case(
-                        (ready_count >= limit, 0),
-                        else_=limit - ready_count,
+            stale_comment_ids = conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(
+                    ReplyGenerationQueueTable.state == "claimed",
+                    or_(
+                        ReplyGenerationQueueTable.claimed_at.is_(None),
+                        ReplyGenerationQueueTable.claimed_at
+                        <= now - self._GENERATION_CLAIM_LEASE,
                     ),
-                    oldest_queued_at,
-                    CommentBatchQueueTable.post_url,
                 )
-                .limit(1)
-            ).scalar_one_or_none()
-            if next_post_url is None:
-                return None
+                .values(state="queued", claimed_at=None, claim_token=None)
+                .returning(ReplyGenerationQueueTable.comment_id)
+            ).scalars().all()
+            if stale_comment_ids:
+                conn.execute(
+                    update(CommentTable)
+                    .where(CommentTable.id.in_(stale_comment_ids))
+                    .values(status=CommentStatus.GENERATION_RETRY.value)
+                )
 
-            rows = conn.execute(
+            row = conn.execute(
                 select(
-                    CommentBatchQueueTable.queued_at.label("queue_queued_at"),
-                    CommentTable.id.label("comment_id"),
+                    ReplyGenerationQueueTable.comment_id.label("comment_id"),
+                    ReplyGenerationQueueTable.attempt_count.label("attempt_count"),
+                    CommentTable.dzen_comment_id.label("dzen_comment_id"),
                     CommentTable.publication_id.label("publication_id"),
-                    CommentTable.post_title.label("post_title"),
-                    CommentTable.thread_text.label("thread_text"),
                     CommentTable.author.label("author"),
                     CommentTable.text.label("comment_text"),
+                    CommentTable.parent_comment_id.label("parent_comment_id"),
+                    CommentTable.posted_at.label("posted_at"),
+                    CommentTable.fetched_at.label("fetched_at"),
+                    CommentTable.post_title.label("publication_title"),
+                    CommentTable.thread_text.label("thread_text"),
+                    CommentTable.post_url.label("post_url"),
                 )
                 .join(
                     CommentTable,
-                    CommentTable.id == CommentBatchQueueTable.comment_id,
+                    CommentTable.id == ReplyGenerationQueueTable.comment_id,
                 )
-                .where(ready, CommentBatchQueueTable.post_url == next_post_url)
+                .where(ready)
                 .order_by(
-                    CommentBatchQueueTable.queued_at,
-                    CommentBatchQueueTable.comment_id,
+                    func.coalesce(
+                        ReplyGenerationQueueTable.next_attempt_at,
+                        ReplyGenerationQueueTable.created_at,
+                    ),
+                    ReplyGenerationQueueTable.created_at,
+                    ReplyGenerationQueueTable.comment_id,
                 )
-                .limit(limit)
-                .with_for_update(skip_locked=True, of=CommentBatchQueueTable)
-            ).mappings().all()
-            if not rows:
-                return None
-            oldest = rows[0]["queue_queued_at"]
-            if len(rows) < limit and oldest > now - timedelta(hours=wait_hours):
+                .limit(1)
+                .with_for_update(skip_locked=True, of=ReplyGenerationQueueTable)
+            ).mappings().one_or_none()
+            if row is None:
                 return None
 
-            batch_id = conn.execute(
-                insert(ReplyBatchTable)
-                .values(
-                    post_url=next_post_url,
-                    created_at=now,
-                    status="claimed",
-                    item_count=len(rows),
-                )
-                .returning(ReplyBatchTable.id)
-            ).scalar_one()
-            items = tuple(
-                BatchItem(
-                    batch_id=batch_id,
-                    comment_id=row["comment_id"],
-                    item_no=index,
-                    post_url=next_post_url,
-                    publication_title=row["post_title"] or "",
-                    thread_text=row["thread_text"] or "",
-                    author=row["author"] or "",
-                    comment_text=row["comment_text"] or "",
-                )
-                for index, row in enumerate(rows, start=1)
-            )
+            attempt_count = int(row["attempt_count"]) + 1
+            claim_token = uuid4().hex
             conn.execute(
-                insert(ReplyBatchItemTable),
-                [
-                    {
-                        "batch_id": batch_id,
-                        "comment_id": item.comment_id,
-                        "item_no": item.item_no,
-                        "status": "claimed",
-                    }
-                    for item in items
-                ],
-            )
-            comment_ids = [item.comment_id for item in items]
-            conn.execute(
-                update(CommentBatchQueueTable)
-                .where(CommentBatchQueueTable.comment_id.in_(comment_ids))
+                update(ReplyGenerationQueueTable)
+                .where(ReplyGenerationQueueTable.comment_id == row["comment_id"])
                 .values(
                     state="claimed",
-                    claimed_batch_id=batch_id,
-                    attempt_count=CommentBatchQueueTable.attempt_count + 1,
+                    claimed_at=now,
+                    attempt_count=attempt_count,
+                    claim_token=claim_token,
                 )
             )
-            return ClaimedBatch(
-                id=batch_id,
-                publication_id=rows[0]["publication_id"],
-                post_url=next_post_url,
-                created_at=now,
-                items=items,
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id == row["comment_id"])
+                .values(status=CommentStatus.GENERATING.value)
             )
 
-    def save_batch_outcomes(
+        return ClaimedGeneration(
+            comment=Comment(
+                id=row["comment_id"],
+                dzen_comment_id=row["dzen_comment_id"],
+                publication_id=row["publication_id"],
+                author=row["author"] or "",
+                text=row["comment_text"] or "",
+                parent_comment_id=row["parent_comment_id"],
+                posted_at=row["posted_at"],
+                fetched_at=row["fetched_at"],
+                status=CommentStatus.GENERATING,
+                publication_title=row["publication_title"] or "",
+                thread_text=row["thread_text"] or "",
+                post_url=row["post_url"],
+            ),
+            attempt_count=attempt_count,
+            claim_token=claim_token,
+        )
+
+    def complete_generation(
         self,
-        batch_id: int,
-        outcomes: tuple[BatchOutcome, ...],
+        comment_id: int,
         *,
+        claim_token: str,
+        text: str,
         ai_provider: str,
         ai_model: str,
         article_context_status: str,
         created_at: datetime,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
-        retry_cooldown_minutes: int,
-        max_attempts_per_comment: int,
-    ) -> tuple[int, ...]:
-        """Persist every item outcome in one transaction or persist none of them."""
+        is_cta_candidate: bool,
+    ) -> int:
         with self._engine.begin() as conn:
-            items = conn.execute(
-                select(
-                    ReplyBatchItemTable.comment_id.label("comment_id"),
-                    ReplyBatchItemTable.item_no.label("item_no"),
-                )
-                .where(ReplyBatchItemTable.batch_id == batch_id)
-                .order_by(ReplyBatchItemTable.item_no)
-                .with_for_update()
-            ).mappings().all()
-            expected = [(item["comment_id"], item["item_no"]) for item in items]
-            actual = [(outcome.comment_id, outcome.item_no) for outcome in outcomes]
-            if not items or actual != expected:
-                raise ValueError("Batch outcomes do not match the claimed item order")
-            if any(
-                outcome.kind not in set(BatchOutcomeKind) for outcome in outcomes
-            ):
-                raise ValueError("Unknown batch outcome kind")
-
-            queue_rows = conn.execute(
-                select(
-                    CommentBatchQueueTable.comment_id.label("comment_id"),
-                    CommentBatchQueueTable.attempt_count.label("attempt_count"),
-                )
+            queue = conn.execute(
+                select(ReplyGenerationQueueTable.comment_id)
                 .where(
-                    CommentBatchQueueTable.comment_id.in_(
-                        [outcome.comment_id for outcome in outcomes]
-                    ),
-                    CommentBatchQueueTable.claimed_batch_id == batch_id,
-                    CommentBatchQueueTable.state == "claimed",
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "claimed",
+                    ReplyGenerationQueueTable.claim_token == claim_token,
                 )
                 .with_for_update()
-            ).mappings().all()
-            queues = {queue["comment_id"]: queue for queue in queue_rows}
-            if len(queues) != len(outcomes):
-                raise ValueError("Batch queue claim is no longer active")
-
-            reply_ids: list[int] = []
-            has_error = False
-            batch_error_reason: str | None = None
-            for item, outcome in zip(items, outcomes, strict=True):
-                if outcome.kind is BatchOutcomeKind.REPLY:
-                    reply_status = ReplyStatus.GENERATED
-                    comment_status = CommentStatus.ANSWERED
-                elif outcome.kind is BatchOutcomeKind.SKIP:
-                    reply_status = ReplyStatus.SKIPPED
-                    comment_status = CommentStatus.SKIPPED
-                else:
-                    reply_status = ReplyStatus.ERROR
-                    comment_status = CommentStatus.ERROR
-                    has_error = True
-                    batch_error_reason = batch_error_reason or outcome.error_reason
-
-                reply_id = conn.execute(
-                    insert(ReplyTable)
-                    .values(
-                        comment_id=outcome.comment_id,
-                        generated_text=outcome.text,
-                        ai_provider=ai_provider,
-                        ai_model=ai_model,
-                        status=reply_status.value,
-                        error_reason=outcome.error_reason,
-                        created_at=created_at,
-                        article_context_status=article_context_status,
-                        is_cta_candidate=False,
-                    )
-                    .returning(ReplyTable.id)
-                ).scalar_one()
-                reply_ids.append(reply_id)
-                if outcome.kind is BatchOutcomeKind.REPLY:
-                    conn.execute(
-                        insert(ReplyPublicationQueueTable)
-                        .values(
-                            reply_id=reply_id,
-                            state="queued",
-                            attempt_count=0,
-                            created_at=created_at,
-                        )
-                        .on_conflict_do_nothing(
-                            index_elements=[ReplyPublicationQueueTable.reply_id]
-                        )
-                    )
-                conn.execute(
-                    update(ReplyBatchItemTable)
-                    .where(
-                        ReplyBatchItemTable.batch_id == batch_id,
-                        ReplyBatchItemTable.comment_id == outcome.comment_id,
-                    )
-                    .values(status=reply_status.value, reply_id=reply_id)
-                )
-                conn.execute(
-                    update(CommentTable)
-                    .where(CommentTable.id == outcome.comment_id)
-                    .values(status=comment_status.value)
-                )
-
-                queue = queues[outcome.comment_id]
-                retry = (
-                    outcome.kind is BatchOutcomeKind.ERROR
-                    and queue["attempt_count"] < max_attempts_per_comment
-                )
-                conn.execute(
-                    update(CommentBatchQueueTable)
-                    .where(CommentBatchQueueTable.comment_id == outcome.comment_id)
-                    .values(
-                        state="queued" if retry else "completed",
-                        claimed_batch_id=None if retry else batch_id,
-                        next_attempt_at=(
-                            created_at + timedelta(minutes=retry_cooldown_minutes)
-                            if retry
-                            else None
-                        ),
-                    )
-                )
-
-            conn.execute(
-                update(ReplyBatchTable)
-                .where(ReplyBatchTable.id == batch_id)
+            ).one_or_none()
+            if queue is None:
+                raise ValueError("Generation queue claim is no longer active")
+            reply_id = conn.execute(
+                insert(ReplyTable)
                 .values(
-                    status="error" if has_error else "completed",
+                    comment_id=comment_id,
+                    generated_text=text,
+                    ai_provider=ai_provider,
+                    ai_model=ai_model,
+                    status=ReplyStatus.GENERATED.value,
+                    created_at=created_at,
                     article_context_status=article_context_status,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    error_reason=batch_error_reason,
+                    is_cta_candidate=is_cta_candidate,
+                )
+                .returning(ReplyTable.id)
+            ).scalar_one()
+            conn.execute(
+                insert(ReplyPublicationQueueTable).values(
+                    reply_id=reply_id,
+                    state="queued",
+                    attempt_count=0,
+                    created_at=created_at,
                 )
             )
-            return tuple(reply_ids)
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(ReplyGenerationQueueTable.comment_id == comment_id)
+                .values(
+                    state="completed",
+                    next_attempt_at=None,
+                    last_error=None,
+                    claimed_at=None,
+                    claim_token=None,
+                )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id == comment_id)
+                .values(status=CommentStatus.GENERATED.value)
+            )
+            return reply_id
+
+    def skip_generation(
+        self,
+        comment_id: int,
+        *,
+        claim_token: str,
+        reason: str,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        created_at: datetime,
+    ) -> int:
+        with self._engine.begin() as conn:
+            queue = conn.execute(
+                select(ReplyGenerationQueueTable.comment_id)
+                .where(
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "claimed",
+                    ReplyGenerationQueueTable.claim_token == claim_token,
+                )
+                .with_for_update()
+            ).one_or_none()
+            if queue is None:
+                raise ValueError("Generation queue claim is no longer active")
+            reply_id = conn.execute(
+                insert(ReplyTable)
+                .values(
+                    comment_id=comment_id,
+                    generated_text="",
+                    ai_provider=ai_provider,
+                    ai_model=ai_model,
+                    status=ReplyStatus.SKIPPED.value,
+                    error_reason=reason,
+                    created_at=created_at,
+                    article_context_status=article_context_status,
+                    is_cta_candidate=False,
+                )
+                .returning(ReplyTable.id)
+            ).scalar_one()
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(ReplyGenerationQueueTable.comment_id == comment_id)
+                .values(
+                    state="completed",
+                    next_attempt_at=None,
+                    claimed_at=None,
+                    claim_token=None,
+                )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id == comment_id)
+                .values(status=CommentStatus.SKIPPED.value)
+            )
+            return reply_id
+
+    def fail_generation(
+        self,
+        comment_id: int,
+        *,
+        claim_token: str,
+        error_reason: str,
+        failed_at: datetime,
+        ai_provider: str,
+        ai_model: str,
+        article_context_status: str,
+        retry_cooldown_minutes: int,
+        max_attempts_per_comment: int,
+    ) -> GenerationFailureOutcome:
+        with self._engine.begin() as conn:
+            queue = conn.execute(
+                select(
+                    ReplyGenerationQueueTable.attempt_count.label("attempt_count")
+                )
+                .where(
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "claimed",
+                    ReplyGenerationQueueTable.claim_token == claim_token,
+                )
+                .with_for_update()
+            ).mappings().one_or_none()
+            if queue is None:
+                raise ValueError("Generation queue claim is no longer active")
+
+            retry = int(queue["attempt_count"]) < max_attempts_per_comment
+            conn.execute(
+                insert(ReplyTable).values(
+                    comment_id=comment_id,
+                    generated_text=None,
+                    ai_provider=ai_provider,
+                    ai_model=ai_model,
+                    status=ReplyStatus.ERROR.value,
+                    error_reason=error_reason,
+                    created_at=failed_at,
+                    article_context_status=article_context_status,
+                    is_cta_candidate=False,
+                )
+            )
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(ReplyGenerationQueueTable.comment_id == comment_id)
+                .values(
+                    state="queued" if retry else "completed",
+                    next_attempt_at=(
+                        failed_at + timedelta(minutes=retry_cooldown_minutes)
+                        if retry
+                        else None
+                    ),
+                    last_error=error_reason,
+                    claimed_at=None,
+                    claim_token=None,
+                )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id == comment_id)
+                .values(
+                    status=(
+                        CommentStatus.GENERATION_RETRY.value
+                        if retry
+                        else CommentStatus.GENERATION_ERROR.value
+                    )
+                )
+            )
+            return (
+                GenerationFailureOutcome.RETRY
+                if retry
+                else GenerationFailureOutcome.TERMINAL
+            )
 
     def get_article_context(self, publication_id: int) -> ArticleContext | None:
         stmt = select(
@@ -633,7 +722,7 @@ class PostgresCommentRepository:
                         <= now - self._PUBLICATION_CLAIM_LEASE,
                     ),
                 )
-                .values(state="queued", claimed_at=None)
+                .values(state="queued", claimed_at=None, claim_token=None)
             )
             row = conn.execute(
                 select(
@@ -668,6 +757,7 @@ class PostgresCommentRepository:
             ).mappings().one_or_none()
             if row is None:
                 return None
+            claim_token = uuid4().hex
             conn.execute(
                 update(ReplyPublicationQueueTable)
                 .where(ReplyPublicationQueueTable.reply_id == row["reply_id"])
@@ -675,7 +765,13 @@ class PostgresCommentRepository:
                     state="claimed",
                     claimed_at=now,
                     attempt_count=ReplyPublicationQueueTable.attempt_count + 1,
+                    claim_token=claim_token,
                 )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id == row["comment_id"])
+                .values(status=CommentStatus.PUBLISHING.value)
             )
         return ClaimedPublication(
             reply_id=row["reply_id"],
@@ -694,10 +790,15 @@ class PostgresCommentRepository:
                 post_url=row["post_url"],
             ),
             text=row["reply_text"] or "",
+            claim_token=claim_token,
         )
 
     def complete_publication(
-        self, reply_id: int, *, published_at: datetime | None
+        self,
+        reply_id: int,
+        *,
+        claim_token: str,
+        published_at: datetime | None,
     ) -> None:
         with self._engine.begin() as conn:
             row = conn.execute(
@@ -705,6 +806,7 @@ class PostgresCommentRepository:
                 .where(
                     ReplyPublicationQueueTable.reply_id == reply_id,
                     ReplyPublicationQueueTable.state == "claimed",
+                    ReplyPublicationQueueTable.claim_token == claim_token,
                 )
                 .with_for_update()
             ).one_or_none()
@@ -723,13 +825,35 @@ class PostgresCommentRepository:
             conn.execute(
                 update(ReplyPublicationQueueTable)
                 .where(ReplyPublicationQueueTable.reply_id == reply_id)
-                .values(state="completed", next_attempt_at=None)
+                .values(
+                    state="completed",
+                    next_attempt_at=None,
+                    claimed_at=None,
+                    claim_token=None,
+                )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(
+                    CommentTable.id
+                    == select(ReplyTable.comment_id)
+                    .where(ReplyTable.id == reply_id)
+                    .scalar_subquery()
+                )
+                .values(
+                    status=(
+                        CommentStatus.PUBLISHED.value
+                        if published_at is not None
+                        else CommentStatus.GENERATED.value
+                    )
+                )
             )
 
     def fail_publication(
         self,
         reply_id: int,
         *,
+        claim_token: str,
         error_reason: str,
         failed_at: datetime,
         retry_cooldown_minutes: int,
@@ -743,6 +867,7 @@ class PostgresCommentRepository:
                 .where(
                     ReplyPublicationQueueTable.reply_id == reply_id,
                     ReplyPublicationQueueTable.state == "claimed",
+                    ReplyPublicationQueueTable.claim_token == claim_token,
                 )
                 .with_for_update()
             ).mappings().one_or_none()
@@ -760,6 +885,8 @@ class PostgresCommentRepository:
                         else None
                     ),
                     last_error=error_reason,
+                    claimed_at=None,
+                    claim_token=None,
                 )
             )
             if not retry:
@@ -768,16 +895,22 @@ class PostgresCommentRepository:
                     .where(ReplyTable.id == reply_id)
                     .values(status=ReplyStatus.ERROR.value, error_reason=error_reason)
                 )
-                conn.execute(
-                    update(CommentTable)
-                    .where(
-                        CommentTable.id
-                        == select(ReplyTable.comment_id)
-                        .where(ReplyTable.id == reply_id)
-                        .scalar_subquery()
-                    )
-                    .values(status=CommentStatus.ERROR.value)
+            conn.execute(
+                update(CommentTable)
+                .where(
+                    CommentTable.id
+                    == select(ReplyTable.comment_id)
+                    .where(ReplyTable.id == reply_id)
+                    .scalar_subquery()
                 )
+                .values(
+                    status=(
+                        CommentStatus.PUBLICATION_RETRY.value
+                        if retry
+                        else CommentStatus.PUBLICATION_ERROR.value
+                    )
+                )
+            )
             return (
                 PublicationFailureOutcome.RETRY
                 if retry

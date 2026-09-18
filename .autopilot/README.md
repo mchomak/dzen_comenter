@@ -2,9 +2,11 @@
 
 ## Текущая сборка
 
-- Нет активной сборки.
+`2026-09-18-single-reply-retry-flow` — отключение batch и возврат к single-reply flow с раздельными retry генерации и публикации.
 
 ## Завершённые сборки
+
+- `2026-09-17-stability-history-analysis--wip` — анализ истории изменений, логов и production-метрик стабильности; итоговый отчёт: `reports/stability-history-analysis-2026-09-17.md`.
 
 - `2026-09-10-db-backed-batch-replies` — DB-backed batch-ответы, кэш статьи и отдельные retry публикации; миграция 0009 применена после проверенного backup PostgreSQL.
 
@@ -17,3 +19,9 @@
 - `admin-runtime-settings/tickets/` — таски, на которые разбита сборка.
 
 Если сборка прервалась — скажи «продолжи автопилот»: состояние поднимется из `.autopilot/state.js`.
+
+## Прогоны
+
+| Начат | Папка | Статус | Итог |
+|---|---|---|---|
+| 2026-09-18 | `2026-09-18-single-reply-retry-flow` | сдаётся | Один durable single-reply flow с отдельными retry, прозрачными статусами и строгим output-контрактом. |

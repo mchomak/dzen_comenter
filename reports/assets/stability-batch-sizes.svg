@@ -1,0 +1,58 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1120' height='640' viewBox='0 0 1120 640'>
+<rect width='100%' height='100%' fill='#ffffff'/>
+<text x='115.0' y='34.0' font-family='Arial, sans-serif' font-size='25' text-anchor='start' font-weight='bold' fill='#1f2937'>Фактический размер batch</text>
+<text x='115.0' y='57.0' font-family='Arial, sans-serif' font-size='14' text-anchor='start' font-weight='normal' fill='#4b5563'>Доля batch-вызовов; тройные batch — верхний зелёный сегмент</text>
+<line x1='115.0' y1='495.0' x2='1075.0' y2='495.0' stroke='#d1d5db' stroke-width='1'/>
+<text x='103.0' y='500.0' font-family='Arial, sans-serif' font-size='13' text-anchor='end' font-weight='normal' fill='#4b5563'>0</text>
+<line x1='115.0' y1='410.4' x2='1075.0' y2='410.4' stroke='#d1d5db' stroke-width='1'/>
+<text x='103.0' y='415.4' font-family='Arial, sans-serif' font-size='13' text-anchor='end' font-weight='normal' fill='#4b5563'>20</text>
+<line x1='115.0' y1='325.8' x2='1075.0' y2='325.8' stroke='#d1d5db' stroke-width='1'/>
+<text x='103.0' y='330.8' font-family='Arial, sans-serif' font-size='13' text-anchor='end' font-weight='normal' fill='#4b5563'>40</text>
+<line x1='115.0' y1='241.2' x2='1075.0' y2='241.2' stroke='#d1d5db' stroke-width='1'/>
+<text x='103.0' y='246.2' font-family='Arial, sans-serif' font-size='13' text-anchor='end' font-weight='normal' fill='#4b5563'>60</text>
+<line x1='115.0' y1='156.6' x2='1075.0' y2='156.6' stroke='#d1d5db' stroke-width='1'/>
+<text x='103.0' y='161.6' font-family='Arial, sans-serif' font-size='13' text-anchor='end' font-weight='normal' fill='#4b5563'>80</text>
+<line x1='115.0' y1='72.0' x2='1075.0' y2='72.0' stroke='#d1d5db' stroke-width='1'/>
+<text x='103.0' y='77.0' font-family='Arial, sans-serif' font-size='13' text-anchor='end' font-weight='normal' fill='#4b5563'>100</text>
+<line x1='115.0' y1='72.0' x2='115.0' y2='495.0' stroke='#6b7280' stroke-width='1.2'/>
+<line x1='115.0' y1='495.0' x2='1075.0' y2='495.0' stroke='#6b7280' stroke-width='1.2'/>
+<text x='25.0' y='283.5' font-family='Arial, sans-serif' font-size='14' text-anchor='middle' font-weight='normal' fill='#4b5563'>доля batch-вызовов, %</text>
+<text x='195.0' y='523.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>Articles</text>
+<text x='195.0' y='540.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>pre-batch</text>
+<text x='355.0' y='523.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>Early</text>
+<text x='355.0' y='540.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>batch</text>
+<text x='515.0' y='523.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>Queue</text>
+<text x='515.0' y='540.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>recovery</text>
+<text x='675.0' y='523.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>Durable</text>
+<text x='675.0' y='540.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>queue</text>
+<text x='835.0' y='523.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>Sanitizer</text>
+<text x='995.0' y='523.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>Current</text>
+<text x='995.0' y='540.0' font-family='Arial, sans-serif' font-size='13' text-anchor='middle' font-weight='normal' fill='#374151'>deploy</text>
+<rect x='319.8' y='168.5' width='70.4' height='326.5' fill='#2563eb'/>
+<rect x='319.8' y='118.0' width='70.4' height='50.4' fill='#60a5fa'/>
+<rect x='319.8' y='72.0' width='70.4' height='46.0' fill='#16a34a'/>
+<text x='355.0' y='64.0' font-family='Arial, sans-serif' font-size='12' text-anchor='middle' font-weight='bold' fill='#166534'>3: 10.9%</text>
+<rect x='479.8' y='159.9' width='70.4' height='335.1' fill='#2563eb'/>
+<rect x='479.8' y='102.9' width='70.4' height='57.0' fill='#60a5fa'/>
+<rect x='479.8' y='72.0' width='70.4' height='30.9' fill='#16a34a'/>
+<text x='515.0' y='64.0' font-family='Arial, sans-serif' font-size='12' text-anchor='middle' font-weight='bold' fill='#166534'>3: 7.3%</text>
+<rect x='639.8' y='124.3' width='70.4' height='370.7' fill='#2563eb'/>
+<rect x='639.8' y='83.2' width='70.4' height='41.1' fill='#60a5fa'/>
+<rect x='639.8' y='72.0' width='70.4' height='11.2' fill='#16a34a'/>
+<text x='675.0' y='64.0' font-family='Arial, sans-serif' font-size='12' text-anchor='middle' font-weight='bold' fill='#166534'>3: 2.6%</text>
+<rect x='799.8' y='125.1' width='70.4' height='369.9' fill='#2563eb'/>
+<rect x='799.8' y='84.5' width='70.4' height='40.6' fill='#60a5fa'/>
+<rect x='799.8' y='72.0' width='70.4' height='12.5' fill='#16a34a'/>
+<text x='835.0' y='64.0' font-family='Arial, sans-serif' font-size='12' text-anchor='middle' font-weight='bold' fill='#166534'>3: 3.0%</text>
+<rect x='959.8' y='139.5' width='70.4' height='355.5' fill='#2563eb'/>
+<rect x='959.8' y='96.8' width='70.4' height='42.8' fill='#60a5fa'/>
+<rect x='959.8' y='72.0' width='70.4' height='24.8' fill='#16a34a'/>
+<text x='995.0' y='64.0' font-family='Arial, sans-serif' font-size='12' text-anchor='middle' font-weight='bold' fill='#166534'>3: 5.9%</text>
+<rect x='710' y='32' width='12' height='12' fill='#2563eb'/>
+<text x='729.0' y='43.0' font-family='Arial, sans-serif' font-size='13' text-anchor='start' font-weight='normal' fill='#4b5563'>1 комментарий</text>
+<rect x='842' y='32' width='12' height='12' fill='#60a5fa'/>
+<text x='861.0' y='43.0' font-family='Arial, sans-serif' font-size='13' text-anchor='start' font-weight='normal' fill='#4b5563'>2 комментария</text>
+<rect x='978' y='32' width='12' height='12' fill='#16a34a'/>
+<text x='997.0' y='43.0' font-family='Arial, sans-serif' font-size='13' text-anchor='start' font-weight='normal' fill='#4b5563'>3 комментария</text>
+<text x='115.0' y='614.0' font-family='Arial, sans-serif' font-size='12' text-anchor='start' font-weight='normal' fill='#6b7280'>Источник: production PostgreSQL, reply_batches.created_at. Период до batch не показан: batch-вызовов не было.</text>
+</svg>
