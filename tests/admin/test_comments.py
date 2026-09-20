@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -334,6 +335,69 @@ def test_feed_fresh_first_and_limit(engine):
     # Strictly descending by fetched_at.
     times = [row.fetched_at for row in feed]
     assert times == sorted(times, reverse=True)
+
+
+def test_feed_excludes_configured_bot_account_ignoring_case_and_spacing(engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="  еКАТЕРИНА   великая ",
+        text="bot reply",
+        post_url="/a/bot",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 1),
+    )
+    _add_comment(
+        engine,
+        cid=2,
+        author="reader",
+        text="reader comment",
+        post_url="/a/reader",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    feed = fetch_feed(engine, bot_account_name="Екатерина Великая")
+
+    assert [row.author for row in feed] == ["reader"]
+
+
+def test_comment_pages_exclude_stored_comments_from_configured_bot_account(
+    engine, tmp_path
+):
+    runtime_path = tmp_path / "runtime.json"
+    runtime_path.write_text(
+        json.dumps({"settings": {"bot_account_name": "Екатерина Великая"}}),
+        encoding="utf-8",
+    )
+    settings = AdminSettings(
+        _env_file=None,
+        ADMIN_PASSWORD=PASSWORD,
+        ADMIN_SESSION_SECRET="test-session-secret",
+        RUNTIME_CONFIG_PATH=str(runtime_path),
+    )
+    client = TestClient(create_app(settings, engine=engine))
+    client.post("/login", data={"password": PASSWORD})
+    _add_comment(
+        engine,
+        cid=1,
+        author="Екатерина Великая",
+        text="bot comment text",
+        post_url="/a/bot",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 1),
+    )
+    _add_comment(
+        engine,
+        cid=2,
+        author="reader",
+        text="reader comment text",
+        post_url="/a/reader",
+        fetched_at=datetime(2026, 1, 1, 12, 0, 0),
+    )
+
+    for route in ("/", "/comments"):
+        response = client.get(route)
+
+        assert "reader comment text" in response.text
+        assert "bot comment text" not in response.text
 
 
 def test_feed_reports_reply_statuses(engine):

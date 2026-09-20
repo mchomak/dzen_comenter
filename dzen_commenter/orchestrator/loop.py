@@ -6,7 +6,7 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 
-from dzen_commenter.config.runtime_config import RuntimeConfig
+from dzen_commenter.config.runtime_config import RuntimeConfig, is_bot_account_author
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import CommentStatus, PublicationFailureOutcome
 from dzen_commenter.contracts.interfaces import (
@@ -92,6 +92,10 @@ class OrchestratorLoop:
             now - timedelta(hours=1)
         ) < runtime_settings.max_comments_per_hour
         for comment in comments:
+            if is_bot_account_author(
+                comment.author, runtime_settings.bot_account_name
+            ):
+                continue
             comment.publication_id = publication_id
             if self.repository.is_own_reply(comment.post_url, comment.text) or self._is_too_old(
                 comment.posted_at

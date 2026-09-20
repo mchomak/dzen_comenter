@@ -31,6 +31,14 @@ MAX_GENERATION_RETRY_COOLDOWN_MINUTES = 24 * 60
 MAX_GENERATION_ATTEMPTS_PER_COMMENT = 10
 MAX_PUBLICATION_RETRY_COOLDOWN_MINUTES = 24 * 60
 MAX_PUBLICATION_ATTEMPTS_PER_REPLY = 10
+DEFAULT_BOT_ACCOUNT_NAME = "Екатерина Великая"
+
+
+def is_bot_account_author(author: str | None, account_name: str | None) -> bool:
+    normalized_account_name = " ".join((account_name or "").split()).casefold()
+    return bool(normalized_account_name) and (
+        " ".join((author or "").split()).casefold() == normalized_account_name
+    )
 
 
 @dataclass
@@ -48,6 +56,7 @@ class RuntimeSettings:
     generation_max_attempts_per_comment: int = 3
     publication_retry_cooldown_minutes: int = 60
     publication_max_attempts_per_reply: int = 3
+    bot_account_name: str = DEFAULT_BOT_ACCOUNT_NAME
 
 
 @dataclass
@@ -129,6 +138,7 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
             base.publication_max_attempts_per_reply,
             MAX_PUBLICATION_ATTEMPTS_PER_REPLY,
         ),
+        bot_account_name=str(raw.get("bot_account_name", base.bot_account_name)),
     )
 
 

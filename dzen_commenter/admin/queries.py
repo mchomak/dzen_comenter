@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
+from dzen_commenter.config.runtime_config import is_bot_account_author
 from dzen_commenter.db.models import (
     CommentTable,
     ReplyGenerationQueueTable,
@@ -106,6 +107,7 @@ def fetch_feed(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     order: str = "desc",
+    bot_account_name: str | None = None,
 ) -> list[FeedRow]:
     """Лента: свежие комментарии сверху (по fetched_at desc), до `limit` записей.
 
@@ -116,7 +118,14 @@ def fetch_feed(
     - `author_query` — регистронезависимая подстрока по `author`; пустая строка
       или `None` не фильтрует.
     """
-    feed = _load_feed(engine, limit, date_from, date_to, order)
+    feed = _load_feed(
+        engine,
+        limit,
+        date_from,
+        date_to,
+        order,
+        bot_account_name=bot_account_name,
+    )
 
     if status:
         feed = [row for row in feed if _row_category(row) == status]
@@ -149,6 +158,8 @@ def _load_feed(
     date_from: datetime | None,
     date_to: datetime | None,
     order: str,
+    *,
+    bot_account_name: str | None = None,
 ) -> list[FeedRow]:
     with engine.connect() as conn:
         stmt = select(
@@ -169,9 +180,17 @@ def _load_feed(
             stmt = stmt.order_by(CommentTable.fetched_at.asc(), CommentTable.id.asc())
         else:
             stmt = stmt.order_by(CommentTable.fetched_at.desc(), CommentTable.id.desc())
-        if limit is not None:
+        if limit is not None and not bot_account_name:
             stmt = stmt.limit(limit)
         comment_rows = conn.execute(stmt).all()
+        if bot_account_name:
+            comment_rows = [
+                row
+                for row in comment_rows
+                if not is_bot_account_author(row.author, bot_account_name)
+            ]
+            if limit is not None:
+                comment_rows = comment_rows[:limit]
 
         comment_ids = [row.id for row in comment_rows]
         last_reply: dict[int, object] = {}

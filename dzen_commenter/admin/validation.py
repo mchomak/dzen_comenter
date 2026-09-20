@@ -116,6 +116,7 @@ def validate_settings_form(
     )
     error_notification_cooldown_seconds = _notification_cooldown(form, errors)
     telegram_proxy_url = _telegram_proxy_url(form, errors)
+    bot_account_name = _value(form, "bot_account_name")
     generation_retry_cooldown_minutes = _integer(
         form,
         "generation_retry_cooldown_minutes",
@@ -172,6 +173,7 @@ def validate_settings_form(
                 error_email_list=", ".join(emails),
                 error_notification_cooldown_seconds=error_notification_cooldown_seconds,
                 telegram_proxy_url=telegram_proxy_url,
+                bot_account_name=bot_account_name,
                 generation_retry_cooldown_minutes=generation_retry_cooldown_minutes,
                 generation_max_attempts_per_comment=generation_max_attempts_per_comment,
                 publication_retry_cooldown_minutes=publication_retry_cooldown_minutes,

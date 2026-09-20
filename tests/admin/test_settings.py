@@ -196,6 +196,20 @@ def test_settings_page_explains_retry_phases_without_batch_controls(client):
     assert 'name="batch_' not in response.text
 
 
+def test_settings_saves_and_renders_bot_account_name(client, settings):
+    data = _form()
+    data["bot_account_name"] = "  Аккаунт бота  "
+
+    response = client.post("/settings", data=data)
+
+    assert response.status_code == 302
+    saved = json.loads(Path(settings.RUNTIME_CONFIG_PATH).read_text(encoding="utf-8"))
+    assert saved["settings"]["bot_account_name"] == "Аккаунт бота"
+
+    reloaded = client.get("/settings")
+    assert 'name="bot_account_name" value="Аккаунт бота"' in reloaded.text
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     (

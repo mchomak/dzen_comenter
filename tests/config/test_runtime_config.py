@@ -161,6 +161,18 @@ def test_runtime_settings_default_cta_interval_and_hourly_limit(tmp_path):
     assert data.settings.max_comments_per_hour == 100
 
 
+def test_runtime_settings_default_bot_account_name_is_persisted(tmp_path):
+    runtime_config = RuntimeConfig(str(tmp_path / "runtime.json"))
+
+    data = runtime_config.get()
+    assert data.settings.bot_account_name == "Екатерина Великая"
+
+    runtime_config.save(data)
+    saved = json.loads((tmp_path / "runtime.json").read_text(encoding="utf-8"))
+
+    assert saved["settings"]["bot_account_name"] == "Екатерина Великая"
+
+
 def test_runtime_settings_include_notification_cooldown_and_telegram_proxy_defaults(tmp_path):
     path = tmp_path / "legacy.json"
     path.write_text(json.dumps({"settings": {}, "prompt": {}}), encoding="utf-8")

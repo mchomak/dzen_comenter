@@ -3,6 +3,8 @@ import inspect
 import pathlib
 from datetime import datetime, timedelta
 
+import pytest
+
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.models import Publication
 from dzen_commenter.orchestrator import OrchestratorLoop
@@ -48,6 +50,32 @@ def test_run_cycle_persists_eligible_comments_through_atomic_generation_seam(
     harness.loop.run_cycle()
 
     assert harness.repository.upsert_eligible_comment_calls == [comment]
+
+
+@pytest.mark.parametrize(
+    ("bot_account_name", "author", "expected_comment_count"),
+    [
+        ("Екатерина Великая", "  еКАТЕРИНА   великая  ", 0),
+        ("", "Екатерина Великая", 1),
+    ],
+)
+def test_run_cycle_filters_only_configured_bot_account_before_intake(
+    loop_factory,
+    comment_factory,
+    bot_account_name,
+    author,
+    expected_comment_count,
+):
+    comment = comment_factory(1)
+    comment.author = author
+    harness = loop_factory(comments=[comment], ai_responses=["Готовый ответ"])
+    harness.runtime_config.data.settings.bot_account_name = bot_account_name
+
+    harness.loop.run_cycle()
+
+    assert len(harness.repository.comments) == expected_comment_count
+    assert len(harness.repository.upsert_eligible_comment_calls) == expected_comment_count
+    assert len(harness.repository.generation_queue) == expected_comment_count
 
 
 def test_rescrape_does_not_replace_an_active_generation_status_with_skipped(

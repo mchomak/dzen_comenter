@@ -57,8 +57,15 @@ def create_app(
     def home(request: Request, _: None = Depends(require_login)):
         engine = _get_engine(request.app)
         status, author_query = _feed_filters(request)
+        bot_account_name = request.app.state.runtime_config.get().settings.bot_account_name
         feed = (
-            fetch_feed(engine, limit=100, status=status or None, author_query=author_query or None)
+            fetch_feed(
+                engine,
+                limit=100,
+                status=status or None,
+                author_query=author_query or None,
+                bot_account_name=bot_account_name,
+            )
             if engine is not None
             else []
         )
@@ -94,6 +101,7 @@ def create_app(
             if parsed_date_to
             else None
         )
+        bot_account_name = request.app.state.runtime_config.get().settings.bot_account_name
         feed = (
             fetch_feed(
                 engine,
@@ -103,6 +111,7 @@ def create_app(
                 date_from=date_from,
                 date_to=date_to,
                 order=order,
+                bot_account_name=bot_account_name,
             )
             if engine is not None
             else []
@@ -235,6 +244,7 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
         "error_email_list": split_csv_items(data.settings.error_email_list),
         "error_notification_cooldown": cooldown,
         "telegram_proxy_url": data.settings.telegram_proxy_url,
+        "bot_account_name": data.settings.bot_account_name,
         "generation_retry_cooldown_minutes": str(
             data.settings.generation_retry_cooldown_minutes
         ),
@@ -269,6 +279,7 @@ def _form_values(form) -> dict[str, object]:
             "max_comments_per_hour",
             "error_notification_cooldown",
             "telegram_proxy_url",
+            "bot_account_name",
             "generation_retry_cooldown_minutes",
             "generation_max_attempts_per_comment",
             "publication_retry_cooldown_minutes",
