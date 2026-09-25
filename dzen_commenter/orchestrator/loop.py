@@ -207,6 +207,13 @@ class OrchestratorLoop:
         if self._restore_saved_session():
             return self._session_ready()
 
+        if self.settings.DZEN_LOGIN_PHONE and self.settings.DZEN_LOGIN_PASSWORD:
+            try:
+                if self.session.login():
+                    return self._session_ready()
+            except Exception as exc:
+                self.notifier.notify_error("Dzen automated login failed", exc)
+
         if not self.auth_assistant.ask_ready():
             if not self._authorization_not_confirmed_notified:
                 self.notifier.notify_error("Dzen authorization was not confirmed")

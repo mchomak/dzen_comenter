@@ -13,6 +13,46 @@ from dzen_commenter.orchestrator import OrchestratorLoop
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
+def test_automatic_login_uses_startup_credentials_without_telegram_confirmation(
+    loop_factory,
+):
+    harness = loop_factory(
+        settings_overrides={
+            "DZEN_LOGIN_PHONE": "+70000000000",
+            "DZEN_LOGIN_PASSWORD": "test-password",
+        },
+    )
+    harness.session.logged_in = False
+    harness.session.restore_results = [False]
+    harness.session.login_results = [True]
+    harness.auth_assistant.ask_ready_result = False
+
+    harness.loop.run_cycle()
+
+    assert harness.session.login_calls == 1
+    assert harness.auth_assistant.ask_ready_calls == 0
+    assert harness.page.fetch_calls == 1
+
+
+def test_automatic_login_failure_keeps_telegram_confirmation_fallback(loop_factory):
+    harness = loop_factory(
+        settings_overrides={
+            "DZEN_LOGIN_PHONE": "+70000000000",
+            "DZEN_LOGIN_PASSWORD": "test-password",
+        },
+    )
+    harness.session.logged_in = False
+    harness.session.restore_results = [False]
+    harness.session.login_results = [False, True]
+    harness.auth_assistant.ask_ready_result = True
+
+    harness.loop.run_cycle()
+
+    assert harness.session.login_calls == 2
+    assert harness.auth_assistant.ask_ready_calls == 1
+    assert harness.page.fetch_calls == 1
+
+
 def test_orchestrator_loop_has_only_single_prompt_dependencies():
     signature = inspect.signature(OrchestratorLoop.__init__)
     assert list(signature.parameters) == [
