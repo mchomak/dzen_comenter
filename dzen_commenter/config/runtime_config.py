@@ -51,7 +51,6 @@ class RuntimeSettings:
     developer_telegram_chat_ids: str = ""
     error_email_list: str = ""
     error_notification_cooldown_seconds: int = 900
-    telegram_proxy_url: str = ""
     generation_retry_cooldown_minutes: int = 60
     generation_max_attempts_per_comment: int = 3
     publication_retry_cooldown_minutes: int = 60
@@ -113,7 +112,6 @@ def _parse_settings(raw: dict) -> RuntimeSettings:
                 base.error_notification_cooldown_seconds,
             )
         ),
-        telegram_proxy_url=str(raw.get("telegram_proxy_url", base.telegram_proxy_url)),
         generation_retry_cooldown_minutes=_parse_positive_integer(
             raw,
             "generation_retry_cooldown_minutes",

@@ -43,9 +43,6 @@
         <label>Интервал повторных аварийных уведомлений
           <input type="text" name="error_notification_cooldown" value="{{ values.error_notification_cooldown }}" placeholder="15m">
         </label>
-        <label>Telegram proxy URL
-          <input type="text" name="telegram_proxy_url" value="{{ values.telegram_proxy_url }}">
-        </label>
         <label>Пауза перед повторной генерацией, минут
           <input type="number" name="generation_retry_cooldown_minutes" value="{{ values.generation_retry_cooldown_minutes }}" min="1" max="1440">
         </label>
@@ -84,6 +81,12 @@
           <button type="button" class="repeatable-add">+ Добавить</button>
         </div>
       </fieldset>
+      {% if headless %}
+      <fieldset class="settings-column settings-column-vnc">
+        <legend>Доступ к браузеру</legend>
+        <p>VNC отключён: контейнер работает в headless-режиме.</p>
+      </fieldset>
+      {% else %}
       <fieldset class="settings-column settings-column-vnc">
         <legend>VNC (только чтение)</legend>
         <label>Хост<input type="text" value="{{ vnc.host }}" readonly></label>
@@ -103,6 +106,7 @@
         <button type="submit" formaction="/settings/vnc-access" formmethod="post" name="action" value="open">Открыть VNC</button>
         {% endif %}
       </fieldset>
+      {% endif %}
     </div>
 
     <fieldset class="settings-column settings-column-prompt">

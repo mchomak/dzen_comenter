@@ -68,4 +68,5 @@ def test_env_example_contains_new_keys():
 
 def test_env_example_keys_match_settings_exactly():
     env_keys = _parse_env_keys(ENV_EXAMPLE)
-    assert env_keys == set(Settings.model_fields)
+    compose_only_fields = {"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"}
+    assert env_keys == set(Settings.model_fields) | compose_only_fields

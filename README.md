@@ -25,13 +25,24 @@ cp .env.example .env   # then fill in values
 .venv/bin/python -m pytest -q
 ```
 
-## Remote Access (noVNC)
+## Browser and configuration
 
-The Docker container starts a virtual display on `DISPLAY=:99`, an x11vnc
-server, and a noVNC web gateway. Set `VNC_PASSWORD` and `NOVNC_PORT` in `.env`,
-then open `http://<server-ip>:${NOVNC_PORT}/vnc.html` in a browser. Enter the
-same `VNC_PASSWORD` in the noVNC connection dialog. Keep `AUTO_PUBLISH=false`
-while testing authentication and browser behavior.
+Docker Compose runs Chromium headless by default. In this mode the entrypoint
+does not start Xvfb, x11vnc, or noVNC, and the Compose file publishes neither
+browser ports nor PostgreSQL's port 5432. The admin panel remains available on
+port 8080. Set `HEADLESS=false` only when a display is needed; changing it
+requires recreating the app container.
+
+The admin panel stores live, non-secret controls and prompt text in the shared
+runtime JSON; the bot reloads these values without a restart. Tokens, the
+Telegram proxy (`TELEGRAM_PROXY_URL`), and Compose PostgreSQL credentials
+(`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) belong in `.env` and are
+read at container startup. The panel cannot view or change those secrets.
+
+Compose builds the internal database URL using the `postgres` service name.
+PostgreSQL is reachable from the Compose network, not directly from the public
+host. Changing PostgreSQL environment values does not rotate credentials in an
+already initialized data volume.
 
 ## Admin panel
 

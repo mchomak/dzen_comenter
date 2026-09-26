@@ -1,7 +1,5 @@
 import re
 from collections.abc import Mapping
-from urllib.parse import urlparse
-
 from dzen_commenter.config.runtime_config import RuntimeConfigData, RuntimeSettings
 from dzen_commenter.prompt.config_loader import PromptBrandConfig
 
@@ -25,7 +23,6 @@ _PROMPT_FIELDS = (
 _EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
 _TELEGRAM_ID_RE = re.compile(r"\d+")
 _COOLDOWN_RE = re.compile(r"([1-9]\d*)([mh])")
-_PROXY_SCHEMES = {"http", "https", "socks5", "socks5h"}
 
 
 def split_csv_items(value: str) -> list[str]:
@@ -74,14 +71,6 @@ def _notification_cooldown(form: Mapping[str, object], errors: dict[str, str]) -
     return value
 
 
-def _telegram_proxy_url(form: Mapping[str, object], errors: dict[str, str]) -> str:
-    value = _value(form, "telegram_proxy_url")
-    parsed = urlparse(value)
-    if value and (parsed.scheme not in _PROXY_SCHEMES or not parsed.hostname):
-        errors["telegram_proxy_url"] = "Введите URL proxy с host и схемой http, https, socks5 или socks5h."
-    return value
-
-
 def validate_settings_form(
     form: Mapping[str, object],
 ) -> tuple[RuntimeConfigData | None, dict[str, str]]:
@@ -115,7 +104,6 @@ def validate_settings_form(
         errors=errors,
     )
     error_notification_cooldown_seconds = _notification_cooldown(form, errors)
-    telegram_proxy_url = _telegram_proxy_url(form, errors)
     bot_account_name = _value(form, "bot_account_name")
     generation_retry_cooldown_minutes = _integer(
         form,
@@ -172,7 +160,6 @@ def validate_settings_form(
                 developer_telegram_chat_ids=", ".join(telegram_ids),
                 error_email_list=", ".join(emails),
                 error_notification_cooldown_seconds=error_notification_cooldown_seconds,
-                telegram_proxy_url=telegram_proxy_url,
                 bot_account_name=bot_account_name,
                 generation_retry_cooldown_minutes=generation_retry_cooldown_minutes,
                 generation_max_attempts_per_comment=generation_max_attempts_per_comment,

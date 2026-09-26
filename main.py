@@ -52,7 +52,6 @@ def build_app(
         bot_token=settings.TELEGRAM_BOT_TOKEN,
         chat_id=settings.TELEGRAM_CHAT_ID,
         proxy_url=settings.TELEGRAM_PROXY_URL,
-        proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
     )
 
     session = PlaywrightSessionManager(settings, auth_assistant=auth_assistant)
@@ -83,7 +82,6 @@ def build_app(
             proxy_url=settings.TELEGRAM_PROXY_URL,
             fallback=email_fallback,
             chat_id_provider=lambda: runtime_config.get().settings.developer_telegram_chat_ids,
-            proxy_url_provider=lambda: runtime_config.get().settings.telegram_proxy_url,
         ),
         error_cooldown_provider=lambda: (
             runtime_config.get().settings.error_notification_cooldown_seconds

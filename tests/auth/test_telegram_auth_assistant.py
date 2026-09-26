@@ -145,54 +145,16 @@ def test_default_client_is_constructed_without_proxy_when_empty(monkeypatch):
     assert captured == {}
 
 
-def test_proxy_provider_replaces_and_closes_client_before_the_next_request(monkeypatch):
-    created = []
+def test_telegram_auth_proxy_cannot_be_changed_by_a_runtime_provider():
+    import pytest
 
-    class FakeClient:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-            self.closed = False
-            created.append(self)
-
-        def close(self):
-            self.closed = True
-
-        def post(self, url, **kwargs):
-            return httpx.Response(
-                200,
-                json={"ok": True, "result": []},
-                request=httpx.Request("POST", url),
-            )
-
-    initial_client = FakeClient()
-    proxy = {"url": "http://first-proxy.example:8080"}
-    monkeypatch.setattr(
-        "dzen_commenter.auth.telegram_auth_assistant.httpx.Client",
-        FakeClient,
-    )
-    assistant = TelegramAuthAssistant(
-        bot_token=TOKEN,
-        chat_id=CHAT_ID,
-        proxy_url=proxy["url"],
-        proxy_url_provider=lambda: proxy["url"],
-        client=initial_client,
-    )
-
-    assert assistant.poll_auth_command() is False
-    assert created == [initial_client]
-    assert initial_client.closed is False
-
-    proxy["url"] = "https://second-proxy.example:8443"
-    assert assistant.poll_auth_command() is False
-
-    assert initial_client.closed is True
-    assert created[1].kwargs == {"proxy": "https://second-proxy.example:8443"}
-
-    proxy["url"] = ""
-    assert assistant.poll_auth_command() is False
-
-    assert created[1].closed is True
-    assert created[2].kwargs == {}
+    with pytest.raises(TypeError):
+        TelegramAuthAssistant(
+            bot_token=TOKEN,
+            chat_id=CHAT_ID,
+            proxy_url="http://startup-proxy.example:8080",
+            proxy_url_provider=lambda: "https://runtime-proxy.example:8443",
+        )
 
 
 def test_ask_ready_returns_false_on_timeout_without_real_wait():

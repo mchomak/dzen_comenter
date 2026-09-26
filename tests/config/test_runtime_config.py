@@ -173,19 +173,31 @@ def test_runtime_settings_default_bot_account_name_is_persisted(tmp_path):
     assert saved["settings"]["bot_account_name"] == "Екатерина Великая"
 
 
-def test_runtime_settings_include_notification_cooldown_and_telegram_proxy_defaults(tmp_path):
+def test_runtime_config_ignores_legacy_proxy_secret_and_does_not_reemit_it(tmp_path):
     path = tmp_path / "legacy.json"
-    path.write_text(json.dumps({"settings": {}, "prompt": {}}), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    "telegram_proxy_url": "socks5h://proxy-user:proxy-password@example.test:1080"
+                },
+                "prompt": {},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     data = RuntimeConfig(str(path)).get()
 
     assert data.settings.error_notification_cooldown_seconds == 900
-    assert data.settings.telegram_proxy_url == ""
+    assert not hasattr(data.settings, "telegram_proxy_url")
 
-    RuntimeConfig(str(tmp_path / "initial.json")).save(data)
-    saved = json.loads((tmp_path / "initial.json").read_text(encoding="utf-8"))
+    initial_path = tmp_path / "initial.json"
+    RuntimeConfig(str(initial_path)).save(data)
+    saved = json.loads(initial_path.read_text(encoding="utf-8"))
     assert saved["settings"]["error_notification_cooldown_seconds"] == 900
-    assert saved["settings"]["telegram_proxy_url"] == ""
+    assert "telegram_proxy_url" not in saved["settings"]
+    assert "proxy-password" not in initial_path.read_text(encoding="utf-8")
 
 
 def test_runtime_settings_include_publication_retry_defaults_and_reload(tmp_path):

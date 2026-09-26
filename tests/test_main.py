@@ -19,7 +19,7 @@ def make_fake_settings(**overrides):
         TELEGRAM_BOT_TOKEN="tok",
         TELEGRAM_CHAT_ID="chat",
         DEVELOPER_TELEGRAM_CHAT_ID_LIST="developer-chat",
-        TELEGRAM_PROXY_URL="",
+        TELEGRAM_PROXY_URL="https://startup-proxy.example:8443",
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -62,7 +62,6 @@ def install_di_fakes(monkeypatch):
             self.path = path
             self.settings = SimpleNamespace(
                 error_notification_cooldown_seconds=900,
-                telegram_proxy_url="http://runtime-proxy.example:8080",
             )
             rec.events.append(("runtime_config", self))
 
@@ -180,12 +179,11 @@ def test_build_app_wires_layers(monkeypatch):
     assert all(ev[0] != "email_fallback" for ev in rec.events)
     tg = _first(rec, "telegram_notifier")[1]
     assert tg.kwargs["fallback"] is None
-    assert tg.kwargs["proxy_url_provider"]() == "http://runtime-proxy.example:8080"
+    assert tg.kwargs["proxy_url"] == settings.TELEGRAM_PROXY_URL
+    assert "proxy_url_provider" not in tg.kwargs
     auth_assistant = _first(rec, "auth_assistant")[1]
-    assert (
-        auth_assistant.kwargs["proxy_url_provider"]()
-        == "http://runtime-proxy.example:8080"
-    )
+    assert auth_assistant.kwargs["proxy_url"] == settings.TELEGRAM_PROXY_URL
+    assert "proxy_url_provider" not in auth_assistant.kwargs
     assert session.kwargs["auth_assistant"] is auth_assistant
 
     # OrchestratorLoop receives the single-comment prompt dependency only.

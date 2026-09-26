@@ -14,6 +14,7 @@ class AdminSettings(BaseSettings):
     ADMIN_SESSION_SECRET: str = "change-me-in-production"
     RUNTIME_CONFIG_PATH: str = "runtime_config.json"
     DATABASE_URL: str = ""
+    HEADLESS: bool = False
     VNC_HOST: str = "localhost"
     VNC_PORT: int = 5900
     VNC_PASSWORD: str = ""

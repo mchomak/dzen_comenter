@@ -141,6 +141,7 @@ def create_app(
             context={
                 "values": _runtime_values(data),
                 "vnc": _vnc_values(request.app.state.settings),
+                "headless": request.app.state.settings.HEADLESS,
                 "errors": {},
                 "saved": request.query_params.get("saved") == "1",
                 "dzen_account_status": _dzen_account_status(request),
@@ -159,6 +160,7 @@ def create_app(
                 context={
                     "values": _form_values(form),
                     "vnc": _vnc_values(request.app.state.settings),
+                    "headless": request.app.state.settings.HEADLESS,
                     "errors": errors,
                     "saved": False,
                     "dzen_account_status": None,
@@ -192,6 +194,8 @@ def create_app(
 
     @app.post("/settings/vnc-access")
     async def vnc_access_submit(request: Request, _: None = Depends(require_login)):
+        if request.app.state.settings.HEADLESS:
+            return RedirectResponse("/settings?vnc=disabled", status_code=HTTP_302_FOUND)
         action = (await request.form()).get("action")
         if action not in {"open", "close"}:
             raise HTTPException(status_code=400, detail="invalid VNC action")
@@ -243,7 +247,6 @@ def _runtime_values(data: RuntimeConfigData) -> dict[str, object]:
         "developer_telegram_chat_ids": split_csv_items(data.settings.developer_telegram_chat_ids),
         "error_email_list": split_csv_items(data.settings.error_email_list),
         "error_notification_cooldown": cooldown,
-        "telegram_proxy_url": data.settings.telegram_proxy_url,
         "bot_account_name": data.settings.bot_account_name,
         "generation_retry_cooldown_minutes": str(
             data.settings.generation_retry_cooldown_minutes
@@ -278,7 +281,6 @@ def _form_values(form) -> dict[str, object]:
             "cta_every_n_comments",
             "max_comments_per_hour",
             "error_notification_cooldown",
-            "telegram_proxy_url",
             "bot_account_name",
             "generation_retry_cooldown_minutes",
             "generation_max_attempts_per_comment",
@@ -321,6 +323,7 @@ def _dzen_account_error_response(request: Request, error: str):
         context={
             "values": _runtime_values(request.app.state.runtime_config.get()),
             "vnc": _vnc_values(request.app.state.settings),
+            "headless": request.app.state.settings.HEADLESS,
             "errors": {},
             "saved": False,
             "dzen_account_status": {"error": error},

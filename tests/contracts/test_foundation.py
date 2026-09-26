@@ -207,7 +207,8 @@ def _parse_env_keys(path: pathlib.Path) -> set[str]:
 
 def test_env_example_keys_match_settings():
     env_keys = _parse_env_keys(ENV_EXAMPLE)
-    assert env_keys == EXPECTED_FIELDS == set(Settings.model_fields)
+    compose_only_fields = {"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"}
+    assert env_keys == EXPECTED_FIELDS | compose_only_fields == set(Settings.model_fields) | compose_only_fields
 
 
 def test_prompt_context_reply_type_literal():
