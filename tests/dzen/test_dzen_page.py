@@ -20,11 +20,14 @@ class FakeText:
 
 
 class FakeButton:
-    def __init__(self) -> None:
+    def __init__(self, on_click=None) -> None:
         self.clicks = 0
+        self.on_click = on_click
 
     def click(self) -> None:
         self.clicks += 1
+        if self.on_click is not None:
+            self.on_click()
 
 
 class FakeInput:
@@ -48,6 +51,8 @@ class FakeCommentNode:
         self.reply_button = FakeButton()
         self.reply_input = FakeInput()
         self.reply_submit = FakeButton()
+        self.published_replies: list[dict[str, str]] = []
+        self.has_thread_wrapper = True
         self._children = {
             selectors.COMMENT_AUTHOR_LINK: FakeLink(author_href),
             selectors.COMMENT_AUTHOR_TEXT: FakeText(author),
@@ -61,6 +66,13 @@ class FakeCommentNode:
 
     def query_selector(self, selector: str):
         return self._children.get(selector)
+
+    def evaluate(self, script: str, arg=None):
+        if "authorHref:" in script:
+            return None
+        if arg != selectors.COMMENT_THREAD or not self.has_thread_wrapper:
+            return None
+        return list(self.published_replies)
 
 
 class FakeGroup:
@@ -109,6 +121,9 @@ class FakePage:
         self._cleanup_error = cleanup_error
         self.waited_ms: list[float] = []
         self.evaluate_calls: list[str] = []
+        self.reload_calls: list[dict[str, str]] = []
+        self.on_wait_timeout = None
+        self.on_reload = None
         self.mouse = FakeMouse(self)
         self.context = FakeBrowserContext()
 
@@ -119,6 +134,13 @@ class FakePage:
 
     def wait_for_timeout(self, timeout_ms: float) -> None:
         self.waited_ms.append(timeout_ms)
+        if self.on_wait_timeout is not None:
+            self.on_wait_timeout(timeout_ms)
+
+    def reload(self, **kwargs) -> None:
+        self.reload_calls.append(kwargs)
+        if self.on_reload is not None:
+            self.on_reload()
 
     def load_next_scroll_screen(self) -> None:
         if self._scroll_groups:
@@ -340,6 +362,9 @@ def test_publish_reply_targets_matching_node():
     page = DzenStudioPage(fake)
 
     target = page.fetch_comments()[1]  # соответствует node1
+    node1.reply_submit.on_click = lambda: node1.published_replies.append(
+        {"author": "Екатерина Великая", "text": "мой ответ"}
+    )
     page.publish_reply(target, "мой ответ", auto_publish=True)
 
     assert node1.reply_button.clicks == 1
@@ -350,6 +375,100 @@ def test_publish_reply_targets_matching_node():
     assert node0.reply_submit.clicks == 0
     assert fake.mouse.wheel_calls == []
     assert fake.evaluate_calls == []
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+
+
+def test_auto_publish_is_not_confirmed_by_a_successful_click_alone():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="not visible after submit"):
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert fake.reload_calls == []
+
+
+def test_auto_publish_waits_for_delayed_acknowledgment_before_reloading():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.on_wait_timeout = lambda _timeout_ms: node.published_replies.append(
+        {"author": "Екатерина Великая", "text": "мой ответ"}
+    )
+    reload_saw_acknowledgment = []
+    fake.on_reload = lambda: reload_saw_acknowledgment.append(
+        bool(node.published_replies)
+    )
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert reload_saw_acknowledgment == [True]
+
+
+def test_auto_publish_fails_before_submit_when_source_thread_wrapper_is_missing():
+    node = make_node(0)
+    node.has_thread_wrapper = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError) as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert node.reply_button.clicks == 0
+    assert node.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+    assert "uninspectable" in str(exc_info.value)
+
+
+def test_auto_publish_fails_before_submit_when_bot_author_is_blank():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "  ")
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError) as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert node.reply_button.clicks == 0
+    assert node.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+    assert "uninspectable" in str(exc_info.value)
+
+
+def test_auto_publish_skips_duplicate_when_matching_bot_reply_is_already_visible():
+    node = make_node(0)
+    node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой  ответ"}
+    )
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(
+        fake, bot_account_name_provider=lambda: "Configured Bot"
+    )
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, " мой ответ ", auto_publish=True)
+
+    assert node.reply_button.clicks == 0
+    assert node.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+
+
+def test_same_reply_text_from_another_author_does_not_confirm_publication():
+    node = make_node(0)
+    node.published_replies.append({"author": "другой автор", "text": "мой ответ"})
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="not visible after submit"):
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
 
 
 def test_publish_reply_fills_draft_and_waits_without_submitting():
@@ -406,14 +525,18 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
         fetched_at=datetime.now(timezone.utc),
         status=CommentStatus.NEW,
     )
+    target_node.reply_submit.on_click = lambda: target_node.published_replies.append(
+        {"author": "Екатерина Великая", "text": "готовый ответ"}
+    )
 
     page.publish_reply(target, "готовый ответ", auto_publish=True)
 
     assert len(fake.mouse.wheel_calls) == 1
-    assert fake.waited_ms == [500]
+    assert fake.waited_ms == [500, 500]
     assert target_node.reply_input.filled == ["готовый ответ"]
     assert target_node.reply_submit.clicks == 1
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
 
 
 def test_publish_reply_stops_after_twenty_scrolls_with_new_comments():

@@ -224,6 +224,8 @@ POST_TITLE = '[class*="editor--comment-post__title-"]'
 
 # Отдельный комментарий внутри группы.
 COMMENT_NODE = '[class*="editor--comment__block-"]'
+# Обёртка корневого комментария и его ответов.
+COMMENT_THREAD = '[class*="editor--comments-page__commentNode-"]'
 # Ссылка на автора (href вида "/user/<id>").
 COMMENT_AUTHOR_LINK = 'a[class*="editor--comment__nameLink-"]'
 # Имя автора (текст).

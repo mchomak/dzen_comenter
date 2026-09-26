@@ -5,6 +5,10 @@ from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
+from dzen_commenter.config.runtime_config import (
+    DEFAULT_BOT_ACCOUNT_NAME,
+    is_bot_account_author,
+)
 from dzen_commenter.contracts.enums import CommentStatus
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import selectors
@@ -42,6 +46,7 @@ _REPLY_SEARCH_MAX_SCROLLS = 20
 _REPLY_SEARCH_WAIT_MS = 500
 _REPLY_SEARCH_MAX_STALLED_SCREENS = 2
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
+_REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
 
 
 def _post_url(post_href: str) -> str | None:
@@ -93,8 +98,16 @@ def parse_relative_time(text: str | None, now: datetime) -> datetime | None:
 class DzenStudioPage:
     """Read Dzen Studio comments and publish a reply to a matching node."""
 
-    def __init__(self, page: Any | Callable[[], Any]) -> None:
+    def __init__(
+        self,
+        page: Any | Callable[[], Any],
+        *,
+        bot_account_name_provider: Callable[[], str] | None = None,
+    ) -> None:
         self._page_source = page
+        self._bot_account_name_provider = (
+            bot_account_name_provider or (lambda: DEFAULT_BOT_ACCOUNT_NAME)
+        )
         self._article_text_by_url: dict[str, str | None] = {}
 
     @property
@@ -222,9 +235,9 @@ class DzenStudioPage:
         try:
             parent = node.evaluate(
                 """
-                (node) => {
+                (node, threadSelector) => {
                     const container = node.closest(
-                        '[class*="editor--root-comment__commentNode-"]'
+                        threadSelector
                     );
                     const block = container?.querySelector(
                         '[class*="editor--comment__block-"]'
@@ -241,7 +254,8 @@ class DzenStudioPage:
                         text: text?.innerText || '',
                     };
                 }
-                """
+                """,
+                selectors.COMMENT_THREAD,
             )
         except Exception:
             return None
@@ -252,20 +266,52 @@ class DzenStudioPage:
     def publish_reply(
         self, comment: Comment, text: str, *, auto_publish: bool
     ) -> None:
-        node, seen_ids = self._find_comment_node(comment.dzen_comment_id)
-        if node is not None:
-            self._submit_reply(node, text, auto_publish=auto_publish)
+        node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
+        if node is None:
+            raise LookupError(
+                f"comment {comment.dzen_comment_id!r} not found on page for reply"
+            )
+
+        if auto_publish and self._has_published_reply(node, text):
             return
+
+        self._submit_reply(node, text, auto_publish=auto_publish)
+        if not auto_publish:
+            return
+
+        if not self._has_published_reply(node, text):
+            for _ in range(
+                _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
+            ):
+                self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                if self._has_published_reply(node, text):
+                    break
+            else:
+                raise RuntimeError(
+                    f"reply for comment {comment.dzen_comment_id!r} not visible after submit"
+                )
+
+        self._page.reload(wait_until="domcontentloaded")
+        self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+        node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
+        if node is None or not self._has_published_reply(node, text):
+            raise RuntimeError(
+                f"reply for comment {comment.dzen_comment_id!r} not visible after submit"
+            )
+
+    def _find_comment_node_with_scroll(self, comment_id: str):
+        node, seen_ids = self._find_comment_node(comment_id)
+        if node is not None:
+            return node
 
         try:
             stalled_screens = 0
             for _ in range(_REPLY_SEARCH_MAX_SCROLLS):
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                node, loaded_ids = self._find_comment_node(comment.dzen_comment_id)
+                node, loaded_ids = self._find_comment_node(comment_id)
                 if node is not None:
-                    self._submit_reply(node, text, auto_publish=auto_publish)
-                    return
+                    return node
                 if loaded_ids - seen_ids:
                     seen_ids.update(loaded_ids)
                     stalled_screens = 0
@@ -273,14 +319,52 @@ class DzenStudioPage:
                     stalled_screens += 1
                     if stalled_screens >= _REPLY_SEARCH_MAX_STALLED_SCREENS:
                         break
-            raise LookupError(
-                f"comment {comment.dzen_comment_id!r} not found on page for reply"
-            )
+            return None
         finally:
             try:
                 self._page.evaluate("window.scrollTo(0, 0)")
             except Exception:
                 pass
+
+    def _has_published_reply(self, node: Any, text: str) -> bool:
+        bot_account_name = self._bot_account_name_provider()
+        if not bot_account_name.strip():
+            raise RuntimeError(
+                "source comment thread is uninspectable: bot author is not configured"
+            )
+
+        replies = node.evaluate(
+            """
+            (node, threadSelector) => {
+                const thread = node.closest(
+                    threadSelector
+                );
+                if (!thread) return null;
+                return Array.from(
+                    thread.querySelectorAll('[class*="editor--comment__block-"]')
+                ).filter((block) => block !== node).map((block) => ({
+                    author: block.querySelector(
+                        '[class*="editor--comment__nameText-"]'
+                    )?.innerText || '',
+                    text: block.querySelector(
+                        'p[aria-label="Текст комментария"]'
+                    )?.innerText || '',
+                }));
+            }
+            """,
+            selectors.COMMENT_THREAD,
+        )
+        if replies is None:
+            raise RuntimeError(
+                "source comment thread is uninspectable: wrapper not found"
+            )
+
+        normalized_text = " ".join(text.split())
+        return any(
+            is_bot_account_author(reply.get("author"), bot_account_name)
+            and " ".join(reply.get("text", "").split()) == normalized_text
+            for reply in replies or []
+        )
 
     def _find_comment_node(self, comment_id: str):
         seen_ids: set[str] = set()
