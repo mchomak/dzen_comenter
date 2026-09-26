@@ -77,7 +77,10 @@ class PlaywrightSessionManager:
                 return False
             if not self._is_on_comments_url():
                 return False
-            return self._page.query_selector(selectors.LOGIN_FORM) is None
+            return (
+                self._page.query_selector(selectors.LOGIN_FORM) is None
+                and self._page.query_selector(selectors.POST_GROUP) is not None
+            )
 
     def login(self) -> bool:
         with self._lock:

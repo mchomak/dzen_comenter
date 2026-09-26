@@ -31,6 +31,7 @@ class DeveloperNotifier:
         )
         self._time_fn = time_fn
         self._lock = Lock()
+        self._pending_error_notifications: set[str] = set()
         self._last_error_notifications = self._load_cooldown_state()
 
     def notify(self, message: str) -> None:
@@ -43,7 +44,8 @@ class DeveloperNotifier:
             )
 
     def notify_error(self, message: str, error: Exception | None = None) -> None:
-        if not self._should_send_error(message, error):
+        signature = self._error_signature(message, error)
+        if not self._should_send_error(signature):
             return
         try:
             self.transport.notify_error(message, error)
@@ -52,22 +54,41 @@ class DeveloperNotifier:
                 "Developer error notification delivery failed",
                 exc_info=True,
             )
+        else:
+            self._record_error_notification(signature)
+        finally:
+            with self._lock:
+                self._pending_error_notifications.discard(signature)
 
-    def _should_send_error(self, message: str, error: Exception | None) -> bool:
-        if self._error_cooldown_provider is None:
-            return True
-
-        cooldown = self._error_cooldown_provider()
-        signature = self._error_signature(message, error)
+    def _should_send_error(self, signature: str) -> bool:
+        cooldown = (
+            self._error_cooldown_provider()
+            if self._error_cooldown_provider is not None
+            else 0
+        )
         now = self._time_fn()
         with self._lock:
-            last_sent = self._last_error_notifications.get(signature)
-            if last_sent is not None and now - last_sent < cooldown:
+            if signature in self._pending_error_notifications:
                 return False
+            last_sent = self._last_error_notifications.get(signature)
+            if (
+                self._error_cooldown_provider is not None
+                and last_sent is not None
+                and now - last_sent < cooldown
+            ):
+                return False
+            self._pending_error_notifications.add(signature)
+        return True
+
+    def _record_error_notification(self, signature: str) -> None:
+        if self._error_cooldown_provider is None:
+            return
+        cooldown = self._error_cooldown_provider()
+        now = self._time_fn()
+        with self._lock:
             self._last_error_notifications[signature] = now
             self._drop_expired_notifications(now, cooldown)
             self._save_cooldown_state()
-        return True
 
     @staticmethod
     def _error_signature(message: str, error: Exception | None) -> str:

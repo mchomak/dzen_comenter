@@ -11,8 +11,10 @@ class SpyTransport:
     def __init__(self, fail=False):
         self.fail = fail
         self.errors = []
+        self.attempts = 0
 
     def notify_error(self, message, error=None):
+        self.attempts += 1
         if self.fail:
             raise RuntimeError("smtp unavailable")
         self.errors.append((message, error))
@@ -76,6 +78,24 @@ def test_developer_notifier_throttles_duplicate_errors(tmp_path):
     notifier.notify_error("database unavailable", ValueError("down"))
     notifier.notify_error("database unavailable", ValueError("down"))
 
+    assert len(transport.errors) == 1
+
+
+def test_failed_delivery_does_not_start_cooldown(tmp_path):
+    transport = SpyTransport(fail=True)
+    notifier = DeveloperNotifier(
+        transport,
+        error_cooldown_provider=lambda: 3600,
+        cooldown_state_path=str(tmp_path / "cooldown.json"),
+        time_fn=lambda: 100.0,
+    )
+
+    notifier.notify_error("database unavailable", RuntimeError("offline"))
+    transport.fail = False
+    notifier.notify_error("database unavailable", RuntimeError("offline"))
+    notifier.notify_error("database unavailable", RuntimeError("offline"))
+
+    assert transport.attempts == 2
     assert len(transport.errors) == 1
 
 

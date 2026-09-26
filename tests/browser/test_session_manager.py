@@ -36,8 +36,11 @@ def make_settings(**overrides) -> Settings:
 class FakePage:
     """Фейковая Playwright-страница: записывает вызовы, без сети/браузера."""
 
-    def __init__(self, *, login_form_present: bool = False) -> None:
+    def __init__(
+        self, *, login_form_present: bool = False, comments_page_present: bool = True
+    ) -> None:
         self.login_form_present = login_form_present
+        self.comments_page_present = comments_page_present
         self.goto_calls: list[str] = []
         self.reload_count = 0
         self.reload_kwargs: list[dict] = []
@@ -56,6 +59,8 @@ class FakePage:
 
     def query_selector(self, selector: str):
         if selector == selectors.LOGIN_FORM and self.login_form_present:
+            return object()
+        if selector == selectors.POST_GROUP and self.comments_page_present:
             return object()
         return None
 
@@ -351,6 +356,17 @@ def test_is_logged_in_detects_login_form():
     )
     mgr_out.start()
     assert mgr_out.is_logged_in() is False
+
+
+def test_is_logged_in_requires_positive_comments_page_marker():
+    settings = make_settings()
+    page = FakePage(comments_page_present=False)
+    mgr = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(FakeContext(page))
+    )
+    mgr.start()
+
+    assert mgr.is_logged_in() is False
 
 
 def test_is_logged_in_false_when_redirected_off_comments_host():

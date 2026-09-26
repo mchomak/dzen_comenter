@@ -44,9 +44,13 @@ class TelegramNotifier:
 
     def notify_error(self, message: str, error: Exception | None = None) -> None:
         text = self._format_error(message, error)
+        delivery_succeeded = False
+        delivery_errors = []
         try:
             self._send(text)
-        except Exception:
+            delivery_succeeded = True
+        except Exception as delivery_error:
+            delivery_errors.append(delivery_error)
             logging.getLogger(__name__).warning(
                 "Telegram error notification delivery failed",
                 exc_info=True,
@@ -55,11 +59,17 @@ class TelegramNotifier:
         if self.fallback is not None:
             try:
                 self.fallback.notify_error(message, error)
-            except Exception:
+                delivery_succeeded = True
+            except Exception as delivery_error:
+                delivery_errors.append(delivery_error)
                 logging.getLogger(__name__).warning(
                     "Email error notification delivery failed",
                     exc_info=True,
                 )
+        if not delivery_succeeded:
+            raise RuntimeError("all error notification channels failed") from (
+                delivery_errors[0] if delivery_errors else None
+            )
 
     def _make_client(self) -> object:
         if self.proxy_url:

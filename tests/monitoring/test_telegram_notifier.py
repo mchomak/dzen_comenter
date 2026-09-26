@@ -302,6 +302,32 @@ def test_notify_error_still_sends_to_telegram_when_email_delivery_fails():
     assert len(requests) == 1
 
 
+def test_notify_error_raises_when_every_configured_channel_fails():
+    class FailingFallback:
+        def notify(self, message):
+            raise RuntimeError("email unavailable")
+
+        def notify_error(self, message, error=None):
+            raise RuntimeError("email unavailable")
+
+    def handler(request):
+        raise httpx.ConnectError("proxy unavailable", request=request)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifier = TelegramNotifier(
+        bot_token=TOKEN,
+        chat_id=CHAT_ID,
+        proxy_url=PROXY_URL,
+        fallback=FailingFallback(),
+        client=client,
+    )
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="all error notification channels failed"):
+        notifier.notify_error("broken", RuntimeError("boom"))
+
+
 def test_chat_ids_read_from_provider_at_send_time():
     requests = []
 
