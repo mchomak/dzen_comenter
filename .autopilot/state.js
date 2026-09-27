@@ -10,7 +10,7 @@ window.STATE = {
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-09-25T19:32:14+03:00",
-  "updatedAt": "2026-09-27T16:27:05+03:00",
+  "updatedAt": "2026-09-27T16:35:04+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -62,7 +62,7 @@ window.STATE = {
       "id": "final",
       "status": "active",
       "startedAt": "2026-09-27T13:52:03+03:00",
-      "note": "Blind source review complete; code pushed. Production release is pending because SSH and /health/bot stopped responding; do not restart Docker Engine."
+      "note": "Code and docs are pushed. Production release is pending: TCP is reachable, but SSH banner and /health/bot time out; waiting for a recovery path decision."
     }
   ],
   "requirements": {
