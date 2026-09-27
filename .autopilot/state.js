@@ -10,7 +10,7 @@ window.STATE = {
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-09-25T19:32:14+03:00",
-  "updatedAt": "2026-09-27T16:35:04+03:00",
+  "updatedAt": "2026-09-27T19:19:45.799542+00:00",
   "finishedAt": null,
   "stages": [
     {
@@ -62,7 +62,7 @@ window.STATE = {
       "id": "final",
       "status": "active",
       "startedAt": "2026-09-27T13:52:03+03:00",
-      "note": "Code and docs are pushed. Production release is pending: TCP is reachable, but SSH banner and /health/bot time out; waiting for a recovery path decision."
+      "note": "VNC inspection enabled on production with existing images and preserved browser profile. Direct SSH bound to Ethernet works; prior VPN path stalled. noVNC HTTP 200, RFB banner verified; Dzen Chromium window exists and bot health is operational. Reliability release and natural reply acceptance remain pending; awaiting owner observations."
     }
   ],
   "requirements": {
