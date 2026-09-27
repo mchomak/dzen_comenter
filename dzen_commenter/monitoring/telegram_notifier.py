@@ -53,7 +53,7 @@ class TelegramNotifier:
                 exc_info=True,
             )
 
-        if self.fallback is not None:
+        if not delivery_succeeded and self.fallback is not None:
             try:
                 self.fallback.notify_error(message, error)
                 delivery_succeeded = True

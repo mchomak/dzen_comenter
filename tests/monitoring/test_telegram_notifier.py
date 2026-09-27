@@ -12,14 +12,17 @@ PROXY_URL = "socks5://proxy.example.test:1080"
 
 
 class FallbackSpy:
-    def __init__(self):
+    def __init__(self, events=None):
         self.notify_calls = []
         self.notify_error_calls = []
+        self.events = events
 
     def notify(self, message):
         self.notify_calls.append(message)
 
     def notify_error(self, message, error=None):
+        if self.events is not None:
+            self.events.append("email")
         self.notify_error_calls.append((message, error))
 
 
@@ -191,12 +194,14 @@ def test_notify_uses_fallback_on_httpx_error():
     assert fallback.notify_calls == ["hello"]
 
 
-def test_notify_error_sends_to_telegram_and_email():
+def test_notify_error_skips_email_when_telegram_succeeds():
     requests = []
-    fallback = FallbackSpy()
+    events = []
+    fallback = FallbackSpy(events)
 
     def handler(request):
         requests.append(request)
+        events.append("telegram")
         return httpx.Response(200, json={"ok": True})
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
@@ -213,13 +218,16 @@ def test_notify_error_sends_to_telegram_and_email():
 
     assert b"RuntimeError" in requests[0].read()
     assert b"boom" in requests[0].read()
-    assert fallback.notify_error_calls == [("broken", error)]
+    assert events == ["telegram"]
+    assert fallback.notify_error_calls == []
 
 
 def test_notify_error_attempts_email_when_telegram_delivery_fails():
-    fallback = FallbackSpy()
+    events = []
+    fallback = FallbackSpy(events)
 
     def handler(request):
+        events.append("telegram")
         raise httpx.ConnectError("proxy unavailable", request=request)
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
@@ -234,6 +242,7 @@ def test_notify_error_attempts_email_when_telegram_delivery_fails():
 
     notifier.notify_error("broken", error)
 
+    assert events == ["telegram", "email"]
     assert fallback.notify_error_calls == [("broken", error)]
 
 
