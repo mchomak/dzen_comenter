@@ -384,11 +384,11 @@ def test_auto_publish_is_not_confirmed_by_a_successful_click_alone():
     page = DzenStudioPage(fake)
     target = page.fetch_comments()[0]
 
-    with pytest.raises(RuntimeError, match="not visible after submit"):
+    with pytest.raises(RuntimeError, match="post-reload verification"):
         page.publish_reply(target, "мой ответ", auto_publish=True)
 
     assert node.reply_submit.clicks == 1
-    assert fake.reload_calls == []
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
 
 
 def test_auto_publish_waits_for_delayed_acknowledgment_before_reloading():
@@ -407,6 +407,50 @@ def test_auto_publish_waits_for_delayed_acknowledgment_before_reloading():
     page.publish_reply(target, "мой ответ", auto_publish=True)
 
     assert reload_saw_acknowledgment == [True]
+
+
+def test_auto_publish_recovers_reply_visible_only_after_reload():
+    node = make_node(0)
+    reloaded_node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+
+    def reload_with_persisted_reply():
+        reloaded_node.published_replies.append(
+            {"author": "Екатерина Великая", "text": "мой ответ"}
+        )
+        fake._groups = [FakeGroup("/a/post1", [reloaded_node])]
+
+    fake.on_reload = reload_with_persisted_reply
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+
+
+def test_auto_publish_fails_after_reload_when_reply_exists_only_in_sibling_thread():
+    node = make_node(0)
+    sibling = make_node(1)
+    sibling.published_replies.append(
+        {"author": "Екатерина Великая", "text": "мой ответ"}
+    )
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.on_reload = lambda: setattr(
+        fake, "_groups", [FakeGroup("/a/post1", [node, sibling])]
+    )
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert "мой ответ" not in str(exc_info.value)
+    assert "text0" not in str(exc_info.value)
+    assert node.reply_submit.clicks == 1
+    assert sibling.reply_submit.clicks == 0
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
 
 
 def test_auto_publish_fails_before_submit_when_source_thread_wrapper_is_missing():
@@ -465,7 +509,7 @@ def test_same_reply_text_from_another_author_does_not_confirm_publication():
     page = DzenStudioPage(fake)
     target = page.fetch_comments()[0]
 
-    with pytest.raises(RuntimeError, match="not visible after submit"):
+    with pytest.raises(RuntimeError, match="post-reload verification"):
         page.publish_reply(target, "мой ответ", auto_publish=True)
 
     assert node.reply_submit.clicks == 1

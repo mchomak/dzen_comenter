@@ -286,17 +286,13 @@ class DzenStudioPage:
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
                 if self._has_published_reply(node, text):
                     break
-            else:
-                raise RuntimeError(
-                    f"reply for comment {comment.dzen_comment_id!r} not visible after submit"
-                )
 
         self._page.reload(wait_until="domcontentloaded")
         self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
         node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
         if node is None or not self._has_published_reply(node, text):
             raise RuntimeError(
-                f"reply for comment {comment.dzen_comment_id!r} not visible after submit"
+                "reply not confirmed during post-reload verification"
             )
 
     def _find_comment_node_with_scroll(self, comment_id: str):
