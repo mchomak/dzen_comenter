@@ -20,6 +20,7 @@ from dzen_commenter.admin.queries import (
 from dzen_commenter.admin.validation import split_csv_items, validate_settings_form
 from dzen_commenter.admin.vnc_access import VncAccessClient, VncAccessUnavailable
 from dzen_commenter.auth import DzenLoginControlClient, DzenLoginControlUnavailable
+from dzen_commenter.bot_health import get_bot_health
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
 templates.env.filters["thread_messages"] = parse_thread_messages
@@ -52,6 +53,13 @@ def create_app(
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/health/bot")
+    def bot_health(request: Request):
+        return get_bot_health(
+            request.app.state.settings.BOT_HEALTH_PATH,
+            request.app.state.settings.POLL_INTERVAL,
+        )
 
     @app.get("/")
     def home(request: Request, _: None = Depends(require_login)):
@@ -305,7 +313,6 @@ def _vnc_values(settings: AdminSettings) -> dict[str, str]:
     return {
         "host": settings.VNC_HOST,
         "port": str(settings.VNC_PORT),
-        "password": settings.VNC_PASSWORD,
     }
 
 

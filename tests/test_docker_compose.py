@@ -51,3 +51,17 @@ def test_compose_builds_internal_database_url_from_postgres_environment():
     assert "@postgres:5432/compose_test_db" in services["app"]["environment"]["DATABASE_URL"]
     assert "@postgres:5432/compose_test_db" in services["admin"]["environment"]["DATABASE_URL"]
     assert services["app"]["environment"]["HEADLESS"] == "true"
+
+
+def test_admin_waits_for_database_not_for_bot_operational_readiness():
+    services = _resolved_compose_config()["services"]
+    admin_dependencies = services["admin"]["depends_on"]
+    healthcheck = services["app"]["healthcheck"]
+
+    assert "postgres" in admin_dependencies
+    assert "app" not in admin_dependencies
+    assert admin_dependencies["postgres"]["condition"] == "service_healthy"
+    assert "dzen_commenter.bot_health" in " ".join(healthcheck["test"])
+    assert services["app"]["environment"]["BOT_HEALTH_PATH"] == (
+        services["admin"]["environment"]["BOT_HEALTH_PATH"]
+    )

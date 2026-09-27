@@ -1,4 +1,7 @@
+import json
 from types import SimpleNamespace
+
+import pytest
 
 import main
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
@@ -62,6 +65,7 @@ def install_di_fakes(monkeypatch):
             self.path = path
             self.settings = SimpleNamespace(
                 error_notification_cooldown_seconds=900,
+                bot_account_name="bot-account",
             )
             rec.events.append(("runtime_config", self))
 
@@ -84,8 +88,9 @@ def install_di_fakes(monkeypatch):
             rec.events.append(("session_start", self))
 
     class FakeDzenPage:
-        def __init__(self, page):
+        def __init__(self, page, **kwargs):
             self.page = page
+            self.kwargs = kwargs
             rec.events.append(("dzen_page", self, page))
 
     class FakeEmailFallback:
@@ -184,6 +189,7 @@ def test_build_app_wires_layers(monkeypatch):
     auth_assistant = _first(rec, "auth_assistant")[1]
     assert auth_assistant.kwargs["proxy_url"] == settings.TELEGRAM_PROXY_URL
     assert "proxy_url_provider" not in auth_assistant.kwargs
+    assert dzen_ev[1].kwargs["bot_account_name_provider"]() == "bot-account"
     assert session.kwargs["auth_assistant"] is auth_assistant
 
     # OrchestratorLoop receives the single-comment prompt dependency only.
@@ -280,6 +286,103 @@ class FakeNotifier:
 
     def notify_error(self, message, error=None):
         self.errors.append((message, error))
+
+
+@pytest.mark.parametrize(
+    ("cycle_fails", "authenticated", "cycle_succeeded"),
+    ((False, True, True), (False, False, True), (True, True, False)),
+)
+def test_run_supervised_writes_secret_free_health_after_every_cycle(
+    tmp_path, cycle_fails, authenticated, cycle_succeeded
+):
+    health_path = tmp_path / "bot-health.json"
+
+    class HealthLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH=str(health_path))
+
+        def run_cycle(self):
+            if cycle_fails:
+                raise RuntimeError("private exception content")
+
+    class HealthSession(FakeSession):
+        def is_logged_in(self):
+            return authenticated
+
+    main.run_supervised(
+        HealthLoop(),
+        HealthSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=100,
+        sleep_fn=lambda _delay: None,
+        time_fn=lambda: 0.0,
+        max_cycles=1,
+    )
+
+    assert health_path.exists()
+    health = json.loads(health_path.read_text(encoding="utf-8"))
+    assert health["cycle_succeeded"] is cycle_succeeded
+    assert health["authenticated"] is authenticated
+    assert "private exception content" not in health_path.read_text(encoding="utf-8")
+
+
+def test_run_supervised_records_auth_probe_failure_as_unauthenticated(tmp_path):
+    health_path = tmp_path / "bot-health.json"
+
+    class HealthLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH=str(health_path))
+
+        def run_cycle(self):
+            pass
+
+    class BrokenAuthSession(FakeSession):
+        def is_logged_in(self):
+            raise RuntimeError("auth probe details")
+
+    main.run_supervised(
+        HealthLoop(),
+        BrokenAuthSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=100,
+        sleep_fn=lambda _delay: None,
+        time_fn=lambda: 0.0,
+        max_cycles=1,
+    )
+
+    health = json.loads(health_path.read_text(encoding="utf-8"))
+    assert health["authenticated"] is False
+    assert "auth probe details" not in health_path.read_text(encoding="utf-8")
+
+
+def test_run_supervised_continues_when_health_snapshot_write_fails(monkeypatch):
+    class HealthLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH="unwritable-health-path")
+
+        def __init__(self):
+            self.cycles = 0
+
+        def run_cycle(self):
+            self.cycles += 1
+
+    def fail_write(*_args, **_kwargs):
+        raise OSError("private storage error")
+
+    loop = HealthLoop()
+    monkeypatch.setattr(main, "write_bot_health", fail_write)
+
+    main.run_supervised(
+        loop,
+        FakeSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=100,
+        sleep_fn=lambda _delay: None,
+        time_fn=lambda: 0.0,
+        max_cycles=2,
+    )
+
+    assert loop.cycles == 2
 
 
 # Acceptance 4 — happy path: run_cycle и sleep_fn вызваны ровно max_cycles раз.

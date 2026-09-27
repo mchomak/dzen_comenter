@@ -8,6 +8,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
       HEADLESS: ${HEADLESS:-true}
+      BOT_HEALTH_PATH: /app/config/bot_health.json
       USER_DATA_DIR: /app/user_data
       STORAGE_STATE_PATH: /app/session_state/storage_state.json
       GIGACHAT_VERIFY_SSL_CERTS: "true"
@@ -22,11 +23,11 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "alembic current --check-heads"]
-      interval: 5s
+      test: ["CMD", "python", "-m", "dzen_commenter.bot_health"]
+      interval: 15s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
   admin:
@@ -40,6 +41,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
       HEADLESS: ${HEADLESS:-true}
+      BOT_HEALTH_PATH: /app/config/bot_health.json
       RUNTIME_CONFIG_PATH: /app/config/runtime_config.json
       DZEN_LOGIN_CONTROL_SOCKET: /run/dzen-login-control/dzen-login.sock
     volumes:
@@ -49,7 +51,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      app:
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 

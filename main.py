@@ -7,6 +7,7 @@ from pathlib import Path
 
 import sqlalchemy
 
+from dzen_commenter.bot_health import write_bot_health
 from dzen_commenter.ai.factory import create_provider
 from dzen_commenter.auth.dzen_login_control import DzenLoginControlServer
 from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
@@ -56,7 +57,10 @@ def build_app(
 
     session = PlaywrightSessionManager(settings, auth_assistant=auth_assistant)
     session.start()
-    page = DzenStudioPage(lambda: session.page)
+    page = DzenStudioPage(
+        lambda: session.page,
+        bot_account_name_provider=lambda: runtime_config.get().settings.bot_account_name,
+    )
 
     if settings.SMTP_HOST:
         email_fallback = EmailFallbackNotifier(
@@ -129,6 +133,7 @@ def run_supervised(
     last_error_notification_at: float | None = None
     cycles = 0
     while max_cycles is None or cycles < max_cycles:
+        cycle_succeeded = True
         try:
             loop.run_cycle()
         except Exception as exc:
@@ -142,6 +147,7 @@ def run_supervised(
                     "error_message": str(exc),
                 },
             )
+            cycle_succeeded = False
             now = time_fn()
             error_signature = (type(exc), str(exc))
             repeated_error = (
@@ -159,6 +165,23 @@ def run_supervised(
                 )
                 last_error_signature = error_signature
                 last_error_notification_at = now
+        health_path = getattr(getattr(loop, "settings", None), "BOT_HEALTH_PATH", None)
+        if health_path:
+            authenticated = False
+            try:
+                is_logged_in = getattr(session, "is_logged_in", None)
+                if callable(is_logged_in):
+                    authenticated = bool(is_logged_in())
+            except Exception:
+                authenticated = False
+            try:
+                write_bot_health(
+                    health_path,
+                    cycle_succeeded=cycle_succeeded,
+                    authenticated=authenticated,
+                )
+            except Exception:
+                logger.warning("Failed to write bot health snapshot", exc_info=True)
         now = time_fn()
         if now - last_keepalive >= keepalive_interval:
             try:

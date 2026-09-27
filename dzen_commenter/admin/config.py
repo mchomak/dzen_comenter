@@ -13,6 +13,8 @@ class AdminSettings(BaseSettings):
     ADMIN_PASSWORD: str = ""
     ADMIN_SESSION_SECRET: str = "change-me-in-production"
     RUNTIME_CONFIG_PATH: str = "runtime_config.json"
+    BOT_HEALTH_PATH: str = "bot_health.json"
+    POLL_INTERVAL: int = 60
     DATABASE_URL: str = ""
     HEADLESS: bool = False
     VNC_HOST: str = "localhost"
