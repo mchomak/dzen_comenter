@@ -323,7 +323,7 @@ def test_settings_page_renders_runtime_values_and_only_readonly_vnc(client):
     assert 'name="vnc_host"' not in response.text
     assert 'value="vnc.example.test"' in response.text
     assert 'value="5901"' in response.text
-    assert 'value="vnc-only-secret"' in response.text
+    assert "vnc-only-secret" not in response.text
     assert "readonly" in response.text
     assert "db-secret" not in response.text
     assert "TELEGRAM_PROXY_URL" not in response.text
