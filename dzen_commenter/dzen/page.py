@@ -48,6 +48,7 @@ _REPLY_SEARCH_MAX_STALLED_SCREENS = 2
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
 _REPLY_EXPANSION_TIMEOUT_MS = 10_000
+_SUBMIT_TRACE_LIMIT = 5
 
 
 def _post_url(post_href: str) -> str | None:
@@ -276,25 +277,94 @@ class DzenStudioPage:
         if auto_publish and self._has_published_reply(node, text):
             return
 
-        self._submit_reply(node, text, auto_publish=auto_publish)
         if not auto_publish:
+            self._submit_reply(node, text, auto_publish=False)
             return
 
-        if not self._has_published_reply(node, text):
-            for _ in range(
-                _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
-            ):
-                self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                if self._has_published_reply(node, text):
-                    break
+        page = self._page
+        mutations: list[dict[str, Any]] = []
+        truncated = False
 
-        self._page.reload(wait_until="domcontentloaded")
-        self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-        node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
-        if node is None or not self._has_published_reply(node, text):
-            raise RuntimeError(
-                "reply not confirmed during post-reload verification"
-            )
+        def on_request(request: Any) -> None:
+            nonlocal truncated
+            try:
+                parsed = urlsplit(request.url)
+                method = request.method.upper()
+                host = parsed.hostname or ""
+                if method == "GET" or not (
+                    host == "dzen.ru" or host.endswith(".dzen.ru")
+                ):
+                    return
+                if len(mutations) >= _SUBMIT_TRACE_LIMIT:
+                    truncated = True
+                    return
+                path = re.sub(r"[^A-Za-z0-9/._~%\-]", "_", parsed.path[:160])
+                mutations.append(
+                    {
+                        "request": request,
+                        "method": re.sub(r"[^A-Z]", "_", method[:12]),
+                        "host": host,
+                        "path": path,
+                        "status": "pending",
+                    }
+                )
+            except Exception:
+                return
+
+        def on_response(response: Any) -> None:
+            try:
+                for mutation in mutations:
+                    if mutation["request"] is response.request:
+                        mutation["status"] = str(int(response.status))
+                        break
+            except Exception:
+                return
+
+        page.on("request", on_request)
+        page.on("response", on_response)
+        try:
+            self._submit_reply(node, text, auto_publish=True)
+            acknowledged = self._has_published_reply(node, text)
+            if not acknowledged:
+                for _ in range(
+                    _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
+                ):
+                    page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                    if self._has_published_reply(node, text):
+                        acknowledged = True
+                        break
+
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+            node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
+            if node is None or not self._has_published_reply(node, text):
+                count = None if node is None else node.evaluate(
+                    """(node, threadSelector) =>
+                        node.closest(threadSelector)?.querySelectorAll(
+                            '[class*="editor--comment__block-"]'
+                        ).length ?? null""",
+                    selectors.COMMENT_THREAD,
+                )
+                outcomes = ", ".join(
+                    f"{item['method']} {item['host']} {item['path']} {item['status']}"
+                    for item in mutations
+                ) or "none"
+                reply_count = max(0, count - 1) if count is not None else "unknown"
+                pending_responses = sum(
+                    item["status"] == "pending" for item in mutations
+                )
+                raise RuntimeError(
+                    "reply not confirmed during post-reload verification; "
+                    f"ack_before_reload={str(acknowledged).lower()}; "
+                    f"source_found={str(node is not None).lower()}; "
+                    f"target_reply_count={reply_count}; "
+                    f"mutations=[{outcomes}]; "
+                    f"pending_responses={pending_responses}; "
+                    f"truncated={str(truncated).lower()}"
+                )
+        finally:
+            page.remove_listener("request", on_request)
+            page.remove_listener("response", on_response)
 
     def _find_comment_node_with_scroll(self, comment_id: str):
         node, seen_ids = self._find_comment_node(comment_id)

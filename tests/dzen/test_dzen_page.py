@@ -142,6 +142,17 @@ class FakePage:
         self.on_reload = None
         self.mouse = FakeMouse(self)
         self.context = FakeBrowserContext()
+        self.listeners: dict[str, list] = {}
+
+    def on(self, event: str, callback) -> None:
+        self.listeners.setdefault(event, []).append(callback)
+
+    def remove_listener(self, event: str, callback) -> None:
+        self.listeners[event].remove(callback)
+
+    def emit(self, event: str, value) -> None:
+        for callback in list(self.listeners.get(event, [])):
+            callback(value)
 
     def query_selector_all(self, selector: str):
         if selector == selectors.POST_GROUP:
@@ -392,6 +403,7 @@ def test_publish_reply_targets_matching_node():
     assert fake.mouse.wheel_calls == []
     assert fake.evaluate_calls == []
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert fake.listeners == {"request": [], "response": []}
 
 
 def test_auto_publish_is_not_confirmed_by_a_successful_click_alone():
@@ -467,6 +479,60 @@ def test_auto_publish_fails_after_reload_when_reply_exists_only_in_sibling_threa
     assert node.reply_submit.clicks == 1
     assert sibling.reply_submit.clicks == 0
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+
+
+def test_unconfirmed_reply_reports_sanitized_submit_outcome_and_cleans_listeners():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comment/reply?token=private-query"
+        post_data = "private-body"
+        headers = {"Cookie": "private-cookie"}
+
+    class Response:
+        request = Request()
+        status = 403
+
+    def submit() -> None:
+        fake.emit("request", Response.request)
+        fake.emit("response", Response())
+        pending = Request()
+        pending.url = "https://api.dzen.ru/api/comment/pending?token=private-query"
+        fake.emit("request", pending)
+        for index in range(6):
+            overflow = Request()
+            overflow.url = f"https://dzen.ru/api/overflow/{index}?token=private-query"
+            fake.emit("request", overflow)
+
+    node.reply_submit.on_click = submit
+
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
+        page.publish_reply(target, "private-reply", auto_publish=True)
+
+    message = str(exc_info.value)
+    assert "ack_before_reload=false" in message
+    assert "source_found=true" in message
+    assert "target_reply_count=0" in message
+    assert "POST dzen.ru /api/comment/reply 403" in message
+    assert "pending_responses=4" in message
+    assert "POST api.dzen.ru /api/comment/pending pending" in message
+    assert message.count("POST ") == 5
+    assert "truncated=true" in message
+    assert "/api/overflow/5" not in message
+    for secret in (
+        "private-query",
+        "private-body",
+        "private-cookie",
+        "private-reply",
+        "text0",
+    ):
+        assert secret not in message
+    assert fake.listeners == {"request": [], "response": []}
+    assert node.reply_submit.clicks == 1
 
 
 def test_auto_publish_fails_before_submit_when_source_thread_wrapper_is_missing():
@@ -635,6 +701,7 @@ def test_publish_reply_fills_draft_and_waits_without_submitting():
     assert node.reply_input.filled == ["мой ответ"]
     assert node.reply_submit.clicks == 0
     assert fake.waited_ms == [5_000]
+    assert fake.listeners == {}
 
 
 def test_publish_reply_unmatched_raises_lookup_error():
