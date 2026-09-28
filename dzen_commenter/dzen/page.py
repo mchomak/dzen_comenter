@@ -298,13 +298,15 @@ class DzenStudioPage:
                 if len(mutations) >= _SUBMIT_TRACE_LIMIT:
                     truncated = True
                     return
-                path = re.sub(r"[^A-Za-z0-9/._~%\-]", "_", parsed.path[:160])
+                path_sha256 = hashlib.sha256(
+                    parsed.path.encode("utf-8")
+                ).hexdigest()[:12]
                 mutations.append(
                     {
                         "request": request,
                         "method": re.sub(r"[^A-Z]", "_", method[:12]),
                         "host": host,
-                        "path": path,
+                        "path_sha256": path_sha256,
                         "status": "pending",
                     }
                 )
@@ -346,7 +348,8 @@ class DzenStudioPage:
                     selectors.COMMENT_THREAD,
                 )
                 outcomes = ", ".join(
-                    f"{item['method']} {item['host']} {item['path']} {item['status']}"
+                    f"{item['method']} {item['host']} "
+                    f"path_sha256={item['path_sha256']} {item['status']}"
                     for item in mutations
                 ) or "none"
                 reply_count = max(0, count - 1) if count is not None else "unknown"

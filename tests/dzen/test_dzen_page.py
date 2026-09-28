@@ -489,7 +489,7 @@ def test_unconfirmed_reply_reports_sanitized_submit_outcome_and_cleans_listeners
 
     class Request:
         method = "POST"
-        url = "https://dzen.ru/api/comment/reply?token=private-query"
+        url = "https://dzen.ru/api/comment/private-reply/private-token?token=private-query"
         post_data = "private-body"
         headers = {"Cookie": "private-cookie"}
 
@@ -517,9 +517,9 @@ def test_unconfirmed_reply_reports_sanitized_submit_outcome_and_cleans_listeners
     assert "ack_before_reload=false" in message
     assert "source_found=true" in message
     assert "target_reply_count=0" in message
-    assert "POST dzen.ru /api/comment/reply 403" in message
+    assert "POST dzen.ru path_sha256=f356dc5d49b6 403" in message
     assert "pending_responses=4" in message
-    assert "POST api.dzen.ru /api/comment/pending pending" in message
+    assert "POST api.dzen.ru path_sha256=e335b7ee211c pending" in message
     assert message.count("POST ") == 5
     assert "truncated=true" in message
     assert "/api/overflow/5" not in message
@@ -528,7 +528,9 @@ def test_unconfirmed_reply_reports_sanitized_submit_outcome_and_cleans_listeners
         "private-body",
         "private-cookie",
         "private-reply",
+        "private-token",
         "text0",
+        "/api/comment/",
     ):
         assert secret not in message
     assert fake.listeners == {"request": [], "response": []}
