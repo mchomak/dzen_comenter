@@ -47,6 +47,7 @@ _REPLY_SEARCH_WAIT_MS = 500
 _REPLY_SEARCH_MAX_STALLED_SCREENS = 2
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
+_REPLY_EXPANSION_TIMEOUT_MS = 10_000
 
 
 def _post_url(post_href: str) -> str | None:
@@ -329,12 +330,9 @@ class DzenStudioPage:
                 "source comment thread is uninspectable: bot author is not configured"
             )
 
-        replies = node.evaluate(
-            """
+        read_replies = """
             (node, threadSelector) => {
-                const thread = node.closest(
-                    threadSelector
-                );
+                const thread = node.closest(threadSelector);
                 if (!thread) return null;
                 return Array.from(
                     thread.querySelectorAll('[class*="editor--comment__block-"]')
@@ -347,20 +345,64 @@ class DzenStudioPage:
                     )?.innerText || '',
                 }));
             }
-            """,
-            selectors.COMMENT_THREAD,
-        )
-        if replies is None:
-            raise RuntimeError(
-                "source comment thread is uninspectable: wrapper not found"
-            )
+            """
 
         normalized_text = " ".join(text.split())
-        return any(
-            is_bot_account_author(reply.get("author"), bot_account_name)
-            and " ".join(reply.get("text", "").split()) == normalized_text
-            for reply in replies or []
+        for check in range(2):
+            replies = node.evaluate(read_replies, selectors.COMMENT_THREAD)
+            if replies is None:
+                raise RuntimeError(
+                    "source comment thread is uninspectable: wrapper not found"
+                )
+            if any(
+                is_bot_account_author(reply.get("author"), bot_account_name)
+                and " ".join(reply.get("text", "").split()) == normalized_text
+                for reply in replies
+            ):
+                return True
+            if check == 0 and self._expand_thread(node):
+                continue
+            return False
+        return False
+
+    def _expand_thread(self, node: Any) -> bool:
+        state = node.evaluate(
+            """
+            (node, selectors) => {
+                const thread = node.closest(selectors.thread);
+                if (!thread) return null;
+                const count = thread.querySelectorAll(
+                    '[class*="editor--comment__block-"]'
+                ).length;
+                const button = thread.querySelector(selectors.more);
+                if (!button) return {count, expanded: false};
+                button.click();
+                return {count, expanded: true};
+            }
+            """,
+            {"thread": selectors.COMMENT_THREAD, "more": selectors.COMMENT_OPEN_MORE},
         )
+        if state is None:
+            raise RuntimeError("source comment thread is uninspectable: wrapper not found")
+        if not state["expanded"]:
+            return False
+
+        for _ in range(_REPLY_EXPANSION_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS):
+            count = node.evaluate(
+                """
+                (node, threadSelector) => node.closest(threadSelector)?.querySelectorAll(
+                    '[class*="editor--comment__block-"]'
+                ).length ?? null
+                """,
+                selectors.COMMENT_THREAD,
+            )
+            if count is None:
+                raise RuntimeError("source comment thread is uninspectable: wrapper not found")
+            if count > state["count"]:
+                self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                return True
+            self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+        raise RuntimeError("source comment thread is uninspectable: replies did not expand")
 
     def _find_comment_node(self, comment_id: str):
         seen_ids: set[str] = set()

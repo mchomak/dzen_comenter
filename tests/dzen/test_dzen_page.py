@@ -52,6 +52,10 @@ class FakeCommentNode:
         self.reply_input = FakeInput()
         self.reply_submit = FakeButton()
         self.published_replies: list[dict[str, str]] = []
+        self.hidden_replies: list[dict[str, str]] = []
+        self.more_button = FakeButton(
+            lambda: self.published_replies.extend(self.hidden_replies)
+        )
         self.has_thread_wrapper = True
         self._children = {
             selectors.COMMENT_AUTHOR_LINK: FakeLink(author_href),
@@ -70,8 +74,20 @@ class FakeCommentNode:
     def evaluate(self, script: str, arg=None):
         if "authorHref:" in script:
             return None
+        if isinstance(arg, dict):
+            if not self.has_thread_wrapper:
+                return None
+            count = 1 + len(self.published_replies)
+            if not self.hidden_replies:
+                return {"count": count, "expanded": False}
+            self.more_button.click()
+            if len(self.published_replies) > count - 1:
+                self.hidden_replies.clear()
+            return {"count": count, "expanded": True}
         if arg != selectors.COMMENT_THREAD or not self.has_thread_wrapper:
             return None
+        if "?.querySelectorAll" in script:
+            return 1 + len(self.published_replies)
         return list(self.published_replies)
 
 
@@ -500,6 +516,98 @@ def test_auto_publish_skips_duplicate_when_matching_bot_reply_is_already_visible
     assert node.reply_button.clicks == 0
     assert node.reply_submit.clicks == 0
     assert fake.reload_calls == []
+
+
+def test_auto_publish_expands_target_thread_before_resubmitting_hidden_reply():
+    node = make_node(0)
+    node.hidden_replies.append({"author": "Configured Bot", "text": "already posted"})
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "already posted", auto_publish=True)
+
+    assert node.more_button.clicks == 1
+    assert node.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+
+
+def test_auto_publish_confirms_hidden_reply_after_reload():
+    node = make_node(0)
+    reloaded_node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+
+    def reload_with_collapsed_reply():
+        reloaded_node.hidden_replies.append(
+            {"author": "Configured Bot", "text": "posted reply"}
+        )
+        fake._groups = [FakeGroup("/a/post1", [reloaded_node])]
+
+    fake.on_reload = reload_with_collapsed_reply
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "posted reply", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert reloaded_node.more_button.clicks == 1
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+
+
+@pytest.mark.parametrize(
+    "hidden_reply",
+    [
+        {"author": "Another Author", "text": "posted reply"},
+        {"author": "Configured Bot", "text": "different reply"},
+    ],
+)
+def test_hidden_reply_requires_exact_bot_author_and_text(hidden_reply):
+    node = make_node(0)
+    node.hidden_replies.append(hidden_reply)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="post-reload verification"):
+        page.publish_reply(target, "posted reply", auto_publish=True)
+
+    assert node.more_button.clicks == 1
+    assert node.reply_submit.clicks == 1
+
+
+def test_hidden_reply_in_sibling_thread_does_not_confirm_target():
+    node = make_node(0)
+    sibling = make_node(1)
+    sibling.hidden_replies.append(
+        {"author": "Configured Bot", "text": "posted reply"}
+    )
+    fake = FakePage([FakeGroup("/a/post1", [node, sibling])])
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="post-reload verification"):
+        page.publish_reply(target, "posted reply", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert sibling.more_button.clicks == 0
+    assert sibling.reply_submit.clicks == 0
+
+
+def test_failed_thread_expansion_stops_before_submit():
+    node = make_node(0)
+    node.hidden_replies.append(
+        {"author": "Configured Bot", "text": "posted reply"}
+    )
+    node.more_button.on_click = lambda: None
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="replies did not expand"):
+        page.publish_reply(target, "posted reply", auto_publish=True)
+
+    assert node.more_button.clicks == 1
+    assert node.reply_submit.clicks == 0
 
 
 def test_same_reply_text_from_another_author_does_not_confirm_publication():
