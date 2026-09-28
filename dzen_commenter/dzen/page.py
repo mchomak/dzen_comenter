@@ -44,7 +44,6 @@ _PROMOTIONAL_ARTICLE_MARKERS = (
 )
 _REPLY_SEARCH_MAX_SCROLLS = 20
 _REPLY_SEARCH_WAIT_MS = 500
-_REPLY_SEARCH_MAX_STALLED_SCREENS = 2
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
 _REPLY_EXPANSION_TIMEOUT_MS = 10_000
@@ -370,25 +369,17 @@ class DzenStudioPage:
             page.remove_listener("response", on_response)
 
     def _find_comment_node_with_scroll(self, comment_id: str):
-        node, seen_ids = self._find_comment_node(comment_id)
+        node, _ = self._find_comment_node(comment_id)
         if node is not None:
             return node
 
         try:
-            stalled_screens = 0
             for _ in range(_REPLY_SEARCH_MAX_SCROLLS):
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                node, loaded_ids = self._find_comment_node(comment_id)
+                node, _ = self._find_comment_node(comment_id)
                 if node is not None:
                     return node
-                if loaded_ids - seen_ids:
-                    seen_ids.update(loaded_ids)
-                    stalled_screens = 0
-                else:
-                    stalled_screens += 1
-                    if stalled_screens >= _REPLY_SEARCH_MAX_STALLED_SCREENS:
-                        break
             return None
         finally:
             try:

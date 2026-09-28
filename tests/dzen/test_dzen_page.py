@@ -723,8 +723,32 @@ def test_publish_reply_unmatched_raises_lookup_error():
     )
     with pytest.raises(LookupError):
         page.publish_reply(comment, "ответ", auto_publish=True)
-    assert len(fake.mouse.wheel_calls) == 2
-    assert fake.waited_ms == [500, 500]
+    assert len(fake.mouse.wheel_calls) == 20
+    assert fake.waited_ms == [500] * 20
+    assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+
+
+def test_find_comment_after_three_stalled_scrolls_restores_page_top():
+    initial_group = FakeGroup("/a/post1", [make_node(0)])
+    target_node = make_node(1)
+    fake = FakePage(
+        [initial_group],
+        scroll_groups=[
+            [initial_group],
+            [initial_group],
+            [initial_group],
+            [FakeGroup("/a/post1", [target_node])],
+        ],
+    )
+    page = DzenStudioPage(fake)
+
+    found = page._find_comment_node_with_scroll(
+        synthetic_id("/a/post1", "/user/u1", "text1")
+    )
+
+    assert found is target_node
+    assert len(fake.mouse.wheel_calls) == 4
+    assert fake.waited_ms == [500] * 4
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
 
 
