@@ -21,14 +21,22 @@ class FakeText:
 
 
 class FakeButton:
-    def __init__(self, on_click=None) -> None:
+    def __init__(self, on_click=None, *, hide_on_click: bool = False) -> None:
         self.clicks = 0
         self.on_click = on_click
+        self.hide_on_click = hide_on_click
+        self.visible = True
+        self.attached = True
 
     def click(self) -> None:
         self.clicks += 1
+        if self.hide_on_click:
+            self.visible = False
         if self.on_click is not None:
             self.on_click()
+
+    def is_visible(self) -> bool:
+        return self.attached and self.visible
 
 
 class FakeInput:
@@ -51,7 +59,8 @@ class FakeCommentNode:
     def __init__(self, *, author_href: str, author: str, text: str, date: str | None):
         self.reply_button = FakeButton()
         self.reply_input = FakeInput()
-        self.reply_submit = FakeButton()
+        self.reply_submit = FakeButton(hide_on_click=True)
+        self.query_selector_calls: list[str] = []
         self.published_replies: list[dict[str, str]] = []
         self.hidden_replies: list[dict[str, str]] = []
         self.more_button = FakeButton(
@@ -70,6 +79,9 @@ class FakeCommentNode:
             self._children[selectors.COMMENT_DATE_TEXT] = FakeText(date)
 
     def query_selector(self, selector: str):
+        self.query_selector_calls.append(selector)
+        if selector == selectors.REPLY_SUBMIT and not self.reply_submit.attached:
+            return None
         return self._children.get(selector)
 
     def evaluate(self, script: str, arg=None):
@@ -418,6 +430,147 @@ def test_auto_publish_is_not_confirmed_by_a_successful_click_alone():
 
     assert node.reply_submit.clicks == 1
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+
+
+def test_auto_publish_waits_for_send_button_to_hide_before_reload():
+    node = make_node(0)
+    node.reply_submit.hide_on_click = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+
+    def hide_button_after_delay(_timeout_ms):
+        if len(fake.waited_ms) == 3:
+            node.reply_submit.visible = False
+
+    reload_state = []
+
+    def reload_with_reply():
+        reload_state.append(node.reply_submit.is_visible())
+        node.published_replies.append(
+            {"author": "Configured Bot", "text": "reply text"}
+        )
+
+    fake.on_wait_timeout = hide_button_after_delay
+    fake.on_reload = reload_with_reply
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "reply text", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert reload_state == [False]
+    assert selectors.REPLY_SUBMIT == '[data-testid="send-button"]'
+    assert selectors.REPLY_SUBMIT in node.query_selector_calls
+
+
+def test_auto_publish_retries_send_button_once_when_it_stays_visible():
+    node = make_node(0)
+    node.reply_submit.hide_on_click = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+
+    def submit_on_fallback():
+        if node.reply_submit.clicks == 2:
+            node.reply_submit.visible = False
+            node.published_replies.append(
+                {"author": "Configured Bot", "text": "reply text"}
+            )
+
+    node.reply_submit.on_click = submit_on_fallback
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    page.publish_reply(target, "reply text", auto_publish=True)
+
+    assert node.reply_submit.clicks == 2
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert node.query_selector_calls.count(selectors.REPLY_SUBMIT) > 2
+
+
+def test_auto_publish_does_not_reload_if_send_button_remains_visible():
+    node = make_node(0)
+    node.reply_submit.hide_on_click = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError) as exc_info:
+        page.publish_reply(target, "private reply text", auto_publish=True)
+
+    assert "send button remained visible" in str(exc_info.value)
+    assert "private reply text" not in str(exc_info.value)
+    assert node.reply_submit.clicks == 2
+    assert fake.reload_calls == []
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publish_accepted_response_prevents_fallback_click():
+    node = make_node(0)
+    node.reply_submit.hide_on_click = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+    reply_text = "private reply text"
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create"
+        post_data_json = {
+            "text": reply_text,
+            "publisherId": "publisher-id",
+            "documentId": "document-id",
+            "rootId": "root-id",
+            "replyToId": "reply-id",
+        }
+
+    class Response:
+        request = Request()
+        status = 200
+
+        def json(self):
+            return {
+                "status": "ok",
+                "comments": [
+                    {
+                        **self.request.post_data_json,
+                        "id": "created-id",
+                        "visibility": "visible",
+                    }
+                ],
+            }
+
+    def accepted_submit():
+        fake.emit("request", Response.request)
+        fake.emit("response", Response())
+
+    node.reply_submit.on_click = accepted_submit
+
+    with pytest.raises(RuntimeError, match="send button remained visible"):
+        page.publish_reply(target, reply_text, auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert fake.reload_calls == []
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publish_exact_reply_ack_prevents_fallback_click():
+    node = make_node(0)
+    node.reply_submit.hide_on_click = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+
+    def acknowledge_once(_timeout_ms):
+        if not node.published_replies:
+            node.published_replies.append(
+                {"author": "Configured Bot", "text": "reply text"}
+            )
+
+    fake.on_wait_timeout = acknowledge_once
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    target = page.fetch_comments()[0]
+
+    with pytest.raises(RuntimeError, match="send button remained visible"):
+        page.publish_reply(target, "reply text", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert fake.reload_calls == []
 
 
 def test_auto_publish_waits_for_delayed_acknowledgment_before_reloading():

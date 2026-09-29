@@ -47,6 +47,7 @@ _REPLY_SEARCH_MAX_SCROLLS = 20
 _REPLY_SEARCH_WAIT_MS = 500
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
+_REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 10_000
 _REPLY_EXPANSION_TIMEOUT_MS = 10_000
 _SUBMIT_TRACE_LIMIT = 5
 
@@ -341,11 +342,30 @@ class DzenStudioPage:
             except Exception:
                 return
 
+        acknowledged = False
+
+        def submission_started() -> bool:
+            nonlocal acknowledged
+            if (
+                self._creation_response_outcome(
+                    creation_response, creation_payload, normalized_text
+                )
+                == "accepted"
+            ):
+                return True
+            acknowledged = acknowledged or self._has_published_reply(node, text)
+            return acknowledged
+
         page.on("request", on_request)
         page.on("response", on_response)
         try:
-            self._submit_reply(node, text, auto_publish=True)
-            acknowledged = self._has_published_reply(node, text)
+            self._submit_reply(
+                node,
+                text,
+                auto_publish=True,
+                submission_started=submission_started,
+            )
+            acknowledged = acknowledged or self._has_published_reply(node, text)
             for _ in range(_REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS):
                 if creation_response is not None:
                     break
@@ -544,13 +564,46 @@ class DzenStudioPage:
                 return node, seen_ids
         return None, seen_ids
 
-    def _submit_reply(self, node, text: str, *, auto_publish: bool) -> None:
+    def _submit_reply(
+        self,
+        node,
+        text: str,
+        *,
+        auto_publish: bool,
+        submission_started: Callable[[], bool] | None = None,
+    ) -> None:
         node.query_selector(selectors.COMMENT_REPLY_BUTTON).click()
         node.query_selector(selectors.REPLY_INPUT).fill(text)
         if auto_publish:
-            node.query_selector(selectors.REPLY_SUBMIT).click()
+            send_button = node.query_selector(selectors.REPLY_SUBMIT)
+            if send_button is None:
+                raise RuntimeError("Dzen reply send button was not found after filling")
+            send_button.click()
+            if self._wait_for_send_button_to_hide(node):
+                return
+
+            if submission_started is None or not submission_started():
+                send_button = node.query_selector(selectors.REPLY_SUBMIT)
+                if send_button is not None and send_button.is_visible():
+                    send_button.click()
+
+            if not self._wait_for_send_button_to_hide(node):
+                raise RuntimeError(
+                    "Dzen reply send button remained visible after submit; page was not reloaded"
+                )
         else:
             self._page.wait_for_timeout(5_000)
+
+    def _wait_for_send_button_to_hide(self, node: Any) -> bool:
+        for _ in range(
+            _REPLY_SUBMIT_BUTTON_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
+        ):
+            send_button = node.query_selector(selectors.REPLY_SUBMIT)
+            if send_button is None or not send_button.is_visible():
+                return True
+            self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+        send_button = node.query_selector(selectors.REPLY_SUBMIT)
+        return send_button is None or not send_button.is_visible()
 
     def _iter_comment_nodes(self):
         for group in self._page.query_selector_all(selectors.POST_GROUP):
