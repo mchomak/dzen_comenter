@@ -283,9 +283,13 @@ class DzenStudioPage:
         page = self._page
         mutations: list[dict[str, Any]] = []
         truncated = False
+        creation_request: Any | None = None
+        creation_payload: dict[str, Any] | None = None
+        creation_response: Any | None = None
+        normalized_text = " ".join(text.split())
 
         def on_request(request: Any) -> None:
-            nonlocal truncated
+            nonlocal truncated, creation_request, creation_payload
             try:
                 parsed = urlsplit(request.url)
                 method = request.method.upper()
@@ -294,6 +298,18 @@ class DzenStudioPage:
                     host == "dzen.ru" or host.endswith(".dzen.ru")
                 ):
                     return
+                if method == "POST" and creation_request is None:
+                    try:
+                        payload = request.post_data_json
+                    except Exception:
+                        payload = None
+                    if (
+                        isinstance(payload, dict)
+                        and isinstance(payload.get("text"), str)
+                        and " ".join(payload["text"].split()) == normalized_text
+                    ):
+                        creation_request = request
+                        creation_payload = payload
                 if len(mutations) >= _SUBMIT_TRACE_LIMIT:
                     truncated = True
                     return
@@ -313,7 +329,10 @@ class DzenStudioPage:
                 return
 
         def on_response(response: Any) -> None:
+            nonlocal creation_response
             try:
+                if response.request is creation_request:
+                    creation_response = response
                 for mutation in mutations:
                     if mutation["request"] is response.request:
                         mutation["status"] = str(int(response.status))
@@ -326,17 +345,21 @@ class DzenStudioPage:
         try:
             self._submit_reply(node, text, auto_publish=True)
             acknowledged = self._has_published_reply(node, text)
-            if not acknowledged:
-                for _ in range(
-                    _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
-                ):
-                    page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                    if self._has_published_reply(node, text):
-                        acknowledged = True
-                        break
+            for _ in range(_REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS):
+                if creation_response is not None:
+                    break
+                page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                if not acknowledged:
+                    acknowledged = self._has_published_reply(node, text)
+
+            accepted = self._creation_response_accepted(
+                creation_response, creation_payload, normalized_text
+            )
 
             page.reload(wait_until="domcontentloaded")
             page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+            if accepted:
+                return
             node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
             if node is None or not self._has_published_reply(node, text):
                 count = None if node is None else node.evaluate(
@@ -367,6 +390,40 @@ class DzenStudioPage:
         finally:
             page.remove_listener("request", on_request)
             page.remove_listener("response", on_response)
+
+    @staticmethod
+    def _creation_response_accepted(
+        response: Any | None, payload: dict[str, Any] | None, normalized_text: str
+    ) -> bool:
+        if response is None or payload is None:
+            return False
+        try:
+            if not 200 <= int(response.status) < 300:
+                return False
+            body = response.json()
+            if not isinstance(body, dict) or body.get("status") != "ok":
+                return False
+            comments = body.get("comments")
+            if not isinstance(comments, list) or len(comments) != 1:
+                return False
+            created = comments[0]
+            if not isinstance(created, dict):
+                return False
+            if not str(created.get("id") or "").strip():
+                return False
+            if not isinstance(created.get("text"), str) or (
+                " ".join(created["text"].split()) != normalized_text
+            ):
+                return False
+            if created.get("visibility") != "visible":
+                return False
+            return all(
+                created.get(field) == payload[field]
+                for field in ("publisherId", "documentId", "rootId", "replyToId")
+                if field in payload
+            )
+        except Exception:
+            return False
 
     def _find_comment_node_with_scroll(self, comment_id: str):
         node, _ = self._find_comment_node(comment_id)

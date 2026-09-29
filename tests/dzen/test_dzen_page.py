@@ -458,6 +458,244 @@ def test_auto_publish_recovers_reply_visible_only_after_reload():
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
 
 
+def test_auto_publish_accepts_matching_create_response_when_reload_hides_reply():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+    reply_text = "мой  ответ"
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create?private=secret"
+        post_data_json = {
+            "text": reply_text,
+            "publisherId": "publisher-secret",
+            "documentId": "document-secret",
+            "rootId": "root-secret",
+            "replyToId": "reply-secret",
+        }
+
+    class Response:
+        request = Request()
+        status = 200
+
+        def json(self):
+            return {
+                "status": "ok",
+                "comments": [{
+                    "id": "created-secret",
+                    "text": "мой ответ",
+                    "publisherId": "publisher-secret",
+                    "documentId": "document-secret",
+                    "rootId": "root-secret",
+                    "replyToId": "reply-secret",
+                    "visibility": "visible",
+                    "asPublisher": False,
+                }],
+            }
+
+    def submit():
+        fake.emit("request", Response.request)
+        fake.emit("response", Response())
+        node.published_replies.append(
+            {"author": "Екатерина Великая", "text": reply_text}
+        )
+
+    node.reply_submit.on_click = submit
+    fake.on_reload = node.published_replies.clear
+
+    page.publish_reply(target, reply_text, auto_publish=True)
+
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert node.published_replies == []
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+@pytest.mark.parametrize(
+    "response_status,response_body",
+    [
+        (403, {"status": "ok", "comments": []}),
+        (200, {"status": "error", "comments": []}),
+        (200, {"status": "ok", "comments": []}),
+        (200, {"status": "ok", "comments": [{"id": "", "text": "мой ответ", "visibility": "visible"}]}),
+        (200, {"status": "ok", "comments": [{"id": "id", "text": "wrong text", "visibility": "visible"}]}),
+        (200, {"status": "ok", "comments": [{"id": "id", "text": "мой ответ", "visibility": "hidden"}]}),
+        (200, {"status": "ok", "comments": [{"id": "id", "text": "мой ответ", "visibility": "visible", "replyToId": "wrong"}]}),
+    ],
+)
+def test_auto_publish_rejects_bad_create_response_with_optimistic_dom(
+    response_status, response_body
+):
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create?private=secret"
+        post_data_json = {
+            "text": "мой ответ",
+            "publisherId": "publisher-secret",
+            "documentId": "document-secret",
+            "rootId": "root-secret",
+            "replyToId": "reply-secret",
+        }
+
+    class Response:
+        request = Request()
+        status = response_status
+
+        def json(self):
+            return response_body
+
+    def submit():
+        fake.emit("request", Response.request)
+        fake.emit("response", Response())
+        node.published_replies.append(
+            {"author": "Екатерина Великая", "text": "мой ответ"}
+        )
+
+    node.reply_submit.on_click = submit
+    fake.on_reload = node.published_replies.clear
+
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert "secret" not in str(exc_info.value)
+    assert "мой ответ" not in str(exc_info.value)
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+@pytest.mark.parametrize(
+    "mismatch_field",
+    ["publisherId", "documentId", "rootId", "replyToId"],
+)
+def test_auto_publish_requires_create_response_in_original_thread(mismatch_field):
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+    payload = {
+        "text": "мой ответ",
+        "publisherId": "publisher-secret",
+        "documentId": "document-secret",
+        "rootId": "root-secret",
+        "replyToId": "reply-secret",
+    }
+    created = {
+        **payload,
+        "id": "created-secret",
+        "visibility": "visible",
+        mismatch_field: "unrelated-secret",
+    }
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create"
+        post_data_json = payload
+
+    class Response:
+        request = Request()
+        status = 200
+
+        def json(self):
+            return {"status": "ok", "comments": [created]}
+
+    def submit():
+        fake.emit("request", Response.request)
+        fake.emit("response", Response())
+        node.published_replies.append(
+            {"author": "Екатерина Великая", "text": "мой ответ"}
+        )
+
+    node.reply_submit.on_click = submit
+    fake.on_reload = node.published_replies.clear
+
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert "secret" not in str(exc_info.value)
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publish_optimistic_reply_without_create_response_still_fails():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Екатерина Великая", "text": "мой ответ"}
+    )
+    fake.on_reload = node.published_replies.clear
+
+    with pytest.raises(RuntimeError, match="post-reload verification"):
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publish_waits_for_create_response_before_reload():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create"
+        post_data_json = {
+            "text": "мой ответ",
+            "rootId": "root-secret",
+            "replyToId": "reply-secret",
+        }
+
+    class Response:
+        request = Request()
+        status = 200
+
+        def json(self):
+            return {
+                "status": "ok",
+                "comments": [{
+                    **self.request.post_data_json,
+                    "id": "created-secret",
+                    "visibility": "visible",
+                }],
+            }
+
+    def submit():
+        fake.emit("request", Response.request)
+        node.published_replies.append(
+            {"author": "Екатерина Великая", "text": "мой ответ"}
+        )
+
+    node.reply_submit.on_click = submit
+    emitted = False
+
+    def deliver_response(_timeout_ms):
+        nonlocal emitted
+        if not emitted:
+            assert fake.reload_calls == []
+            fake.emit("response", Response())
+            emitted = True
+
+    fake.on_wait_timeout = deliver_response
+    fake.on_reload = node.published_replies.clear
+
+    page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert emitted
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
 def test_auto_publish_fails_after_reload_when_reply_exists_only_in_sibling_thread():
     node = make_node(0)
     sibling = make_node(1)
@@ -777,7 +1015,7 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
     page.publish_reply(target, "готовый ответ", auto_publish=True)
 
     assert len(fake.mouse.wheel_calls) == 1
-    assert fake.waited_ms == [500, 500]
+    assert fake.waited_ms == [500] * 22
     assert target_node.reply_input.filled == ["готовый ответ"]
     assert target_node.reply_submit.clicks == 1
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
