@@ -515,19 +515,21 @@ def test_auto_publish_accepts_matching_create_response_when_reload_hides_reply()
 
 
 @pytest.mark.parametrize(
-    "response_status,response_body",
+    "response_status,response_body,expected_outcome",
     [
-        (403, {"status": "ok", "comments": []}),
-        (200, {"status": "error", "comments": []}),
-        (200, {"status": "ok", "comments": []}),
-        (200, {"status": "ok", "comments": [{"id": "", "text": "мой ответ", "visibility": "visible"}]}),
-        (200, {"status": "ok", "comments": [{"id": "id", "text": "wrong text", "visibility": "visible"}]}),
-        (200, {"status": "ok", "comments": [{"id": "id", "text": "мой ответ", "visibility": "hidden"}]}),
-        (200, {"status": "ok", "comments": [{"id": "id", "text": "мой ответ", "visibility": "visible", "replyToId": "wrong"}]}),
+        (403, {"status": "ok", "comments": []}, "non_2xx"),
+        (200, {"status": "error-secret", "comments": []}, "invalid_response"),
+        (200, {"status": "ok", "comments": []}, "invalid_response"),
+        (200, {"status": "ok", "comments": ["server-secret"]}, "invalid_response"),
+        (200, {"status": "ok", "comments": [{"id": "", "text": "мой ответ", "visibility": "visible"}]}, "missing_created_id"),
+        (200, {"status": "ok", "comments": [{"id": "id-secret", "text": "wrong text secret", "visibility": "visible"}]}, "text_mismatch"),
+        (200, {"status": "ok", "comments": [{"id": "id-secret", "text": "мой ответ", "visibility": "hidden"}]}, "visibility_mismatch"),
+        (200, {"status": "ok", "comments": [{"id": "id-secret", "text": "мой ответ", "visibility": "visible", "replyToId": "wrong-secret"}]}, "relation_mismatch"),
+        (200, RuntimeError("server-secret"), "invalid_response"),
     ],
 )
 def test_auto_publish_rejects_bad_create_response_with_optimistic_dom(
-    response_status, response_body
+    response_status, response_body, expected_outcome
 ):
     node = make_node(0)
     fake = FakePage([FakeGroup("/a/post1", [node])])
@@ -550,6 +552,8 @@ def test_auto_publish_rejects_bad_create_response_with_optimistic_dom(
         status = response_status
 
         def json(self):
+            if isinstance(response_body, Exception):
+                raise response_body
             return response_body
 
     def submit():
@@ -565,6 +569,7 @@ def test_auto_publish_rejects_bad_create_response_with_optimistic_dom(
     with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
         page.publish_reply(target, "мой ответ", auto_publish=True)
 
+    assert f"creation_outcome={expected_outcome};" in str(exc_info.value)
     assert "secret" not in str(exc_info.value)
     assert "мой ответ" not in str(exc_info.value)
     assert node.reply_submit.clicks == 1
@@ -619,6 +624,7 @@ def test_auto_publish_requires_create_response_in_original_thread(mismatch_field
     with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
         page.publish_reply(target, "мой ответ", auto_publish=True)
 
+    assert "creation_outcome=relation_mismatch;" in str(exc_info.value)
     assert "secret" not in str(exc_info.value)
     assert node.reply_submit.clicks == 1
     assert fake.listeners == {"request": [], "response": []}
@@ -634,10 +640,40 @@ def test_auto_publish_optimistic_reply_without_create_response_still_fails():
     )
     fake.on_reload = node.published_replies.clear
 
-    with pytest.raises(RuntimeError, match="post-reload verification"):
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
         page.publish_reply(target, "мой ответ", auto_publish=True)
 
+    assert "creation_outcome=missing_request;" in str(exc_info.value)
     assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publish_reports_missing_create_response_after_request():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    target = page.fetch_comments()[0]
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create?token=secret"
+        post_data_json = {"text": "мой ответ"}
+
+    def submit():
+        fake.emit("request", Request())
+        node.published_replies.append(
+            {"author": "Екатерина Великая", "text": "мой ответ"}
+        )
+
+    node.reply_submit.on_click = submit
+    fake.on_reload = node.published_replies.clear
+
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
+
+    assert "creation_outcome=missing_response;" in str(exc_info.value)
+    assert "secret" not in str(exc_info.value)
+    assert "мой ответ" not in str(exc_info.value)
     assert fake.listeners == {"request": [], "response": []}
 
 

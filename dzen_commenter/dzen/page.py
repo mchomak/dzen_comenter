@@ -353,13 +353,13 @@ class DzenStudioPage:
                 if not acknowledged:
                     acknowledged = self._has_published_reply(node, text)
 
-            accepted = self._creation_response_accepted(
+            creation_outcome = self._creation_response_outcome(
                 creation_response, creation_payload, normalized_text
             )
 
             page.reload(wait_until="domcontentloaded")
             page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-            if accepted:
+            if creation_outcome == "accepted":
                 return
             node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
             if node is None or not self._has_published_reply(node, text):
@@ -381,6 +381,7 @@ class DzenStudioPage:
                 )
                 raise RuntimeError(
                     "reply not confirmed during post-reload verification; "
+                    f"creation_outcome={creation_outcome}; "
                     f"ack_before_reload={str(acknowledged).lower()}; "
                     f"source_found={str(node is not None).lower()}; "
                     f"target_reply_count={reply_count}; "
@@ -393,38 +394,42 @@ class DzenStudioPage:
             page.remove_listener("response", on_response)
 
     @staticmethod
-    def _creation_response_accepted(
+    def _creation_response_outcome(
         response: Any | None, payload: dict[str, Any] | None, normalized_text: str
-    ) -> bool:
-        if response is None or payload is None:
-            return False
+    ) -> str:
+        if payload is None:
+            return "missing_request"
+        if response is None:
+            return "missing_response"
         try:
             if not 200 <= int(response.status) < 300:
-                return False
+                return "non_2xx"
             body = response.json()
             if not isinstance(body, dict) or body.get("status") != "ok":
-                return False
+                return "invalid_response"
             comments = body.get("comments")
             if not isinstance(comments, list) or len(comments) != 1:
-                return False
+                return "invalid_response"
             created = comments[0]
             if not isinstance(created, dict):
-                return False
+                return "invalid_response"
             if not str(created.get("id") or "").strip():
-                return False
+                return "missing_created_id"
             if not isinstance(created.get("text"), str) or (
                 " ".join(created["text"].split()) != normalized_text
             ):
-                return False
+                return "text_mismatch"
             if created.get("visibility") != "visible":
-                return False
-            return all(
+                return "visibility_mismatch"
+            if not all(
                 created.get(field) == payload[field]
                 for field in ("publisherId", "documentId", "rootId", "replyToId")
                 if field in payload
-            )
+            ):
+                return "relation_mismatch"
+            return "accepted"
         except Exception:
-            return False
+            return "invalid_response"
 
     def _find_comment_node_with_scroll(self, comment_id: str):
         node, _ = self._find_comment_node(comment_id)
