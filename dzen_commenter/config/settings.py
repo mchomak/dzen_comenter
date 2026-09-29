@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     POLL_INTERVAL: int
     KEEPALIVE_INTERVAL: int
     MAX_REPLIES_PER_CYCLE: int
+    BOT_HEALTH_PATH: str = "bot_health.json"
 
     # Telegram (авторизация/уведомления)
     TELEGRAM_BOT_TOKEN: str = ""

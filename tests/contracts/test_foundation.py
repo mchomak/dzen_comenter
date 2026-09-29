@@ -56,6 +56,7 @@ EXPECTED_FIELDS = {
     "POLL_INTERVAL",
     "KEEPALIVE_INTERVAL",
     "MAX_REPLIES_PER_CYCLE",
+    "BOT_HEALTH_PATH",
     # stage-02 config extension
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
@@ -182,6 +183,12 @@ def test_settings_reads_full_env(monkeypatch):
 
 def test_settings_fields_match_model():
     assert set(Settings.model_fields) == EXPECTED_FIELDS
+
+
+def test_settings_bot_health_path_accepts_compose_override(monkeypatch):
+    assert Settings.model_fields["BOT_HEALTH_PATH"].default == "bot_health.json"
+    monkeypatch.setenv("BOT_HEALTH_PATH", "/app/config/bot_health.json")
+    assert Settings(_env_file=str(ENV_EXAMPLE)).BOT_HEALTH_PATH == "/app/config/bot_health.json"
 
 
 def test_runtime_auto_publish_defaults_false():
