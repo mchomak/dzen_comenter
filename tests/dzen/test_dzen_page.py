@@ -612,7 +612,7 @@ def test_auto_publish_recovers_reply_visible_only_after_reload():
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
 
 
-def test_auto_publish_accepts_matching_create_response_when_reload_hides_reply():
+def test_auto_publish_accepts_matching_create_response_when_reply_visible_after_reload():
     node = make_node(0)
     fake = FakePage([FakeGroup("/a/post1", [node])])
     page = DzenStudioPage(fake)
@@ -657,12 +657,13 @@ def test_auto_publish_accepts_matching_create_response_when_reload_hides_reply()
         )
 
     node.reply_submit.on_click = submit
-    fake.on_reload = node.published_replies.clear
 
     page.publish_reply(target, reply_text, auto_publish=True)
 
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-    assert node.published_replies == []
+    assert node.published_replies == [
+        {"author": "Екатерина Великая", "text": reply_text}
+    ]
     assert node.reply_submit.clicks == 1
     assert fake.listeners == {"request": [], "response": []}
 
@@ -830,7 +831,7 @@ def test_auto_publish_reports_missing_create_response_after_request():
     assert fake.listeners == {"request": [], "response": []}
 
 
-def test_auto_publish_waits_for_create_response_before_reload():
+def test_auto_publish_rejects_accepted_response_when_reply_missing_after_reload():
     node = make_node(0)
     fake = FakePage([FakeGroup("/a/post1", [node])])
     page = DzenStudioPage(fake)
@@ -878,9 +879,13 @@ def test_auto_publish_waits_for_create_response_before_reload():
     fake.on_wait_timeout = deliver_response
     fake.on_reload = node.published_replies.clear
 
-    page.publish_reply(target, "мой ответ", auto_publish=True)
+    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
+        page.publish_reply(target, "мой ответ", auto_publish=True)
 
     assert emitted
+    assert "creation_outcome=accepted;" in str(exc_info.value)
+    assert "root-secret" not in str(exc_info.value)
+    assert "мой ответ" not in str(exc_info.value)
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
     assert node.reply_submit.clicks == 1
     assert fake.listeners == {"request": [], "response": []}

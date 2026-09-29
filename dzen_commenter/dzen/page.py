@@ -379,8 +379,6 @@ class DzenStudioPage:
 
             page.reload(wait_until="domcontentloaded")
             page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-            if creation_outcome == "accepted":
-                return
             node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
             if node is None or not self._has_published_reply(node, text):
                 count = None if node is None else node.evaluate(
