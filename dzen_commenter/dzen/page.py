@@ -10,6 +10,7 @@ from dzen_commenter.config.runtime_config import (
     is_bot_account_author,
 )
 from dzen_commenter.contracts.enums import CommentStatus
+from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import selectors
 from dzen_commenter.time_utils import moscow_now
@@ -269,7 +270,7 @@ class DzenStudioPage:
     ) -> None:
         node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
         if node is None:
-            raise LookupError(
+            raise SourceCommentUnavailableError(
                 f"comment {comment.dzen_comment_id!r} not found on page for reply"
             )
 

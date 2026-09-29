@@ -5,6 +5,7 @@ import pytest
 
 import dzen_commenter.dzen  # noqa: F401
 from dzen_commenter.contracts.enums import CommentStatus
+from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.interfaces import DzenPage
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import DzenStudioPage, selectors
@@ -959,8 +960,9 @@ def test_publish_reply_unmatched_raises_lookup_error():
         fetched_at=datetime.now(timezone.utc),
         status=CommentStatus.NEW,
     )
-    with pytest.raises(LookupError):
+    with pytest.raises(LookupError) as error:
         page.publish_reply(comment, "ответ", auto_publish=True)
+    assert isinstance(error.value, SourceCommentUnavailableError)
     assert len(fake.mouse.wheel_calls) == 20
     assert fake.waited_ms == [500] * 20
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]

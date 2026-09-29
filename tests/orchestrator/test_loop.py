@@ -1,12 +1,15 @@
 import ast
 import inspect
+import logging
 import pathlib
 from datetime import datetime, timedelta
 
 import pytest
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
+from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.models import Publication
+from dzen_commenter.monitoring.developer_notifier import DeveloperNotificationHandler
 from dzen_commenter.orchestrator import OrchestratorLoop
 
 
@@ -192,6 +195,91 @@ def test_publication_retry_preserves_generated_text_and_never_regenerates(loop_f
     assert len(harness.ai_provider.calls) == 1
     assert harness.repository.replies[1].generated_text == saved_text
     assert harness.repository.replies[1].status is ReplyStatus.PUBLISHED
+
+
+def test_unavailable_source_exhausts_publication_without_developer_alert(
+    loop_factory, comment_factory, monkeypatch, caplog
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    clock = {"now": datetime(2026, 9, 18, 12, 0, 0)}
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: clock["now"])
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["Ready reply"],
+        settings_overrides={
+            "AUTO_PUBLISH": True,
+            "PUBLICATION_MAX_ATTEMPTS_PER_REPLY": 2,
+        },
+    )
+
+    def unavailable(*args, **kwargs):
+        raise SourceCommentUnavailableError("source missing after bounded search")
+
+    harness.page.publish_reply = unavailable
+    log = logging.getLogger("dzen_commenter.orchestrator.loop")
+    handler = DeveloperNotificationHandler(harness.notifier)
+    log.addHandler(handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger=log.name):
+            harness.loop.run_cycle()
+            saved_text = harness.repository.replies[1].generated_text
+            assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_RETRY
+            clock["now"] += timedelta(minutes=60)
+            harness.loop.run_cycle()
+    finally:
+        log.removeHandler(handler)
+
+    reply = harness.repository.replies[1]
+    queue = harness.repository.publication_queue[1]
+    records = [record for record in caplog.records if record.name == log.name]
+    assert queue["attempt_count"] == 2
+    assert queue["state"] == "completed"
+    assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_ERROR
+    assert reply.status is ReplyStatus.ERROR
+    assert reply.generated_text == saved_text
+    assert "source missing after bounded search" in reply.error_reason
+    assert len(harness.ai_provider.calls) == 1
+    assert [record.event for record in records] == [
+        "publication_retry",
+        "publication_source_unavailable",
+    ]
+    assert all(record.levelno == logging.WARNING and not record.exc_info for record in records)
+    assert harness.notifier.errors == []
+
+
+def test_other_terminal_publication_failure_still_alerts(
+    loop_factory, comment_factory, caplog
+):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["Ready reply"],
+        settings_overrides={
+            "AUTO_PUBLISH": True,
+            "PUBLICATION_MAX_ATTEMPTS_PER_REPLY": 1,
+        },
+    )
+
+    def rejected(*args, **kwargs):
+        raise RuntimeError("submit rejected")
+
+    harness.page.publish_reply = rejected
+    log = logging.getLogger("dzen_commenter.orchestrator.loop")
+    handler = DeveloperNotificationHandler(harness.notifier)
+    log.addHandler(handler)
+    try:
+        with caplog.at_level(logging.ERROR, logger=log.name):
+            harness.loop.run_cycle()
+    finally:
+        log.removeHandler(handler)
+
+    records = [record for record in caplog.records if record.name == log.name]
+    assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_ERROR
+    assert len(records) == 1
+    assert records[0].levelno == logging.ERROR
+    assert records[0].event == "publication_terminal_failure"
+    assert len(harness.notifier.errors) == 1
+    assert isinstance(harness.notifier.errors[0][1], RuntimeError)
 
 
 def test_article_context_is_cached_for_the_next_single_comment(loop_factory, comment_factory):

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from dzen_commenter.config.runtime_config import RuntimeConfig, is_bot_account_author
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import CommentStatus, PublicationFailureOutcome
+from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.interfaces import (
     AIProvider,
     AuthAssistant,
@@ -170,6 +171,15 @@ class OrchestratorLoop:
                         "Dzen reply publication retry scheduled",
                         extra={
                             "event": "publication_retry",
+                            "reply_id": claimed.reply_id,
+                            "error": error_reason,
+                        },
+                    )
+                elif isinstance(exc, SourceCommentUnavailableError):
+                    logger.warning(
+                        "Dzen reply source comment unavailable after retries",
+                        extra={
+                            "event": "publication_source_unavailable",
                             "reply_id": claimed.reply_id,
                             "error": error_reason,
                         },
