@@ -18,7 +18,7 @@ def health_client(tmp_path):
         ADMIN_SESSION_SECRET="test-session-secret",
         RUNTIME_CONFIG_PATH=str(tmp_path / "runtime.json"),
         BOT_HEALTH_PATH=str(health_path),
-        POLL_INTERVAL=30,
+        POLL_INTERVAL=60,
     )
     return TestClient(create_app(settings)), health_path
 
@@ -53,7 +53,8 @@ def test_bot_health_is_starting_until_a_snapshot_exists(health_client):
         ({"cycle_succeeded": True, "authenticated": True}, "operational", True),
         ({"cycle_succeeded": True, "authenticated": False}, "authentication_required", True),
         ({"cycle_succeeded": False, "authenticated": True}, "degraded", True),
-        ({"cycle_succeeded": True, "authenticated": True, "seconds_ago": 300}, "stale", True),
+        ({"cycle_succeeded": True, "authenticated": True, "seconds_ago": 300}, "operational", True),
+        ({"cycle_succeeded": True, "authenticated": True, "seconds_ago": 601}, "stale", True),
     ),
 )
 def test_bot_health_derives_public_status_without_internal_details(
@@ -80,7 +81,7 @@ def test_corrupt_bot_health_never_reports_operational(health_client):
     assert response.json() == {"status": "degraded", "heartbeat_at": None}
 
 
-@pytest.mark.parametrize(("poll_interval", "freshness_limit"), ((30, 90), (10, 60)))
+@pytest.mark.parametrize(("poll_interval", "freshness_limit"), ((60, 600), (10, 600), (250, 750)))
 def test_shared_evaluator_uses_the_exact_freshness_limit(
     tmp_path, poll_interval, freshness_limit
 ):

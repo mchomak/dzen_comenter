@@ -65,7 +65,7 @@ def get_bot_health(
         return {"status": "degraded", "heartbeat_at": None}
 
     current = now or datetime.now(timezone.utc)
-    threshold = timedelta(seconds=max(3 * poll_interval, 60))
+    threshold = timedelta(seconds=max(3 * poll_interval, 600))
     if current.astimezone(timezone.utc) - heartbeat.astimezone(timezone.utc) > threshold:
         status = "stale"
     elif authenticated is False:
