@@ -378,9 +378,30 @@ class DzenStudioPage:
             )
 
             page.reload(wait_until="domcontentloaded")
-            page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-            node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
-            if node is None or not self._has_published_reply(node, text):
+            node = None
+            reply_visible = False
+            scrolled = False
+            poll_count = _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
+            try:
+                for poll in range(poll_count + 1):
+                    node, _ = self._find_comment_node(comment.dzen_comment_id)
+                    if node is not None and self._has_published_reply(node, text):
+                        reply_visible = True
+                        break
+                    if poll == poll_count:
+                        break
+                    if node is None:
+                        page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
+                        scrolled = True
+                    page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+            finally:
+                if scrolled:
+                    try:
+                        page.evaluate("window.scrollTo(0, 0)")
+                    except Exception:
+                        pass
+
+            if not reply_visible:
                 count = None if node is None else node.evaluate(
                     """(node, threadSelector) =>
                         node.closest(threadSelector)?.querySelectorAll(

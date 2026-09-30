@@ -8,7 +8,7 @@ from dzen_commenter.contracts.enums import CommentStatus
 from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.interfaces import DzenPage
 from dzen_commenter.contracts.models import Comment
-from dzen_commenter.dzen import DzenStudioPage, selectors
+from dzen_commenter.dzen import DzenStudioPage, page as dzen_page, selectors
 from dzen_commenter.dzen.page import is_video_post_url, synthetic_id
 
 
@@ -868,10 +868,13 @@ def test_auto_publish_rejects_accepted_response_when_reply_missing_after_reload(
 
     node.reply_submit.on_click = submit
     emitted = False
+    post_reload_waits = 0
 
     def deliver_response(_timeout_ms):
-        nonlocal emitted
-        if not emitted:
+        nonlocal emitted, post_reload_waits
+        if fake.reload_calls:
+            post_reload_waits += 1
+        elif not emitted:
             assert fake.reload_calls == []
             fake.emit("response", Response())
             emitted = True
@@ -886,7 +889,75 @@ def test_auto_publish_rejects_accepted_response_when_reply_missing_after_reload(
     assert "creation_outcome=accepted;" in str(exc_info.value)
     assert "root-secret" not in str(exc_info.value)
     assert "мой ответ" not in str(exc_info.value)
+    assert post_reload_waits == (
+        dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS // dzen_page._REPLY_SEARCH_WAIT_MS
+    )
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publish_succeeds_when_reply_appears_after_reload():
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(
+        fake, bot_account_name_provider=lambda: "Configured Bot"
+    )
+    target = page.fetch_comments()[0]
+    reply_text = "мой ответ"
+
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create"
+        post_data_json = {
+            "text": reply_text,
+            "publisherId": "publisher-secret",
+            "documentId": "document-secret",
+            "rootId": "root-secret",
+            "replyToId": "reply-secret",
+        }
+
+    class Response:
+        request = Request()
+        status = 200
+
+        def json(self):
+            return {
+                "status": "ok",
+                "comments": [{
+                    **self.request.post_data_json,
+                    "id": "created-secret",
+                    "visibility": "visible",
+                }],
+            }
+
+    def submit():
+        fake.emit("request", Response.request)
+        fake.emit("response", Response())
+        node.published_replies.append(
+            {"author": "Configured Bot", "text": reply_text}
+        )
+
+    node.reply_submit.on_click = submit
+    fake.on_reload = node.published_replies.clear
+    post_reload_waits = 0
+
+    def hydrate_reply(_timeout_ms):
+        nonlocal post_reload_waits
+        if fake.reload_calls:
+            post_reload_waits += 1
+            if post_reload_waits == 3:
+                node.published_replies.append(
+                    {"author": "Configured Bot", "text": reply_text}
+                )
+
+    fake.on_wait_timeout = hydrate_reply
+
+    page.publish_reply(target, reply_text, auto_publish=True)
+
+    assert post_reload_waits == 3
+    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert node.reply_button.clicks == 1
     assert node.reply_submit.clicks == 1
     assert fake.listeners == {"request": [], "response": []}
 
@@ -1211,7 +1282,11 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
     page.publish_reply(target, "готовый ответ", auto_publish=True)
 
     assert len(fake.mouse.wheel_calls) == 1
-    assert fake.waited_ms == [500] * 22
+    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * (
+        1
+        + dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS
+        // dzen_page._REPLY_SEARCH_WAIT_MS
+    )
     assert target_node.reply_input.filled == ["готовый ответ"]
     assert target_node.reply_submit.clicks == 1
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
