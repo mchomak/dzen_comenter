@@ -145,12 +145,25 @@ class OrchestratorLoop:
             if claimed is None:
                 return publication_attempts
             publication_attempts += 1
+            correlation = {
+                "comment_id": claimed.comment.dzen_comment_id,
+                "reply_id": claimed.reply_id,
+            }
+            logger.info(
+                "Dzen publication job claimed",
+                extra={
+                    "event": "publication_job_started",
+                    **correlation,
+                    "auto_publish": runtime_settings.auto_publish,
+                },
+            )
             try:
                 with self._browser_access():
                     self.page.publish_reply(
                         claimed.comment,
                         claimed.text,
                         auto_publish=runtime_settings.auto_publish,
+                        reply_id=claimed.reply_id,
                     )
             except Exception as exc:
                 error_reason = f"Dzen reply publication failed: {exc}"
@@ -171,8 +184,8 @@ class OrchestratorLoop:
                         "Dzen reply publication retry scheduled",
                         extra={
                             "event": "publication_retry",
-                            "reply_id": claimed.reply_id,
-                            "error": error_reason,
+                            **correlation,
+                            "failure_type": type(exc).__name__,
                         },
                     )
                 elif isinstance(exc, SourceCommentUnavailableError):
@@ -180,8 +193,8 @@ class OrchestratorLoop:
                         "Dzen reply source comment unavailable after retries",
                         extra={
                             "event": "publication_source_unavailable",
-                            "reply_id": claimed.reply_id,
-                            "error": error_reason,
+                            **correlation,
+                            "failure_type": type(exc).__name__,
                         },
                     )
                 else:
@@ -190,16 +203,34 @@ class OrchestratorLoop:
                         exc_info=exc,
                         extra={
                             "event": "publication_terminal_failure",
-                            "reply_id": claimed.reply_id,
-                            "error": error_reason,
+                            **correlation,
+                            "failure_type": type(exc).__name__,
                         },
                     )
+                logger.info(
+                    "Dzen publication job failed",
+                    extra={
+                        "event": "publication_failed",
+                        **correlation,
+                        "failure_type": type(exc).__name__,
+                        "outcome": outcome.value,
+                    },
+                )
                 continue
 
+            published_at = moscow_now() if runtime_settings.auto_publish else None
             self.repository.complete_publication(
                 claimed.reply_id,
                 claim_token=claimed.claim_token,
-                published_at=(moscow_now() if runtime_settings.auto_publish else None),
+                published_at=published_at,
+            )
+            logger.info(
+                "Dzen publication job completed",
+                extra={
+                    "event": "publication_completed",
+                    **correlation,
+                    "outcome": "published" if published_at is not None else "draft",
+                },
             )
         return publication_attempts
 

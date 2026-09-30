@@ -34,7 +34,13 @@ class StructuredFormatter(logging.Formatter):
             if key not in _RESERVED_RECORD_ATTRS:
                 payload[key] = value
 
-        if record.exc_info:
+        # Publication exceptions can contain page URLs, selectors, or request
+        # details. Keep exc_info on the LogRecord for developer notifications,
+        # but omit the raw traceback from structured publication logs.
+        is_publication_event = str(getattr(record, "event", "")).startswith(
+            "publication_"
+        )
+        if record.exc_info and not is_publication_event:
             exc_type = record.exc_info[0]
             payload["exception"] = {
                 "type": exc_type.__name__ if exc_type else None,

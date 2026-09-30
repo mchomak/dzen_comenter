@@ -54,6 +54,24 @@ def test_format_includes_exception_when_present():
     assert "RuntimeError" in json.dumps(parsed["exception"], ensure_ascii=False)
 
 
+def test_format_redacts_exception_traceback_for_publication_events():
+    try:
+        raise RuntimeError("private reply text and https://dzen.ru/private")
+    except RuntimeError:
+        import sys
+
+        record = _make_record(
+            "Dzen publication failed",
+            extra={"event": "publication_terminal_failure"},
+            exc_info=sys.exc_info(),
+        )
+
+    parsed = json.loads(StructuredFormatter().format(record))
+    assert "exception" not in parsed
+    assert "private reply text" not in json.dumps(parsed, ensure_ascii=False)
+    assert "https://dzen.ru/private" not in json.dumps(parsed, ensure_ascii=False)
+
+
 # Acceptance 5: configure_logging идемпотентна.
 def test_configure_logging_is_idempotent():
     root = logging.getLogger()

@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -14,6 +15,8 @@ from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import selectors
 from dzen_commenter.time_utils import moscow_now
+
+logger = logging.getLogger(__name__)
 
 _MINUTES_RE = re.compile(
     r"(\d+)\s*(мин\.?|минуту|минуты|минут|м)\b",
@@ -267,19 +270,98 @@ class DzenStudioPage:
         return synthetic_id(post_href, parent.get("authorHref", ""), parent["text"])
 
     def publish_reply(
-        self, comment: Comment, text: str, *, auto_publish: bool
+        self,
+        comment: Comment,
+        text: str,
+        *,
+        auto_publish: bool,
+        reply_id: int | None = None,
     ) -> None:
+        correlation = {
+            "comment_id": comment.dzen_comment_id,
+            "reply_id": reply_id,
+        }
+        logger.info(
+            "Dzen publication action started",
+            extra={
+                "event": "publication_action_started",
+                **correlation,
+                "auto_publish": auto_publish,
+            },
+        )
+        try:
+            self._publish_reply(
+                comment,
+                text,
+                auto_publish=auto_publish,
+                reply_id=reply_id,
+            )
+        except Exception as exc:
+            logger.info(
+                "Dzen publication action failed",
+                extra={
+                    "event": "publication_action_failed",
+                    **correlation,
+                    "failure_type": type(exc).__name__,
+                },
+            )
+            raise
+
+    def _publish_reply(
+        self,
+        comment: Comment,
+        text: str,
+        *,
+        auto_publish: bool,
+        reply_id: int | None,
+    ) -> None:
+        correlation = {
+            "comment_id": comment.dzen_comment_id,
+            "reply_id": reply_id,
+        }
+        logger.info(
+            "Searching for Dzen source comment",
+            extra={
+                "event": "publication_source_comment_search_started",
+                **correlation,
+            },
+        )
         node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
+        logger.info(
+            "Dzen source comment search completed",
+            extra={
+                "event": "publication_source_comment_search_completed",
+                **correlation,
+                "result": "found" if node is not None else "not_found",
+            },
+        )
         if node is None:
             raise SourceCommentUnavailableError(
                 f"comment {comment.dzen_comment_id!r} not found on page for reply"
             )
 
         if auto_publish and self._has_published_reply(node, text):
+            logger.info(
+                "Matching Dzen reply is already visible",
+                extra={
+                    "event": "publication_reply_already_visible",
+                    **correlation,
+                },
+            )
             return
 
         if not auto_publish:
-            self._submit_reply(node, text, auto_publish=False)
+            self._submit_reply(
+                node,
+                text,
+                auto_publish=False,
+                comment_id=comment.dzen_comment_id,
+                reply_id=reply_id,
+            )
+            logger.info(
+                "Dzen reply draft prepared",
+                extra={"event": "publication_draft_prepared", **correlation},
+            )
             return
 
         page = self._page
@@ -364,6 +446,15 @@ class DzenStudioPage:
                 text,
                 auto_publish=True,
                 submission_started=submission_started,
+                comment_id=comment.dzen_comment_id,
+                reply_id=reply_id,
+            )
+            logger.info(
+                "Waiting for Dzen publication acknowledgment",
+                extra={
+                    "event": "publication_acknowledgment_wait_started",
+                    **correlation,
+                },
             )
             acknowledged = acknowledged or self._has_published_reply(node, text)
             for _ in range(_REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS):
@@ -376,8 +467,25 @@ class DzenStudioPage:
             creation_outcome = self._creation_response_outcome(
                 creation_response, creation_payload, normalized_text
             )
+            logger.info(
+                "Dzen publication acknowledgment wait completed",
+                extra={
+                    "event": "publication_acknowledgment_wait_completed",
+                    **correlation,
+                    "acknowledged": acknowledged,
+                    "response_outcome": creation_outcome,
+                },
+            )
 
+            logger.info(
+                "Reloading Dzen page to verify reply",
+                extra={"event": "publication_page_reload_started", **correlation},
+            )
             page.reload(wait_until="domcontentloaded")
+            logger.info(
+                "Dzen page reload completed",
+                extra={"event": "publication_page_reload_completed", **correlation},
+            )
             node = None
             reply_visible = False
             scrolled = False
@@ -385,8 +493,20 @@ class DzenStudioPage:
             try:
                 for poll in range(poll_count + 1):
                     node, _ = self._find_comment_node(comment.dzen_comment_id)
-                    if node is not None and self._has_published_reply(node, text):
-                        reply_visible = True
+                    reply_visible = bool(
+                        node is not None and self._has_published_reply(node, text)
+                    )
+                    logger.info(
+                        "Checked Dzen reply visibility after reload",
+                        extra={
+                            "event": "publication_post_reload_visibility_check",
+                            **correlation,
+                            "poll": poll + 1,
+                            "source_found": node is not None,
+                            "reply_visible": reply_visible,
+                        },
+                    )
+                    if reply_visible:
                         break
                     if poll == poll_count:
                         break
@@ -402,6 +522,13 @@ class DzenStudioPage:
                         pass
 
             if not reply_visible:
+                logger.info(
+                    "Dzen reply was not confirmed after reload",
+                    extra={
+                        "event": "publication_post_reload_verification_failed",
+                        **correlation,
+                    },
+                )
                 count = None if node is None else node.evaluate(
                     """(node, threadSelector) =>
                         node.closest(threadSelector)?.querySelectorAll(
@@ -428,6 +555,10 @@ class DzenStudioPage:
                     f"pending_responses={pending_responses}; "
                     f"truncated={str(truncated).lower()}"
                 )
+            logger.info(
+                "Dzen reply confirmed after reload",
+                extra={"event": "publication_confirmed", **correlation},
+            )
         finally:
             page.remove_listener("request", on_request)
             page.remove_listener("response", on_response)
@@ -590,39 +721,117 @@ class DzenStudioPage:
         *,
         auto_publish: bool,
         submission_started: Callable[[], bool] | None = None,
+        comment_id: str,
+        reply_id: int | None,
     ) -> None:
-        node.query_selector(selectors.COMMENT_REPLY_BUTTON).click()
+        correlation = {"comment_id": comment_id, "reply_id": reply_id}
+        reply_button = node.query_selector(selectors.COMMENT_REPLY_BUTTON)
+        logger.info(
+            "Dzen reply button search completed",
+            extra={
+                "event": "publication_reply_button_search",
+                **correlation,
+                "result": "found" if reply_button is not None else "missing",
+            },
+        )
+        reply_button.click()
         node.query_selector(selectors.REPLY_INPUT).fill(text)
         if auto_publish:
             send_button = node.query_selector(selectors.REPLY_SUBMIT)
+            logger.info(
+                "Dzen send button search completed",
+                extra={
+                    "event": "publication_send_button_search",
+                    **correlation,
+                    "attempt": 1,
+                    "result": "found" if send_button is not None else "missing",
+                },
+            )
             if send_button is None:
                 raise RuntimeError("Dzen reply send button was not found after filling")
+            logger.info(
+                "Attempting to click Dzen send button",
+                extra={
+                    "event": "publication_send_click_attempt",
+                    **correlation,
+                    "attempt": 1,
+                },
+            )
             send_button.click()
-            if self._wait_for_send_button_to_hide(node):
+            if self._wait_for_send_button_to_hide(
+                node, wait_attempt=1, comment_id=comment_id, reply_id=reply_id
+            ):
                 return
 
             if submission_started is None or not submission_started():
                 send_button = node.query_selector(selectors.REPLY_SUBMIT)
+                logger.info(
+                    "Dzen send button search completed",
+                    extra={
+                        "event": "publication_send_button_search",
+                        **correlation,
+                        "attempt": 2,
+                        "result": "found" if send_button is not None else "missing",
+                    },
+                )
                 if send_button is not None and send_button.is_visible():
+                    logger.info(
+                        "Attempting to click Dzen send button",
+                        extra={
+                            "event": "publication_send_click_attempt",
+                            **correlation,
+                            "attempt": 2,
+                        },
+                    )
                     send_button.click()
 
-            if not self._wait_for_send_button_to_hide(node):
+            if not self._wait_for_send_button_to_hide(
+                node, wait_attempt=2, comment_id=comment_id, reply_id=reply_id
+            ):
                 raise RuntimeError(
                     "Dzen reply send button remained visible after submit; page was not reloaded"
                 )
         else:
             self._page.wait_for_timeout(5_000)
 
-    def _wait_for_send_button_to_hide(self, node: Any) -> bool:
+    def _wait_for_send_button_to_hide(
+        self,
+        node: Any,
+        *,
+        wait_attempt: int,
+        comment_id: str,
+        reply_id: int | None,
+    ) -> bool:
         for _ in range(
             _REPLY_SUBMIT_BUTTON_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
         ):
             send_button = node.query_selector(selectors.REPLY_SUBMIT)
             if send_button is None or not send_button.is_visible():
+                logger.info(
+                    "Dzen send button visibility wait completed",
+                    extra={
+                        "event": "publication_send_button_wait",
+                        "comment_id": comment_id,
+                        "reply_id": reply_id,
+                        "attempt": wait_attempt,
+                        "result": "hidden",
+                    },
+                )
                 return True
             self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
         send_button = node.query_selector(selectors.REPLY_SUBMIT)
-        return send_button is None or not send_button.is_visible()
+        hidden = send_button is None or not send_button.is_visible()
+        logger.info(
+            "Dzen send button visibility wait completed",
+            extra={
+                "event": "publication_send_button_wait",
+                "comment_id": comment_id,
+                "reply_id": reply_id,
+                "attempt": wait_attempt,
+                "result": "hidden" if hidden else "still_visible",
+            },
+        )
+        return hidden
 
     def _iter_comment_nodes(self):
         for group in self._page.query_selector_all(selectors.POST_GROUP):

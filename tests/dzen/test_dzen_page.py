@@ -1,4 +1,5 @@
 import inspect
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -10,6 +11,7 @@ from dzen_commenter.contracts.interfaces import DzenPage
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import DzenStudioPage, page as dzen_page, selectors
 from dzen_commenter.dzen.page import is_video_post_url, synthetic_id
+from dzen_commenter.monitoring.logging_config import StructuredFormatter
 
 
 class FakeText:
@@ -417,6 +419,131 @@ def test_publish_reply_targets_matching_node():
     assert fake.evaluate_calls == []
     assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
     assert fake.listeners == {"request": [], "response": []}
+
+
+def test_auto_publication_logs_safe_ordered_action_trace(caplog):
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/private-post", [node])])
+    reply_text = "private-reply-content"
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": reply_text}
+    )
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+    log = logging.getLogger("dzen_commenter.dzen.page")
+
+    with caplog.at_level(logging.INFO, logger=log.name):
+        page.publish_reply(comment, reply_text, auto_publish=True, reply_id=73)
+
+    records = [record for record in caplog.records if record.name == log.name]
+    events = [record.event for record in records]
+    expected = [
+        "publication_source_comment_search_started",
+        "publication_source_comment_search_completed",
+        "publication_reply_button_search",
+        "publication_send_button_search",
+        "publication_send_click_attempt",
+        "publication_send_button_wait",
+        "publication_acknowledgment_wait_started",
+        "publication_acknowledgment_wait_completed",
+        "publication_page_reload_started",
+        "publication_page_reload_completed",
+        "publication_post_reload_visibility_check",
+        "publication_confirmed",
+    ]
+    assert [event for event in events if event in expected] == expected
+    assert all(record.comment_id == comment.dzen_comment_id for record in records)
+    assert all(record.reply_id == 73 for record in records)
+    serialized = "\n".join(StructuredFormatter().format(record) for record in records)
+    assert "private-reply-content" not in serialized
+    assert "text0" not in serialized
+    assert "author0" not in serialized
+    assert "Configured Bot" not in serialized
+    assert "/a/private-post" not in serialized
+
+
+def test_missing_send_button_logs_failure_before_reload(caplog):
+    node = make_node(0)
+    node._children.pop(selectors.REPLY_SUBMIT)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    comment = page.fetch_comments()[0]
+    log = logging.getLogger("dzen_commenter.dzen.page")
+
+    with caplog.at_level(logging.INFO, logger=log.name):
+        with pytest.raises(RuntimeError, match="send button was not found"):
+            page.publish_reply(comment, "private-reply-content", auto_publish=True, reply_id=73)
+
+    events = [
+        record.event for record in caplog.records if record.name == log.name
+    ]
+    assert events[-1] == "publication_action_failed"
+    assert next(
+        record for record in caplog.records
+        if record.name == log.name and record.event == "publication_send_button_search"
+    ).result == "missing"
+    failed = next(
+        record for record in caplog.records
+        if record.name == log.name and record.event == "publication_action_failed"
+    )
+    assert failed.comment_id == comment.dzen_comment_id
+    assert failed.reply_id == 73
+    assert failed.failure_type == "RuntimeError"
+    assert not any(event.startswith("publication_page_reload") for event in events)
+    assert fake.reload_calls == []
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == log.name
+    )
+    assert "private-reply-content" not in serialized
+
+
+def test_send_button_still_visible_logs_failure_before_reload(caplog):
+    node = make_node(0)
+    node.reply_submit.hide_on_click = False
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    comment = page.fetch_comments()[0]
+    log = logging.getLogger("dzen_commenter.dzen.page")
+
+    with caplog.at_level(logging.INFO, logger=log.name):
+        with pytest.raises(RuntimeError, match="send button remained visible"):
+            page.publish_reply(comment, "private-reply-content", auto_publish=True, reply_id=73)
+
+    records = [record for record in caplog.records if record.name == log.name]
+    wait_records = [
+        record for record in records if record.event == "publication_send_button_wait"
+    ]
+    assert wait_records[-1].result == "still_visible"
+    assert records[-1].event == "publication_action_failed"
+    assert not any(record.event.startswith("publication_page_reload") for record in records)
+    assert fake.reload_calls == []
+
+
+def test_draft_action_trace_never_clicks_send_or_confirms_publication(caplog):
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    page = DzenStudioPage(fake)
+    comment = page.fetch_comments()[0]
+    log = logging.getLogger("dzen_commenter.dzen.page")
+
+    with caplog.at_level(logging.INFO, logger=log.name):
+        page.publish_reply(comment, "private-draft-content", auto_publish=False, reply_id=73)
+
+    records = [record for record in caplog.records if record.name == log.name]
+    events = [record.event for record in records]
+    assert "publication_reply_button_search" in events
+    assert "publication_send_click_attempt" not in events
+    assert "publication_send_button_search" not in events
+    assert "publication_page_reload_started" not in events
+    assert "publication_confirmed" not in events
+    assert all(record.comment_id == comment.dzen_comment_id for record in records)
+    assert all(record.reply_id == 73 for record in records)
+    assert node.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+    serialized = "\n".join(StructuredFormatter().format(record) for record in records)
+    assert "private-draft-content" not in serialized
 
 
 def test_auto_publish_is_not_confirmed_by_a_successful_click_alone():

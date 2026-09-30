@@ -652,7 +652,14 @@ class FakeDzenPage:
         self.article_text_urls.append(post_url)
         return self.article_text_by_url.get(post_url)
 
-    def publish_reply(self, comment: Comment, text: str, *, auto_publish: bool) -> None:
+    def publish_reply(
+        self,
+        comment: Comment,
+        text: str,
+        *,
+        auto_publish: bool,
+        reply_id: int | None = None,
+    ) -> None:
         self.publish_calls.append((comment, text, auto_publish))
 
 

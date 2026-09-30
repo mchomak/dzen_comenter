@@ -10,6 +10,7 @@ from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.errors import SourceCommentUnavailableError
 from dzen_commenter.contracts.models import Publication
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotificationHandler
+from dzen_commenter.monitoring.logging_config import StructuredFormatter
 from dzen_commenter.orchestrator import OrchestratorLoop
 
 
@@ -251,8 +252,9 @@ def test_unavailable_source_exhausts_publication_without_developer_alert(
 def test_other_terminal_publication_failure_still_alerts(
     loop_factory, comment_factory, caplog
 ):
+    comment = comment_factory(1)
     harness = loop_factory(
-        comments=[comment_factory(1)],
+        comments=[comment],
         ai_responses=["Ready reply"],
         settings_overrides={
             "AUTO_PUBLISH": True,
@@ -261,25 +263,95 @@ def test_other_terminal_publication_failure_still_alerts(
     )
 
     def rejected(*args, **kwargs):
-        raise RuntimeError("submit rejected")
+        raise RuntimeError("private reply content")
 
     harness.page.publish_reply = rejected
     log = logging.getLogger("dzen_commenter.orchestrator.loop")
     handler = DeveloperNotificationHandler(harness.notifier)
     log.addHandler(handler)
     try:
-        with caplog.at_level(logging.ERROR, logger=log.name):
+        with caplog.at_level(logging.INFO, logger=log.name):
             harness.loop.run_cycle()
     finally:
         log.removeHandler(handler)
 
     records = [record for record in caplog.records if record.name == log.name]
+    terminal_records = [
+        record for record in records if record.event == "publication_terminal_failure"
+    ]
+    failed_records = [
+        record for record in records if record.event == "publication_failed"
+    ]
     assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_ERROR
-    assert len(records) == 1
-    assert records[0].levelno == logging.ERROR
-    assert records[0].event == "publication_terminal_failure"
+    assert len(terminal_records) == 1
+    assert terminal_records[0].levelno == logging.ERROR
+    assert terminal_records[0].comment_id == comment.dzen_comment_id
+    assert terminal_records[0].reply_id == harness.repository.replies[1].id
+    assert terminal_records[0].failure_type == "RuntimeError"
+    assert not hasattr(terminal_records[0], "error")
+    assert len(failed_records) == 1
+    assert failed_records[0].outcome == "terminal"
+    formatted = "\n".join(StructuredFormatter().format(record) for record in records)
+    assert "private reply content" not in formatted
     assert len(harness.notifier.errors) == 1
     assert isinstance(harness.notifier.errors[0][1], RuntimeError)
+
+
+def test_publication_completion_trace_correlates_draft_without_marking_published(
+    loop_factory, comment_factory, caplog
+):
+    comment = comment_factory(1)
+    harness = loop_factory(
+        comments=[comment],
+        ai_responses=["private reply text"],
+        settings_overrides={"AUTO_PUBLISH": False},
+    )
+    log = logging.getLogger("dzen_commenter.orchestrator.loop")
+
+    with caplog.at_level(logging.INFO, logger=log.name):
+        harness.loop.run_cycle()
+
+    records = [record for record in caplog.records if record.name == log.name]
+    publication_records = [
+        record for record in records
+        if record.event in {"publication_job_started", "publication_completed"}
+    ]
+    assert [record.event for record in publication_records] == [
+        "publication_job_started",
+        "publication_completed",
+    ]
+    reply_id = harness.repository.replies[1].id
+    assert all(record.comment_id == comment.dzen_comment_id for record in publication_records)
+    assert all(record.reply_id == reply_id for record in publication_records)
+    assert publication_records[-1].outcome == "draft"
+    assert harness.repository.replies[reply_id].published_at is None
+    serialized = "\n".join(StructuredFormatter().format(record) for record in records)
+    assert "private reply text" not in serialized
+    assert comment.text not in serialized
+
+
+def test_publication_completion_trace_reports_published_after_auto_publish(
+    loop_factory, comment_factory, caplog
+):
+    comment = comment_factory(1)
+    harness = loop_factory(
+        comments=[comment],
+        ai_responses=["private reply text"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    log = logging.getLogger("dzen_commenter.orchestrator.loop")
+
+    with caplog.at_level(logging.INFO, logger=log.name):
+        harness.loop.run_cycle()
+
+    records = [record for record in caplog.records if record.name == log.name]
+    completed = next(
+        record for record in records if record.event == "publication_completed"
+    )
+    assert completed.comment_id == comment.dzen_comment_id
+    assert completed.reply_id == harness.repository.replies[1].id
+    assert completed.outcome == "published"
+    assert harness.repository.replies[completed.reply_id].published_at is not None
 
 
 def test_article_context_is_cached_for_the_next_single_comment(loop_factory, comment_factory):
