@@ -1,6 +1,7 @@
 {
   "settings": {
     "auto_publish": false,
+    "bot_account_name": "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ",
     "max_comment_age_days": 1,
     "max_reply_length": 200,
     "developer_telegram_chat_ids": "1132147659",

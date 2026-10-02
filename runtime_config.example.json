@@ -5,7 +5,7 @@
     "max_reply_length": 1000,
     "cta_every_n_comments": 7,
     "max_comments_per_hour": 100,
-    "bot_account_name": "Екатерина Великая",
+    "bot_account_name": "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ",
     "generation_retry_cooldown_minutes": 60,
     "generation_max_attempts_per_comment": 3,
     "publication_retry_cooldown_minutes": 60,

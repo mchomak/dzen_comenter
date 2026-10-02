@@ -52,6 +52,13 @@ _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 10_000
 _REPLY_EXPANSION_TIMEOUT_MS = 10_000
+_PUBLIC_COMMENT_LOAD_LIMIT = 25
+_PUBLIC_COMMENT_WAIT_MS = 500
+_PUBLIC_COMMENT_POLL_LIMIT = 20
+_PUBLIC_PREFLIGHT_POLL_LIMIT = 4
+_PUBLIC_NAVIGATION_TIMEOUT_MS = 60_000
+_PUBLIC_NAVIGATION_ATTEMPTS = 2
+_STUDIO_CONFIRM_DELAY_MS = 2_000
 _SUBMIT_TRACE_LIMIT = 5
 
 
@@ -348,7 +355,70 @@ class DzenStudioPage:
                     **correlation,
                 },
             )
+            author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+            source_author_href = author_link.get_attribute("href") or "" if author_link else ""
+            logger.info(
+                "Checking public article for existing Dzen reply",
+                extra={"event": "publication_article_check_started", **correlation},
+            )
+            try:
+                public_visible = self._verify_public_reply(
+                    comment, text, source_author_href, comment.author
+                )
+            except Exception as exc:
+                logger.info(
+                    "Dzen public article verification failed",
+                    extra={
+                        "event": "publication_article_verification_failed",
+                        **correlation,
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+                raise
+            if not public_visible:
+                logger.info(
+                    "Existing Dzen reply was not confirmed in public article",
+                    extra={"event": "publication_article_verification_failed", **correlation},
+                )
+                raise RuntimeError("reply not confirmed in public article")
+            logger.info(
+                "Existing Dzen reply confirmed in Studio and public article",
+                extra={"event": "publication_confirmed", **correlation},
+            )
             return
+
+        if auto_publish:
+            author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+            source_author_href = author_link.get_attribute("href") or "" if author_link else ""
+            logger.info(
+                "Checking public article before Dzen reply submit",
+                extra={"event": "publication_public_preflight_started", **correlation},
+            )
+            try:
+                already_public = self._verify_public_reply(
+                    comment, text, source_author_href, comment.author,
+                    wait_for_reply=False,
+                )
+            except Exception as exc:
+                logger.info(
+                    "Public article preflight failed before Dzen reply submit",
+                    extra={
+                        "event": "publication_public_preflight_failed",
+                        **correlation,
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+                raise
+            if already_public:
+                logger.info(
+                    "Existing Dzen reply found in public article before submit",
+                    extra={"event": "publication_reply_already_public", **correlation},
+                )
+                logger.info(
+                    "Existing Dzen reply confirmed in public article",
+                    extra={"event": "publication_confirmed", **correlation},
+                )
+                return
 
         if not auto_publish:
             self._submit_reply(
@@ -477,91 +547,358 @@ class DzenStudioPage:
                 },
             )
 
-            logger.info(
-                "Reloading Dzen page to verify reply",
-                extra={"event": "publication_page_reload_started", **correlation},
-            )
-            page.reload(wait_until="domcontentloaded")
-            logger.info(
-                "Dzen page reload completed",
-                extra={"event": "publication_page_reload_completed", **correlation},
-            )
-            node = None
+            page.wait_for_timeout(_STUDIO_CONFIRM_DELAY_MS)
             reply_visible = False
-            scrolled = False
-            poll_count = _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS
-            try:
-                for poll in range(poll_count + 1):
-                    node, _ = self._find_comment_node(comment.dzen_comment_id)
-                    reply_visible = bool(
-                        node is not None and self._has_published_reply(node, text)
-                    )
-                    logger.info(
-                        "Checked Dzen reply visibility after reload",
-                        extra={
-                            "event": "publication_post_reload_visibility_check",
-                            **correlation,
-                            "poll": poll + 1,
-                            "source_found": node is not None,
-                            "reply_visible": reply_visible,
-                        },
-                    )
-                    if reply_visible:
-                        break
-                    if poll == poll_count:
-                        break
-                    if node is None:
-                        page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
-                        scrolled = True
-                    page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-            finally:
-                if scrolled:
-                    try:
-                        page.evaluate("window.scrollTo(0, 0)")
-                    except Exception:
-                        pass
+            for poll in range(_REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS + 1):
+                node, _ = self._find_comment_node(comment.dzen_comment_id)
+                reply_visible = bool(node is not None and self._has_published_reply(node, text))
+                logger.info(
+                    "Checked Dzen Studio reply visibility",
+                    extra={
+                        "event": "publication_studio_visibility_check",
+                        **correlation,
+                        "poll": poll + 1,
+                        "source_found": node is not None,
+                        "reply_visible": reply_visible,
+                    },
+                )
+                if reply_visible:
+                    break
+                page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
 
             if not reply_visible:
                 logger.info(
-                    "Dzen reply was not confirmed after reload",
-                    extra={
-                        "event": "publication_post_reload_verification_failed",
-                        **correlation,
-                    },
-                )
-                count = None if node is None else node.evaluate(
-                    """(node, threadSelector) =>
-                        node.closest(threadSelector)?.querySelectorAll(
-                            '[class*="editor--comment__block-"]'
-                        ).length ?? null""",
-                    selectors.COMMENT_THREAD,
+                    "Dzen reply was not confirmed in Studio",
+                    extra={"event": "publication_studio_verification_failed", **correlation},
                 )
                 outcomes = ", ".join(
                     f"{item['method']} {item['host']} "
                     f"path_sha256={item['path_sha256']} {item['status']}"
                     for item in mutations
                 ) or "none"
-                reply_count = max(0, count - 1) if count is not None else "unknown"
-                pending_responses = sum(
-                    item["status"] == "pending" for item in mutations
-                )
                 raise RuntimeError(
-                    "reply not confirmed during post-reload verification; "
+                    "reply not confirmed in Studio; "
                     f"creation_outcome={creation_outcome}; "
-                    f"ack_before_reload={str(acknowledged).lower()}; "
                     f"source_found={str(node is not None).lower()}; "
-                    f"target_reply_count={reply_count}; "
                     f"mutations=[{outcomes}]; "
-                    f"pending_responses={pending_responses}; "
                     f"truncated={str(truncated).lower()}"
                 )
+
+            author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+            source_author_href = author_link.get_attribute("href") or "" if author_link else ""
             logger.info(
-                "Dzen reply confirmed after reload",
+                "Checking Dzen public article for published reply",
+                extra={"event": "publication_article_check_started", **correlation},
+            )
+            try:
+                public_visible = self._verify_public_reply(
+                    comment, text, source_author_href, comment.author
+                )
+            except Exception as exc:
+                logger.info(
+                    "Dzen public article verification failed",
+                    extra={
+                        "event": "publication_article_verification_failed",
+                        **correlation,
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+                raise
+            if not public_visible:
+                logger.info(
+                    "Dzen reply was not confirmed in public article",
+                    extra={"event": "publication_article_verification_failed", **correlation},
+                )
+                raise RuntimeError("reply not confirmed in public article")
+            logger.info(
+                "Dzen reply confirmed in Studio and public article",
                 extra={"event": "publication_confirmed", **correlation},
             )
         finally:
             page.remove_listener("request", on_request)
             page.remove_listener("response", on_response)
+
+    def _verify_public_reply(
+        self,
+        comment: Comment,
+        text: str,
+        source_author_href: str = "",
+        source_author: str = "",
+        *,
+        wait_for_reply: bool = True,
+    ) -> bool:
+        """Confirm the reply inside its source comment on the public article."""
+        post_url = _post_url(comment.post_url or "")
+        if post_url is None:
+            raise RuntimeError("public article verification requires an article URL")
+        account_name = self._bot_account_name_provider()
+        if not account_name.strip():
+            raise RuntimeError("public article verification requires a bot author")
+
+        article_page = self._page.context.new_page()
+        try:
+            for attempt in range(1, _PUBLIC_NAVIGATION_ATTEMPTS + 1):
+                try:
+                    article_page.goto(
+                        post_url,
+                        wait_until="commit",
+                        timeout=_PUBLIC_NAVIGATION_TIMEOUT_MS,
+                    )
+                    break
+                except Exception as exc:
+                    logger.info(
+                        "Public article navigation attempt failed",
+                        extra={
+                            "event": "publication_article_navigation_retry",
+                            "comment_id": comment.dzen_comment_id,
+                            "attempt": attempt,
+                            "failure_type": type(exc).__name__,
+                        },
+                    )
+                    if attempt == _PUBLIC_NAVIGATION_ATTEMPTS:
+                        raise RuntimeError("public article navigation failed") from exc
+                    article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+            for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                try:
+                    article_page.evaluate(
+                        "window.scrollTo(0, document.body?.scrollHeight || 0)"
+                    )
+                    comments = article_page.query_selector(selectors.ARTICLE_COMMENTS)
+                    if comments is not None:
+                        comments.scroll_into_view_if_needed()
+                        break
+                except Exception:
+                    pass  # The document may still be loading after navigation commit.
+                article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+            else:
+                raise RuntimeError("public article comments did not load")
+
+            sort_button = article_page.query_selector(selectors.ARTICLE_SORT)
+            if sort_button is not None:
+                try:
+                    if "Сначала новые" not in sort_button.inner_text():
+                        sort_button.click()
+                        newest = None
+                        for _ in range(6):
+                            newest = article_page.query_selector(selectors.ARTICLE_SORT_NEWEST)
+                            if newest is not None:
+                                break
+                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                        if newest is None:
+                            sort_button.click()  # Close a menu without the expected option.
+                        else:
+                            newest.click()
+                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                            logger.info(
+                                "Sorted public article comments by newest",
+                                extra={
+                                    "event": "publication_article_sorted_newest",
+                                    "comment_id": comment.dzen_comment_id,
+                                },
+                            )
+                except Exception:
+                    logger.info(
+                        "Public article sort option was unavailable",
+                        extra={
+                            "event": "publication_article_sort_unavailable",
+                            "comment_id": comment.dzen_comment_id,
+                        },
+                    )
+
+            expected_source_text = " ".join(comment.text.split())
+            expected_reply_text = " ".join(text.split())
+            source_href = urlsplit(source_author_href).path.rstrip("/")
+            source_name = " ".join((source_author or comment.author).split()).casefold()
+            for load in range(_PUBLIC_COMMENT_LOAD_LIMIT + 1):
+                roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
+                for index, root in enumerate(roots):
+                    try:
+                        data = self._read_public_comment(root)
+                    except Exception:
+                        continue  # React can replace a comment while it renders.
+                    if data is None:
+                        continue
+                    candidates = [data, *data["replies"]]
+                    source = next(
+                        (
+                            candidate for candidate in candidates
+                            if self._public_source_matches(
+                                candidate, expected_source_text, source_href, source_name
+                            )
+                        ),
+                        None,
+                    )
+                    if source is None:
+                        try:
+                            expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
+                            if expand is not None and "Свернуть" not in expand.inner_text():
+                                previous_reply_count = len(data["replies"])
+                                expand.click()
+                                for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                                    article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                                    current_roots = article_page.query_selector_all(
+                                        selectors.ARTICLE_ROOT_COMMENT
+                                    )
+                                    if index >= len(current_roots):
+                                        continue
+                                    data = self._read_public_comment(current_roots[index])
+                                    if data is None:
+                                        continue
+                                    source = next(
+                                        (
+                                            candidate for candidate in [data, *data["replies"]]
+                                            if self._public_source_matches(
+                                                candidate, expected_source_text, source_href, source_name
+                                            )
+                                        ),
+                                        None,
+                                    )
+                                    if source is not None or len(data["replies"]) > previous_reply_count:
+                                        break
+                        except Exception:
+                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                    if source is None:
+                        continue
+                    logger.info(
+                        "Found source comment in public article",
+                        extra={
+                            "event": "publication_article_source_found",
+                            "comment_id": comment.dzen_comment_id,
+                            "load": load,
+                            "source_kind": "root" if source is data else "child",
+                        },
+                    )
+                    poll_limit = (
+                        _PUBLIC_COMMENT_POLL_LIMIT
+                        if wait_for_reply else _PUBLIC_PREFLIGHT_POLL_LIMIT
+                    )
+                    for poll in range(poll_limit + 1):
+                        current_roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
+                        if index >= len(current_roots):
+                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                            continue
+                        root = current_roots[index]
+                        try:
+                            data = self._read_public_comment(root)
+                        except Exception:
+                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                            continue
+                        if data is not None and any(
+                            is_bot_account_author(reply["author"], account_name)
+                            and " ".join(reply["text"].split()) == expected_reply_text
+                            and (
+                                not reply.get("addressee")
+                                or " ".join(reply["addressee"].split()).casefold()
+                                == " ".join(source["author"].split()).casefold()
+                            )
+                            for reply in data["replies"]
+                        ):
+                            logger.info(
+                                "Found matching child reply in public article",
+                                extra={
+                                    "event": "publication_article_reply_found",
+                                    "comment_id": comment.dzen_comment_id,
+                                    "poll": poll + 1,
+                                },
+                            )
+                            return True
+                        try:
+                            expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
+                            if expand is not None and "Свернуть" not in expand.inner_text():
+                                expand.click()
+                        except Exception:
+                            pass  # Re-query the comment after a transient DOM replacement.
+                        if poll < poll_limit:
+                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                    expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
+                    if expand is not None and "Свернуть" not in expand.inner_text():
+                        raise RuntimeError("public article replies did not expand")
+                    return False
+
+                if load == _PUBLIC_COMMENT_LOAD_LIMIT:
+                    break
+                more = article_page.query_selector(selectors.ARTICLE_MORE_COMMENTS)
+                if more is None:
+                    if roots:
+                        break
+                    article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                    continue
+                previous_count = len(roots)
+                more.click()
+                logger.info(
+                    "Loaded more public article comments",
+                    extra={
+                        "event": "publication_article_more_comments_clicked",
+                        "comment_id": comment.dzen_comment_id,
+                        "load": load + 1,
+                    },
+                )
+                for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                    article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                    if len(article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)) > previous_count:
+                        break
+                else:
+                    raise RuntimeError("public article comments did not expand")
+            logger.info(
+                "Source comment was not found in public article",
+                extra={
+                    "event": "publication_article_source_missing",
+                    "comment_id": comment.dzen_comment_id,
+                },
+            )
+            raise RuntimeError("source comment not found in public article")
+        finally:
+            article_page.close()
+
+    @staticmethod
+    def _public_source_matches(
+        candidate: dict[str, str], text: str, author_href: str, author_name: str
+    ) -> bool:
+        if " ".join(candidate["text"].split()) != text:
+            return False
+        candidate_href = urlsplit(candidate.get("authorHref", "")).path.rstrip("/")
+        if author_href and candidate_href:
+            if author_href == candidate_href:
+                return True
+            if author_href.split("/")[1:2] == candidate_href.split("/")[1:2]:
+                return False
+        return " ".join(candidate["author"].split()).casefold() == author_name
+
+    @staticmethod
+    def _read_public_comment(root: Any) -> dict[str, Any] | None:
+        return root.evaluate(
+            """(root) => {
+                const own = root.querySelector(':scope > [class*="comments2--comment__content-"]');
+                if (!own) return null;
+                const author = own.querySelector('[data-testid="comment-author-link"]');
+                const content = own.querySelector('[class*="comments2--comment-text__block-"]');
+                return {
+                    author: author?.innerText || '',
+                    authorHref: author?.getAttribute('href') || '',
+                    text: content?.innerText || '',
+                    replies: Array.from(root.querySelectorAll('[data-testid="child-comment"]'))
+                        .map((child) => {
+                            const ownChild = child.querySelector(
+                                ':scope > [class*="comments2--comment__content-"]'
+                            );
+                            return {
+                                author: ownChild?.querySelector(
+                                    '[data-testid="comment-author-link"]'
+                                )?.innerText || '',
+                                authorHref: ownChild?.querySelector(
+                                    '[data-testid="comment-author-link"]'
+                                )?.getAttribute('href') || '',
+                                text: ownChild?.querySelector(
+                                    '[class*="comments2--comment-text__block-"]'
+                                )?.innerText || '',
+                                addressee: ownChild?.querySelector(
+                                    '[data-testid="comment-author-name"]'
+                                )?.innerText || '',
+                            };
+                        }),
+                };
+            }"""
+        )
 
     @staticmethod
     def _creation_response_outcome(

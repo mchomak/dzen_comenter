@@ -40,6 +40,9 @@ class FakeButton:
     def is_visible(self) -> bool:
         return self.attached and self.visible
 
+    def inner_text(self) -> str:
+        return "2 ответа"
+
 
 class FakeInput:
     def __init__(self) -> None:
@@ -211,28 +214,128 @@ class FakeArticlePage:
         article_text: str = "",
         article_content: dict | None = None,
         goto_error: Exception | None = None,
+        goto_errors: list[Exception | None] | None = None,
+        public_roots: list | None = None,
+        hidden_roots: list | None = None,
+        newest_roots: list | None = None,
+        sort_label: str | None = None,
+        newest_option_available: bool = True,
     ) -> None:
         self.article_text = article_text
         self.article_content = article_content
         self.goto_error = goto_error
+        self.goto_errors = list(goto_errors or [])
         self.goto_calls: list[tuple[str, str]] = []
+        self.goto_timeouts: list[int | None] = []
         self.close_calls = 0
+        self.public_roots = list(public_roots or [])
+        self.hidden_roots = list(hidden_roots or [])
+        self.newest_roots = list(newest_roots or [])
+        self.sort_label = sort_label
+        self.newest_option_available = newest_option_available
+        self.sort_open = False
+        self.waited_ms: list[int] = []
+        self.scroll_calls = 0
+        self.more_button = FakeButton(self._load_more)
+        self.sort_button = FakeButton(self._toggle_sort)
+        self.sort_button.inner_text = lambda: self.sort_label or ""
+        self.newest_button = FakeButton(self._sort_newest)
 
-    def goto(self, url: str, *, wait_until: str) -> None:
+    def _load_more(self) -> None:
+        self.public_roots.extend(self.hidden_roots)
+        self.hidden_roots.clear()
+
+    def _toggle_sort(self) -> None:
+        self.sort_open = not self.sort_open
+
+    def _sort_newest(self) -> None:
+        self.public_roots = list(self.newest_roots)
+        self.sort_label = "Сначала новые"
+        self.sort_open = False
+
+    def goto(self, url: str, *, wait_until: str, timeout: int | None = None) -> None:
         self.goto_calls.append((url, wait_until))
+        self.goto_timeouts.append(timeout)
+        if self.goto_errors:
+            error = self.goto_errors.pop(0)
+            if error is not None:
+                raise error
         if self.goto_error is not None:
             raise self.goto_error
 
     def query_selector(self, selector: str):
         if selector == "article" and self.article_text:
             return FakeText(self.article_text)
+        if selector == selectors.ARTICLE_COMMENTS:
+            return self
+        if selector == selectors.ARTICLE_MORE_COMMENTS and self.hidden_roots:
+            return self.more_button
+        if selector == selectors.ARTICLE_SORT and self.sort_label is not None:
+            return self.sort_button
+        if selector == selectors.ARTICLE_SORT_NEWEST and self.sort_open and self.newest_option_available:
+            return self.newest_button
         return None
+
+    def query_selector_all(self, selector: str):
+        if selector == selectors.ARTICLE_ROOT_COMMENT:
+            return list(self.public_roots)
+        return []
+
+    def scroll_into_view_if_needed(self) -> None:
+        self.scroll_calls += 1
+
+    def wait_for_timeout(self, timeout_ms: int) -> None:
+        self.waited_ms.append(timeout_ms)
 
     def evaluate(self, _script: str):
         return self.article_content
 
     def close(self) -> None:
         self.close_calls += 1
+
+
+class FakePublicRoot:
+    def __init__(
+        self,
+        *,
+        author: str,
+        author_href: str,
+        text: str,
+        replies: list[dict[str, str]] | None = None,
+        hidden_replies: list[dict[str, str]] | None = None,
+    ) -> None:
+        self.author = author
+        self.author_href = author_href
+        self.text = text
+        self.replies = list(replies or [])
+        self.hidden_replies = list(hidden_replies or [])
+        self.expand_button = FakeButton(self._expand)
+
+    def _expand(self) -> None:
+        self.replies.extend(self.hidden_replies)
+        self.hidden_replies.clear()
+
+    def evaluate(self, _script: str) -> dict:
+        return {
+            "author": self.author,
+            "authorHref": self.author_href,
+            "text": self.text,
+            "replies": list(self.replies),
+        }
+
+    def query_selector(self, selector: str):
+        if selector == selectors.ARTICLE_OPEN_REPLIES and self.hidden_replies:
+            return self.expand_button
+        return None
+
+
+def public_root_for(node: FakeCommentNode, *, reply_text: str = "мой ответ", reply_author: str = "Configured Bot") -> FakePublicRoot:
+    return FakePublicRoot(
+        author=node._children[selectors.COMMENT_AUTHOR_TEXT].inner_text(),
+        author_href=node._children[selectors.COMMENT_AUTHOR_LINK].get_attribute("href"),
+        text=node._children[selectors.COMMENT_TEXT].inner_text(),
+        replies=[{"author": reply_author, "text": reply_text}],
+    )
 
 
 def make_node(i: int, date: str | None = None) -> FakeCommentNode:
@@ -395,367 +498,150 @@ def test_parent_comment_id_always_none():
         assert c.parent_comment_id is None
 
 
-# Acceptance 7 — publish_reply находит нужный узел.
-def test_publish_reply_targets_matching_node():
-    node0 = make_node(0)
-    node1 = make_node(1)
-    groups = [FakeGroup("/a/post1", [node0, node1])]
-    fake = FakePage(groups)
-    page = DzenStudioPage(fake)
+# Publication confirmation uses the source thread in Studio and the public article.
+def make_publication_page(node, *, article=None, bot_name="Configured Bot"):
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    article = article or FakeArticlePage(public_roots=[public_root_for(node)])
+    preflight = FakeArticlePage(public_roots=[FakePublicRoot(
+        author=node._children[selectors.COMMENT_AUTHOR_TEXT].inner_text(),
+        author_href=node._children[selectors.COMMENT_AUTHOR_LINK].get_attribute("href"),
+        text=node._children[selectors.COMMENT_TEXT].inner_text(),
+    )])
+    fake.context.article_pages = [preflight, article]
+    return fake, DzenStudioPage(fake, bot_account_name_provider=lambda: bot_name), article
 
-    target = page.fetch_comments()[1]  # соответствует node1
-    node1.reply_submit.on_click = lambda: node1.published_replies.append(
-        {"author": "Екатерина Великая", "text": "мой ответ"}
+
+def test_publish_reply_targets_matching_node_without_reloading_studio():
+    first, target_node = make_node(0), make_node(1)
+    fake = FakePage([FakeGroup("/a/post1", [first, target_node])])
+    article = FakeArticlePage(public_roots=[public_root_for(target_node)])
+    fake.context.article_pages = [
+        FakeArticlePage(public_roots=[FakePublicRoot(
+            author="author1", author_href="/user/u1", text="text1"
+        )]),
+        article,
+    ]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[1]
+    target_node.reply_submit.on_click = lambda: target_node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
     )
-    page.publish_reply(target, "мой ответ", auto_publish=True)
 
-    assert node1.reply_button.clicks == 1
-    assert node1.reply_input.filled == ["мой ответ"]
-    assert node1.reply_submit.clicks == 1
-    assert node0.reply_button.clicks == 0
-    assert node0.reply_input.filled == []
-    assert node0.reply_submit.clicks == 0
-    assert fake.mouse.wheel_calls == []
-    assert fake.evaluate_calls == []
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    page.publish_reply(comment, "мой ответ", auto_publish=True)
+
+    assert target_node.reply_button.clicks == target_node.reply_submit.clicks == 1
+    assert target_node.reply_input.filled == ["мой ответ"]
+    assert first.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+    assert dzen_page._STUDIO_CONFIRM_DELAY_MS in fake.waited_ms
+    assert article.goto_calls == [("https://dzen.ru/a/post1", "commit")]
+    assert article.goto_timeouts == [60_000]
+    assert article.scroll_calls == 1
+    assert article.close_calls == 1
     assert fake.listeners == {"request": [], "response": []}
 
 
-def test_auto_publication_logs_safe_ordered_action_trace(caplog):
+def test_domeo_author_identity_confirms_both_pages():
+    bot_name = "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ"
     node = make_node(0)
-    fake = FakePage([FakeGroup("/a/private-post", [node])])
-    reply_text = "private-reply-content"
-    node.reply_submit.on_click = lambda: node.published_replies.append(
-        {"author": "Configured Bot", "text": reply_text}
+    article = FakeArticlePage(
+        public_roots=[public_root_for(node, reply_author=bot_name)]
     )
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    fake, page, _ = make_publication_page(node, article=article, bot_name=bot_name)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": bot_name, "text": "мой ответ"}
+    )
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_auto_publication_logs_both_confirmations_without_reply_text(caplog):
+    node = make_node(0)
+    fake, page, _ = make_publication_page(
+        node,
+        article=FakeArticlePage(
+            public_roots=[public_root_for(node, reply_text="private-reply-content")]
+        ),
+    )
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "private-reply-content"}
+    )
     comment = page.fetch_comments()[0]
     log = logging.getLogger("dzen_commenter.dzen.page")
 
     with caplog.at_level(logging.INFO, logger=log.name):
-        page.publish_reply(comment, reply_text, auto_publish=True, reply_id=73)
+        page.publish_reply(comment, "private-reply-content", auto_publish=True, reply_id=73)
 
     records = [record for record in caplog.records if record.name == log.name]
     events = [record.event for record in records]
-    expected = [
-        "publication_source_comment_search_started",
-        "publication_source_comment_search_completed",
-        "publication_reply_button_search",
-        "publication_send_button_search",
-        "publication_send_click_attempt",
-        "publication_send_button_wait",
-        "publication_acknowledgment_wait_started",
-        "publication_acknowledgment_wait_completed",
-        "publication_page_reload_started",
-        "publication_page_reload_completed",
-        "publication_post_reload_visibility_check",
-        "publication_confirmed",
-    ]
-    assert [event for event in events if event in expected] == expected
+    assert events.index("publication_studio_visibility_check") < events.index("publication_article_check_started")
+    assert events.index("publication_article_reply_found") < events.index("publication_confirmed")
     assert all(record.comment_id == comment.dzen_comment_id for record in records)
-    assert all(record.reply_id == 73 for record in records)
+    assert all(record.reply_id == 73 for record in records if hasattr(record, "reply_id"))
     serialized = "\n".join(StructuredFormatter().format(record) for record in records)
-    assert "private-reply-content" not in serialized
-    assert "text0" not in serialized
-    assert "author0" not in serialized
-    assert "Configured Bot" not in serialized
-    assert "/a/private-post" not in serialized
+    for secret in ("private-reply-content", "text0", "author0", "/a/post1"):
+        assert secret not in serialized
 
 
-def test_missing_send_button_logs_failure_before_reload(caplog):
+def test_missing_send_button_fails_before_public_check(caplog):
     node = make_node(0)
     node._children.pop(selectors.REPLY_SUBMIT)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
+    fake, page, article = make_publication_page(node)
     comment = page.fetch_comments()[0]
-    log = logging.getLogger("dzen_commenter.dzen.page")
 
-    with caplog.at_level(logging.INFO, logger=log.name):
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
         with pytest.raises(RuntimeError, match="send button was not found"):
-            page.publish_reply(comment, "private-reply-content", auto_publish=True, reply_id=73)
+            page.publish_reply(comment, "private-reply-content", auto_publish=True)
 
-    events = [
-        record.event for record in caplog.records if record.name == log.name
-    ]
-    assert events[-1] == "publication_action_failed"
-    assert next(
-        record for record in caplog.records
-        if record.name == log.name and record.event == "publication_send_button_search"
-    ).result == "missing"
-    failed = next(
-        record for record in caplog.records
-        if record.name == log.name and record.event == "publication_action_failed"
-    )
-    assert failed.comment_id == comment.dzen_comment_id
-    assert failed.reply_id == 73
-    assert failed.failure_type == "RuntimeError"
-    assert not any(event.startswith("publication_page_reload") for event in events)
     assert fake.reload_calls == []
-    serialized = "\n".join(
-        StructuredFormatter().format(record)
-        for record in caplog.records
-        if record.name == log.name
-    )
-    assert "private-reply-content" not in serialized
-
-
-def test_send_button_still_visible_logs_failure_before_reload(caplog):
-    node = make_node(0)
-    node.reply_submit.hide_on_click = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    comment = page.fetch_comments()[0]
-    log = logging.getLogger("dzen_commenter.dzen.page")
-
-    with caplog.at_level(logging.INFO, logger=log.name):
-        with pytest.raises(RuntimeError, match="send button remained visible"):
-            page.publish_reply(comment, "private-reply-content", auto_publish=True, reply_id=73)
-
-    records = [record for record in caplog.records if record.name == log.name]
-    wait_records = [
-        record for record in records if record.event == "publication_send_button_wait"
-    ]
-    assert wait_records[-1].result == "still_visible"
-    assert records[-1].event == "publication_action_failed"
-    assert not any(record.event.startswith("publication_page_reload") for record in records)
-    assert fake.reload_calls == []
-
-
-def test_draft_action_trace_never_clicks_send_or_confirms_publication(caplog):
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    comment = page.fetch_comments()[0]
-    log = logging.getLogger("dzen_commenter.dzen.page")
-
-    with caplog.at_level(logging.INFO, logger=log.name):
-        page.publish_reply(comment, "private-draft-content", auto_publish=False, reply_id=73)
-
-    records = [record for record in caplog.records if record.name == log.name]
-    events = [record.event for record in records]
-    assert "publication_reply_button_search" in events
-    assert "publication_send_click_attempt" not in events
-    assert "publication_send_button_search" not in events
-    assert "publication_page_reload_started" not in events
-    assert "publication_confirmed" not in events
-    assert all(record.comment_id == comment.dzen_comment_id for record in records)
-    assert all(record.reply_id == 73 for record in records)
+    assert article.goto_calls == []
     assert node.reply_submit.clicks == 0
-    assert fake.reload_calls == []
-    serialized = "\n".join(StructuredFormatter().format(record) for record in records)
-    assert "private-draft-content" not in serialized
+    assert any(getattr(record, "event", None) == "publication_action_failed" for record in caplog.records)
 
 
-def test_auto_publish_is_not_confirmed_by_a_successful_click_alone():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError, match="post-reload verification"):
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-
-
-def test_auto_publish_waits_for_send_button_to_hide_before_reload():
+def test_send_button_retries_once_before_studio_and_public_checks():
     node = make_node(0)
     node.reply_submit.hide_on_click = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake, page, article = make_publication_page(node)
 
-    def hide_button_after_delay(_timeout_ms):
-        if len(fake.waited_ms) == 3:
-            node.reply_submit.visible = False
-
-    reload_state = []
-
-    def reload_with_reply():
-        reload_state.append(node.reply_submit.is_visible())
-        node.published_replies.append(
-            {"author": "Configured Bot", "text": "reply text"}
-        )
-
-    fake.on_wait_timeout = hide_button_after_delay
-    fake.on_reload = reload_with_reply
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
-    page.publish_reply(target, "reply text", auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert reload_state == [False]
-    assert selectors.REPLY_SUBMIT == '[data-testid="send-button"]'
-    assert selectors.REPLY_SUBMIT in node.query_selector_calls
-
-
-def test_auto_publish_retries_send_button_once_when_it_stays_visible():
-    node = make_node(0)
-    node.reply_submit.hide_on_click = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-
-    def submit_on_fallback():
+    def submit():
         if node.reply_submit.clicks == 2:
             node.reply_submit.visible = False
             node.published_replies.append(
-                {"author": "Configured Bot", "text": "reply text"}
+                {"author": "Configured Bot", "text": "мой ответ"}
             )
 
-    node.reply_submit.on_click = submit_on_fallback
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
-    page.publish_reply(target, "reply text", auto_publish=True)
-
+    node.reply_submit.on_click = submit
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert node.reply_submit.clicks == 2
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-    assert node.query_selector_calls.count(selectors.REPLY_SUBMIT) > 2
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
 
 
-def test_auto_publish_does_not_reload_if_send_button_remains_visible():
+def test_send_button_still_visible_stops_before_article_check():
     node = make_node(0)
     node.reply_submit.hide_on_click = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError) as exc_info:
-        page.publish_reply(target, "private reply text", auto_publish=True)
-
-    assert "send button remained visible" in str(exc_info.value)
-    assert "private reply text" not in str(exc_info.value)
+    fake, page, article = make_publication_page(node)
+    with pytest.raises(RuntimeError, match="send button remained visible"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert node.reply_submit.clicks == 2
-    assert fake.reload_calls == []
+    assert article.goto_calls == []
     assert fake.listeners == {"request": [], "response": []}
 
 
-def test_auto_publish_accepted_response_prevents_fallback_click():
+def test_accepted_create_response_without_studio_reply_does_not_confirm():
     node = make_node(0)
-    node.reply_submit.hide_on_click = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-    reply_text = "private reply text"
+    fake, page, article = make_publication_page(node)
+    reply_text = "private reply"
 
     class Request:
         method = "POST"
-        url = "https://dzen.ru/api/comments/create"
-        post_data_json = {
-            "text": reply_text,
-            "publisherId": "publisher-id",
-            "documentId": "document-id",
-            "rootId": "root-id",
-            "replyToId": "reply-id",
-        }
-
-    class Response:
-        request = Request()
-        status = 200
-
-        def json(self):
-            return {
-                "status": "ok",
-                "comments": [
-                    {
-                        **self.request.post_data_json,
-                        "id": "created-id",
-                        "visibility": "visible",
-                    }
-                ],
-            }
-
-    def accepted_submit():
-        fake.emit("request", Response.request)
-        fake.emit("response", Response())
-
-    node.reply_submit.on_click = accepted_submit
-
-    with pytest.raises(RuntimeError, match="send button remained visible"):
-        page.publish_reply(target, reply_text, auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert fake.reload_calls == []
-    assert fake.listeners == {"request": [], "response": []}
-
-
-def test_auto_publish_exact_reply_ack_prevents_fallback_click():
-    node = make_node(0)
-    node.reply_submit.hide_on_click = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-
-    def acknowledge_once(_timeout_ms):
-        if not node.published_replies:
-            node.published_replies.append(
-                {"author": "Configured Bot", "text": "reply text"}
-            )
-
-    fake.on_wait_timeout = acknowledge_once
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError, match="send button remained visible"):
-        page.publish_reply(target, "reply text", auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert fake.reload_calls == []
-
-
-def test_auto_publish_waits_for_delayed_acknowledgment_before_reloading():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    fake.on_wait_timeout = lambda _timeout_ms: node.published_replies.append(
-        {"author": "Екатерина Великая", "text": "мой ответ"}
-    )
-    reload_saw_acknowledgment = []
-    fake.on_reload = lambda: reload_saw_acknowledgment.append(
-        bool(node.published_replies)
-    )
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert reload_saw_acknowledgment == [True]
-
-
-def test_auto_publish_recovers_reply_visible_only_after_reload():
-    node = make_node(0)
-    reloaded_node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-
-    def reload_with_persisted_reply():
-        reloaded_node.published_replies.append(
-            {"author": "Екатерина Великая", "text": "мой ответ"}
-        )
-        fake._groups = [FakeGroup("/a/post1", [reloaded_node])]
-
-    fake.on_reload = reload_with_persisted_reply
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-
-
-def test_auto_publish_accepts_matching_create_response_when_reply_visible_after_reload():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-    reply_text = "мой  ответ"
-
-    class Request:
-        method = "POST"
-        url = "https://dzen.ru/api/comments/create?private=secret"
-        post_data_json = {
-            "text": reply_text,
-            "publisherId": "publisher-secret",
-            "documentId": "document-secret",
-            "rootId": "root-secret",
-            "replyToId": "reply-secret",
-        }
+        url = "https://dzen.ru/api/comments/create?token=private-token"
+        post_data_json = {"text": reply_text, "replyToId": "source-id"}
 
     class Response:
         request = Request()
@@ -765,561 +651,444 @@ def test_auto_publish_accepts_matching_create_response_when_reply_visible_after_
             return {
                 "status": "ok",
                 "comments": [{
-                    "id": "created-secret",
-                    "text": "мой ответ",
-                    "publisherId": "publisher-secret",
-                    "documentId": "document-secret",
-                    "rootId": "root-secret",
-                    "replyToId": "reply-secret",
-                    "visibility": "visible",
-                    "asPublisher": False,
+                    "id": "created-id", "text": reply_text,
+                    "replyToId": "source-id", "visibility": "visible",
                 }],
             }
 
     def submit():
         fake.emit("request", Response.request)
         fake.emit("response", Response())
-        node.published_replies.append(
-            {"author": "Екатерина Великая", "text": reply_text}
-        )
 
     node.reply_submit.on_click = submit
+    with pytest.raises(RuntimeError, match="not confirmed in Studio") as exc_info:
+        page.publish_reply(page.fetch_comments()[0], reply_text, auto_publish=True)
 
-    page.publish_reply(target, reply_text, auto_publish=True)
-
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-    assert node.published_replies == [
-        {"author": "Екатерина Великая", "text": reply_text}
-    ]
+    assert "creation_outcome=accepted" in str(exc_info.value)
+    assert "private-token" not in str(exc_info.value)
+    assert reply_text not in str(exc_info.value)
     assert node.reply_submit.clicks == 1
+    assert article.goto_calls == []
     assert fake.listeners == {"request": [], "response": []}
 
 
 @pytest.mark.parametrize(
-    "response_status,response_body,expected_outcome",
+    "status,created,expected_outcome",
     [
-        (403, {"status": "ok", "comments": []}, "non_2xx"),
-        (200, {"status": "error-secret", "comments": []}, "invalid_response"),
-        (200, {"status": "ok", "comments": []}, "invalid_response"),
-        (200, {"status": "ok", "comments": ["server-secret"]}, "invalid_response"),
-        (200, {"status": "ok", "comments": [{"id": "", "text": "мой ответ", "visibility": "visible"}]}, "missing_created_id"),
-        (200, {"status": "ok", "comments": [{"id": "id-secret", "text": "wrong text secret", "visibility": "visible"}]}, "text_mismatch"),
-        (200, {"status": "ok", "comments": [{"id": "id-secret", "text": "мой ответ", "visibility": "hidden"}]}, "visibility_mismatch"),
-        (200, {"status": "ok", "comments": [{"id": "id-secret", "text": "мой ответ", "visibility": "visible", "replyToId": "wrong-secret"}]}, "relation_mismatch"),
-        (200, RuntimeError("server-secret"), "invalid_response"),
+        (403, {"id": "id", "text": "мой ответ", "visibility": "visible"}, "non_2xx"),
+        (200, None, "invalid_response"),
+        (200, {"id": "", "text": "мой ответ", "visibility": "visible"}, "missing_created_id"),
+        (200, {"id": "id", "text": "other", "visibility": "visible"}, "text_mismatch"),
+        (200, {"id": "id", "text": "мой ответ", "visibility": "hidden"}, "visibility_mismatch"),
+        (200, {"id": "id", "text": "мой ответ", "visibility": "visible", "replyToId": "wrong"}, "relation_mismatch"),
     ],
 )
-def test_auto_publish_rejects_bad_create_response_with_optimistic_dom(
-    response_status, response_body, expected_outcome
+def test_create_response_outcome_is_diagnostic_not_publication_proof(
+    status, created, expected_outcome
 ):
     node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
+    fake, page, article = make_publication_page(node)
 
     class Request:
         method = "POST"
-        url = "https://dzen.ru/api/comments/create?private=secret"
-        post_data_json = {
-            "text": "мой ответ",
-            "publisherId": "publisher-secret",
-            "documentId": "document-secret",
-            "rootId": "root-secret",
-            "replyToId": "reply-secret",
-        }
+        url = "https://dzen.ru/api/comments/create?token=private-token"
+        post_data_json = {"text": "мой ответ", "replyToId": "source-id"}
 
     class Response:
         request = Request()
-        status = response_status
+
+        def __init__(self):
+            self.status = status
 
         def json(self):
-            if isinstance(response_body, Exception):
-                raise response_body
-            return response_body
+            return {"status": "ok", "comments": [created] if created else []}
 
     def submit():
         fake.emit("request", Response.request)
         fake.emit("response", Response())
-        node.published_replies.append(
-            {"author": "Екатерина Великая", "text": "мой ответ"}
-        )
 
     node.reply_submit.on_click = submit
-    fake.on_reload = node.published_replies.clear
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert f"creation_outcome={expected_outcome};" in str(exc_info.value)
-    assert "secret" not in str(exc_info.value)
-    assert "мой ответ" not in str(exc_info.value)
+    with pytest.raises(RuntimeError, match="not confirmed in Studio") as exc_info:
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert f"creation_outcome={expected_outcome}" in str(exc_info.value)
+    assert "private-token" not in str(exc_info.value)
+    assert article.goto_calls == []
     assert node.reply_submit.clicks == 1
-    assert fake.listeners == {"request": [], "response": []}
 
 
-@pytest.mark.parametrize(
-    "mismatch_field",
-    ["publisherId", "documentId", "rootId", "replyToId"],
-)
-def test_auto_publish_requires_create_response_in_original_thread(mismatch_field):
+def test_draft_does_not_submit_or_open_article():
     node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-    payload = {
-        "text": "мой ответ",
-        "publisherId": "publisher-secret",
-        "documentId": "document-secret",
-        "rootId": "root-secret",
-        "replyToId": "reply-secret",
-    }
-    created = {
-        **payload,
-        "id": "created-secret",
-        "visibility": "visible",
-        mismatch_field: "unrelated-secret",
-    }
-
-    class Request:
-        method = "POST"
-        url = "https://dzen.ru/api/comments/create"
-        post_data_json = payload
-
-    class Response:
-        request = Request()
-        status = 200
-
-        def json(self):
-            return {"status": "ok", "comments": [created]}
-
-    def submit():
-        fake.emit("request", Response.request)
-        fake.emit("response", Response())
-        node.published_replies.append(
-            {"author": "Екатерина Великая", "text": "мой ответ"}
-        )
-
-    node.reply_submit.on_click = submit
-    fake.on_reload = node.published_replies.clear
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert "creation_outcome=relation_mismatch;" in str(exc_info.value)
-    assert "secret" not in str(exc_info.value)
-    assert node.reply_submit.clicks == 1
-    assert fake.listeners == {"request": [], "response": []}
-
-
-def test_auto_publish_optimistic_reply_without_create_response_still_fails():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-    node.reply_submit.on_click = lambda: node.published_replies.append(
-        {"author": "Екатерина Великая", "text": "мой ответ"}
-    )
-    fake.on_reload = node.published_replies.clear
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert "creation_outcome=missing_request;" in str(exc_info.value)
-    assert node.reply_submit.clicks == 1
-    assert fake.listeners == {"request": [], "response": []}
-
-
-def test_auto_publish_reports_missing_create_response_after_request():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    class Request:
-        method = "POST"
-        url = "https://dzen.ru/api/comments/create?token=secret"
-        post_data_json = {"text": "мой ответ"}
-
-    def submit():
-        fake.emit("request", Request())
-        node.published_replies.append(
-            {"author": "Екатерина Великая", "text": "мой ответ"}
-        )
-
-    node.reply_submit.on_click = submit
-    fake.on_reload = node.published_replies.clear
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert "creation_outcome=missing_response;" in str(exc_info.value)
-    assert "secret" not in str(exc_info.value)
-    assert "мой ответ" not in str(exc_info.value)
-    assert fake.listeners == {"request": [], "response": []}
-
-
-def test_auto_publish_rejects_accepted_response_when_reply_missing_after_reload():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    class Request:
-        method = "POST"
-        url = "https://dzen.ru/api/comments/create"
-        post_data_json = {
-            "text": "мой ответ",
-            "rootId": "root-secret",
-            "replyToId": "reply-secret",
-        }
-
-    class Response:
-        request = Request()
-        status = 200
-
-        def json(self):
-            return {
-                "status": "ok",
-                "comments": [{
-                    **self.request.post_data_json,
-                    "id": "created-secret",
-                    "visibility": "visible",
-                }],
-            }
-
-    def submit():
-        fake.emit("request", Response.request)
-        node.published_replies.append(
-            {"author": "Екатерина Великая", "text": "мой ответ"}
-        )
-
-    node.reply_submit.on_click = submit
-    emitted = False
-    post_reload_waits = 0
-
-    def deliver_response(_timeout_ms):
-        nonlocal emitted, post_reload_waits
-        if fake.reload_calls:
-            post_reload_waits += 1
-        elif not emitted:
-            assert fake.reload_calls == []
-            fake.emit("response", Response())
-            emitted = True
-
-    fake.on_wait_timeout = deliver_response
-    fake.on_reload = node.published_replies.clear
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert emitted
-    assert "creation_outcome=accepted;" in str(exc_info.value)
-    assert "root-secret" not in str(exc_info.value)
-    assert "мой ответ" not in str(exc_info.value)
-    assert post_reload_waits == (
-        dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS // dzen_page._REPLY_SEARCH_WAIT_MS
-    )
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-    assert node.reply_submit.clicks == 1
-    assert fake.listeners == {"request": [], "response": []}
-
-
-def test_auto_publish_succeeds_when_reply_appears_after_reload():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(
-        fake, bot_account_name_provider=lambda: "Configured Bot"
-    )
-    target = page.fetch_comments()[0]
-    reply_text = "мой ответ"
-
-    class Request:
-        method = "POST"
-        url = "https://dzen.ru/api/comments/create"
-        post_data_json = {
-            "text": reply_text,
-            "publisherId": "publisher-secret",
-            "documentId": "document-secret",
-            "rootId": "root-secret",
-            "replyToId": "reply-secret",
-        }
-
-    class Response:
-        request = Request()
-        status = 200
-
-        def json(self):
-            return {
-                "status": "ok",
-                "comments": [{
-                    **self.request.post_data_json,
-                    "id": "created-secret",
-                    "visibility": "visible",
-                }],
-            }
-
-    def submit():
-        fake.emit("request", Response.request)
-        fake.emit("response", Response())
-        node.published_replies.append(
-            {"author": "Configured Bot", "text": reply_text}
-        )
-
-    node.reply_submit.on_click = submit
-    fake.on_reload = node.published_replies.clear
-    post_reload_waits = 0
-
-    def hydrate_reply(_timeout_ms):
-        nonlocal post_reload_waits
-        if fake.reload_calls:
-            post_reload_waits += 1
-            if post_reload_waits == 3:
-                node.published_replies.append(
-                    {"author": "Configured Bot", "text": reply_text}
-                )
-
-    fake.on_wait_timeout = hydrate_reply
-
-    page.publish_reply(target, reply_text, auto_publish=True)
-
-    assert post_reload_waits == 3
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    fake, page, article = make_publication_page(node)
+    page.publish_reply(page.fetch_comments()[0], "draft", auto_publish=False)
     assert node.reply_button.clicks == 1
-    assert node.reply_submit.clicks == 1
-    assert fake.listeners == {"request": [], "response": []}
-
-
-def test_auto_publish_fails_after_reload_when_reply_exists_only_in_sibling_thread():
-    node = make_node(0)
-    sibling = make_node(1)
-    sibling.published_replies.append(
-        {"author": "Екатерина Великая", "text": "мой ответ"}
-    )
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    fake.on_reload = lambda: setattr(
-        fake, "_groups", [FakeGroup("/a/post1", [node, sibling])]
-    )
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert "мой ответ" not in str(exc_info.value)
-    assert "text0" not in str(exc_info.value)
-    assert node.reply_submit.clicks == 1
-    assert sibling.reply_submit.clicks == 0
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
-
-
-def test_unconfirmed_reply_reports_sanitized_submit_outcome_and_cleans_listeners():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    class Request:
-        method = "POST"
-        url = "https://dzen.ru/api/comment/private-reply/private-token?token=private-query"
-        post_data = "private-body"
-        headers = {"Cookie": "private-cookie"}
-
-    class Response:
-        request = Request()
-        status = 403
-
-    def submit() -> None:
-        fake.emit("request", Response.request)
-        fake.emit("response", Response())
-        pending = Request()
-        pending.url = "https://api.dzen.ru/api/comment/pending?token=private-query"
-        fake.emit("request", pending)
-        for index in range(6):
-            overflow = Request()
-            overflow.url = f"https://dzen.ru/api/overflow/{index}?token=private-query"
-            fake.emit("request", overflow)
-
-    node.reply_submit.on_click = submit
-
-    with pytest.raises(RuntimeError, match="post-reload verification") as exc_info:
-        page.publish_reply(target, "private-reply", auto_publish=True)
-
-    message = str(exc_info.value)
-    assert "ack_before_reload=false" in message
-    assert "source_found=true" in message
-    assert "target_reply_count=0" in message
-    assert "POST dzen.ru path_sha256=f356dc5d49b6 403" in message
-    assert "pending_responses=4" in message
-    assert "POST api.dzen.ru path_sha256=e335b7ee211c pending" in message
-    assert message.count("POST ") == 5
-    assert "truncated=true" in message
-    assert "/api/overflow/5" not in message
-    for secret in (
-        "private-query",
-        "private-body",
-        "private-cookie",
-        "private-reply",
-        "private-token",
-        "text0",
-        "/api/comment/",
-    ):
-        assert secret not in message
-    assert fake.listeners == {"request": [], "response": []}
-    assert node.reply_submit.clicks == 1
-
-
-def test_auto_publish_fails_before_submit_when_source_thread_wrapper_is_missing():
-    node = make_node(0)
-    node.has_thread_wrapper = False
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError) as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert node.reply_button.clicks == 0
+    assert node.reply_input.filled == ["draft"]
     assert node.reply_submit.clicks == 0
-    assert fake.reload_calls == []
-    assert "uninspectable" in str(exc_info.value)
-
-
-def test_auto_publish_fails_before_submit_when_bot_author_is_blank():
-    node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "  ")
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError) as exc_info:
-        page.publish_reply(target, "мой ответ", auto_publish=True)
-
-    assert node.reply_button.clicks == 0
-    assert node.reply_submit.clicks == 0
-    assert fake.reload_calls == []
-    assert "uninspectable" in str(exc_info.value)
-
-
-def test_auto_publish_skips_duplicate_when_matching_bot_reply_is_already_visible():
-    node = make_node(0)
-    node.published_replies.append(
-        {"author": "Configured Bot", "text": "мой  ответ"}
-    )
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(
-        fake, bot_account_name_provider=lambda: "Configured Bot"
-    )
-    target = page.fetch_comments()[0]
-
-    page.publish_reply(target, " мой ответ ", auto_publish=True)
-
-    assert node.reply_button.clicks == 0
-    assert node.reply_submit.clicks == 0
+    assert article.goto_calls == []
     assert fake.reload_calls == []
 
 
-def test_auto_publish_expands_target_thread_before_resubmitting_hidden_reply():
+def test_click_alone_does_not_confirm_publication():
     node = make_node(0)
-    node.hidden_replies.append({"author": "Configured Bot", "text": "already posted"})
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
+    fake, page, article = make_publication_page(node)
+    with pytest.raises(RuntimeError, match="not confirmed in Studio"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert node.reply_submit.clicks == 1
+    assert article.goto_calls == []
+    assert fake.reload_calls == []
 
-    page.publish_reply(target, "already posted", auto_publish=True)
 
+def test_studio_reply_from_wrong_author_does_not_confirm():
+    node = make_node(0)
+    fake, page, article = make_publication_page(node)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Another Author", "text": "мой ответ"}
+    )
+    with pytest.raises(RuntimeError, match="not confirmed in Studio"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert article.goto_calls == []
+    assert fake.reload_calls == []
+
+
+def test_studio_reply_can_appear_after_delay_without_reload():
+    node = make_node(0)
+    fake, page, article = make_publication_page(node)
+    def hydrate(timeout_ms):
+        if timeout_ms == dzen_page._STUDIO_CONFIRM_DELAY_MS:
+            node.published_replies.append({"author": "Configured Bot", "text": "мой ответ"})
+    fake.on_wait_timeout = hydrate
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert node.reply_submit.clicks == 1
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_article_expands_hidden_replies_and_loads_more_comments():
+    node = make_node(0)
+    source = public_root_for(node)
+    source.hidden_replies = source.replies
+    source.replies = []
+    unrelated = FakePublicRoot(author="other", author_href="/user/other", text="other")
+    article = FakeArticlePage(public_roots=[unrelated], hidden_roots=[source])
+    fake, page, _ = make_publication_page(node, article=article)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert article.more_button.clicks == 1
+    assert source.expand_button.clicks == 1
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_article_requires_source_author_even_when_text_matches():
+    node = make_node(0)
+    wrong_source = FakePublicRoot(
+        author="author0", author_href="/user/not-the-source",
+        text="text0", replies=[{"author": "Configured Bot", "text": "мой ответ"}]
+    )
+    article = FakeArticlePage(public_roots=[wrong_source])
+    fake, page, _ = make_publication_page(node, article=article)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
+
+    with pytest.raises(RuntimeError, match="source comment not found in public article"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_article_finds_original_comment_inside_child_replies():
+    node = make_node(0)
+    parent = FakePublicRoot(
+        author="parent", author_href="/user/parent", text="parent text",
+        hidden_replies=[
+            {"author": "author0", "authorHref": "/user/u0", "text": "text0"},
+            {"author": "Configured Bot", "text": "мой ответ", "addressee": "author0"},
+        ],
+    )
+    article = FakeArticlePage(public_roots=[parent])
+    fake, page, _ = make_publication_page(node, article=article)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert parent.expand_button.clicks == 1
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_article_requires_reply_from_bot_in_source_thread():
+    node = make_node(0)
+    source = public_root_for(node, reply_author="Another Author")
+    sibling = FakePublicRoot(
+        author="other", author_href="/user/other", text="other",
+        replies=[{"author": "Configured Bot", "text": "мой ответ"}],
+    )
+    article = FakeArticlePage(public_roots=[source, sibling])
+    fake, page, _ = make_publication_page(node, article=article)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
+
+    with pytest.raises(RuntimeError, match="not confirmed in public article"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_article_requires_exact_reply_text():
+    node = make_node(0)
+    article = FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")])
+    fake, page, _ = make_publication_page(node, article=article)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
+    with pytest.raises(RuntimeError, match="not confirmed in public article"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_preexisting_studio_reply_still_requires_public_verification():
+    node = make_node(0)
+    node.published_replies.append({"author": "Configured Bot", "text": "мой ответ"})
+    article = FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")])
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    with pytest.raises(RuntimeError, match="not confirmed in public article"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert article.close_calls == 1
+
+
+def test_preexisting_studio_and_public_reply_skips_duplicate_send():
+    node = make_node(0)
+    node.published_replies.append({"author": "Configured Bot", "text": "мой ответ"})
+    fake, page, article = make_publication_page(node)
+    fake.context.article_pages = [article]
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_reply_preflight_prevents_duplicate_when_studio_loses_reply():
+    node = make_node(0)
+    fake, page, article = make_publication_page(node)
+    fake.context.article_pages = [article]
+    comment = page.fetch_comments()[0]
+
+    page.publish_reply(comment, "мой ответ", auto_publish=True, reply_id=73)
+
+    assert node.reply_button.clicks == 0
+    assert node.reply_submit.clicks == 0
+    assert fake.listeners == {}
+    assert article.goto_calls == [("https://dzen.ru/a/post1", "commit")]
+    assert article.goto_timeouts == [60_000]
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_preflight_sorts_newest_to_find_fresh_reply():
+    node = make_node(0)
+    unrelated = FakePublicRoot(author="other", author_href="/user/other", text="old")
+    article = FakeArticlePage(
+        public_roots=[unrelated],
+        newest_roots=[public_root_for(node)],
+        sort_label="Сначала популярные",
+    )
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert article.sort_button.clicks == 1
+    assert article.newest_button.clicks == 1
+    assert article.sort_label == "Сначала новые"
+    assert article.more_button.clicks == 0
+    assert node.reply_submit.clicks == 0
+    assert article.close_calls == 1
+
+
+def test_public_preflight_uses_load_more_when_newest_sort_is_unavailable():
+    node = make_node(0)
+    unrelated = FakePublicRoot(author="other", author_href="/user/other", text="old")
+    article = FakeArticlePage(
+        public_roots=[unrelated],
+        hidden_roots=[public_root_for(node)],
+        sort_label="Сначала популярные",
+        newest_option_available=False,
+    )
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert article.sort_button.clicks == 2
+    assert article.newest_button.clicks == 0
+    assert article.more_button.clicks == 1
+    assert node.reply_submit.clicks == 0
+    assert article.close_calls == 1
+
+
+def test_public_reply_preflight_error_stops_before_any_repeat_submit():
+    node = make_node(0)
+    article = FakeArticlePage(goto_error=RuntimeError("article unavailable"))
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, reply_id=73)
+
+    assert str(exc_info.value.__cause__) == "article unavailable"
+    assert node.reply_button.clicks == 0
+    assert node.reply_submit.clicks == 0
+    assert fake.listeners == {}
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
+
+def test_public_preflight_retries_transient_article_navigation():
+    node = make_node(0)
+    article = FakeArticlePage(
+        public_roots=[public_root_for(node)],
+        goto_errors=[TimeoutError("transient navigation timeout"), None],
+    )
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert article.goto_calls == [
+        ("https://dzen.ru/a/post1", "commit"),
+        ("https://dzen.ru/a/post1", "commit"),
+    ]
+    assert article.goto_timeouts == [60_000, 60_000]
+    assert article.close_calls == 1
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert fake.listeners == {}
+
+
+def test_public_preflight_navigation_retries_exhaust_before_submit():
+    node = make_node(0)
+    article = FakeArticlePage(goto_error=TimeoutError("article navigation timeout"))
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert isinstance(exc_info.value.__cause__, TimeoutError)
+    assert str(exc_info.value.__cause__) == "article navigation timeout"
+    assert article.goto_calls == [
+        ("https://dzen.ru/a/post1", "commit"),
+        ("https://dzen.ru/a/post1", "commit"),
+    ]
+    assert article.goto_timeouts == [60_000, 60_000]
+    assert article.close_calls == 1
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert fake.listeners == {}
+
+
+def test_hidden_studio_reply_prevents_duplicate_send():
+    node = make_node(0)
+    node.hidden_replies.append({"author": "Configured Bot", "text": "мой ответ"})
+    fake, page, article = make_publication_page(node)
+    fake.context.article_pages = [article]
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert node.more_button.clicks == 1
     assert node.reply_submit.clicks == 0
-    assert fake.reload_calls == []
-
-
-def test_auto_publish_confirms_hidden_reply_after_reload():
-    node = make_node(0)
-    reloaded_node = make_node(0)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-
-    def reload_with_collapsed_reply():
-        reloaded_node.hidden_replies.append(
-            {"author": "Configured Bot", "text": "posted reply"}
-        )
-        fake._groups = [FakeGroup("/a/post1", [reloaded_node])]
-
-    fake.on_reload = reload_with_collapsed_reply
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
-    page.publish_reply(target, "posted reply", auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert reloaded_node.more_button.clicks == 1
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert article.close_calls == 1
 
 
 @pytest.mark.parametrize(
     "hidden_reply",
     [
-        {"author": "Another Author", "text": "posted reply"},
+        {"author": "Another Author", "text": "мой ответ"},
         {"author": "Configured Bot", "text": "different reply"},
     ],
 )
-def test_hidden_reply_requires_exact_bot_author_and_text(hidden_reply):
+def test_hidden_studio_reply_requires_author_and_text(hidden_reply):
     node = make_node(0)
     node.hidden_replies.append(hidden_reply)
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError, match="post-reload verification"):
-        page.publish_reply(target, "posted reply", auto_publish=True)
-
+    fake, page, article = make_publication_page(node)
+    with pytest.raises(RuntimeError, match="not confirmed in Studio"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert node.more_button.clicks == 1
     assert node.reply_submit.clicks == 1
+    assert article.goto_calls == []
 
 
-def test_hidden_reply_in_sibling_thread_does_not_confirm_target():
+def test_failed_studio_reply_expansion_stops_before_submit():
     node = make_node(0)
-    sibling = make_node(1)
-    sibling.hidden_replies.append(
-        {"author": "Configured Bot", "text": "posted reply"}
-    )
-    fake = FakePage([FakeGroup("/a/post1", [node, sibling])])
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
-    with pytest.raises(RuntimeError, match="post-reload verification"):
-        page.publish_reply(target, "posted reply", auto_publish=True)
-
-    assert node.reply_submit.clicks == 1
-    assert sibling.more_button.clicks == 0
-    assert sibling.reply_submit.clicks == 0
-
-
-def test_failed_thread_expansion_stops_before_submit():
-    node = make_node(0)
-    node.hidden_replies.append(
-        {"author": "Configured Bot", "text": "posted reply"}
-    )
+    node.hidden_replies.append({"author": "Configured Bot", "text": "мой ответ"})
     node.more_button.on_click = lambda: None
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
-    target = page.fetch_comments()[0]
-
+    fake, page, article = make_publication_page(node)
     with pytest.raises(RuntimeError, match="replies did not expand"):
-        page.publish_reply(target, "posted reply", auto_publish=True)
-
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert node.more_button.clicks == 1
+    assert node.reply_submit.clicks == 0
+    assert article.goto_calls == []
+
+
+def test_wrong_studio_thread_does_not_confirm_reply():
+    node, sibling = make_node(0), make_node(1)
+    sibling.published_replies.append({"author": "Configured Bot", "text": "мой ответ"})
+    fake = FakePage([FakeGroup("/a/post1", [node, sibling])])
+    fake.context.article_pages = [FakeArticlePage(public_roots=[FakePublicRoot(
+        author="author0", author_href="/user/u0", text="text0"
+    )])]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    with pytest.raises(RuntimeError, match="not confirmed in Studio"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert node.reply_submit.clicks == 1
+    assert sibling.reply_submit.clicks == 0
+    assert fake.reload_calls == []
+
+
+def test_missing_studio_thread_wrapper_fails_before_submit():
+    node = make_node(0)
+    node.has_thread_wrapper = False
+    fake, page, _ = make_publication_page(node)
+    with pytest.raises(RuntimeError, match="uninspectable"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert node.reply_submit.clicks == 0
 
 
-def test_same_reply_text_from_another_author_does_not_confirm_publication():
+def test_blank_bot_author_fails_before_submit():
     node = make_node(0)
-    node.published_replies.append({"author": "другой автор", "text": "мой ответ"})
-    fake = FakePage([FakeGroup("/a/post1", [node])])
-    page = DzenStudioPage(fake)
-    target = page.fetch_comments()[0]
+    fake, page, _ = make_publication_page(node, bot_name=" ")
+    with pytest.raises(RuntimeError, match="uninspectable"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert node.reply_submit.clicks == 0
 
-    with pytest.raises(RuntimeError, match="post-reload verification"):
-        page.publish_reply(target, "мой ответ", auto_publish=True)
 
-    assert node.reply_submit.clicks == 1
+def test_public_article_failure_closes_temporary_tab():
+    node = make_node(0)
+    article = FakeArticlePage(goto_error=RuntimeError("article unavailable"))
+    fake, page, _ = make_publication_page(node, article=article)
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
+    with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    assert str(exc_info.value.__cause__) == "article unavailable"
+    assert article.close_calls == 1
+    assert fake.reload_calls == []
+
 
 
 def test_publish_reply_fills_draft_and_waits_without_submitting():
@@ -1390,7 +1159,13 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
         [FakeGroup("/a/post1", [make_node(0)])],
         scroll_groups=[[FakeGroup("/a/post1", [target_node])]],
     )
-    page = DzenStudioPage(fake)
+    fake.context.article_pages = [
+        FakeArticlePage(public_roots=[FakePublicRoot(
+            author="author1", author_href="/user/u1", text="text1"
+        )]),
+        FakeArticlePage(public_roots=[public_root_for(target_node, reply_text="готовый ответ")])
+    ]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
     target = Comment(
         id=None,
         dzen_comment_id=synthetic_id("/a/post1", "/user/u1", "text1"),
@@ -1401,23 +1176,20 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
         posted_at=None,
         fetched_at=datetime.now(timezone.utc),
         status=CommentStatus.NEW,
+        post_url="https://dzen.ru/a/post1",
     )
     target_node.reply_submit.on_click = lambda: target_node.published_replies.append(
-        {"author": "Екатерина Великая", "text": "готовый ответ"}
+        {"author": "Configured Bot", "text": "готовый ответ"}
     )
 
     page.publish_reply(target, "готовый ответ", auto_publish=True)
 
     assert len(fake.mouse.wheel_calls) == 1
-    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * (
-        1
-        + dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS
-        // dzen_page._REPLY_SEARCH_WAIT_MS
-    )
+    assert dzen_page._STUDIO_CONFIRM_DELAY_MS in fake.waited_ms
     assert target_node.reply_input.filled == ["готовый ответ"]
     assert target_node.reply_submit.clicks == 1
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
-    assert fake.reload_calls == [{"wait_until": "domcontentloaded"}]
+    assert fake.reload_calls == []
 
 
 def test_publish_reply_stops_after_twenty_scrolls_with_new_comments():

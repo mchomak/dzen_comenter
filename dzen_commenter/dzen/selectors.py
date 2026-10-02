@@ -245,3 +245,12 @@ COMMENT_FORM_CONTAINER = '[data-testid="comment-form-container"]'
 # Публикация ответа.
 REPLY_INPUT = '[data-testid="comment-textarea"]'
 REPLY_SUBMIT = '[data-testid="send-button"]'
+
+# Public article comments (rendered by the comments2 microapp).
+ARTICLE_COMMENTS = '[data-testid="article-comments"]'
+ARTICLE_ROOT_COMMENT = '[data-testid="root-comment"]'
+ARTICLE_CHILD_COMMENT = '[data-testid="child-comment"]'
+ARTICLE_MORE_COMMENTS = '[data-testid="show-more-comments"]'
+ARTICLE_OPEN_REPLIES = 'button[aria-label="Показать ответы на комментарий"]'
+ARTICLE_SORT = '[data-testid="comments-sorting-selector"]'
+ARTICLE_SORT_NEWEST = 'text="Сначала новые"'

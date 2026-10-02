@@ -165,12 +165,12 @@ def test_runtime_settings_default_bot_account_name_is_persisted(tmp_path):
     runtime_config = RuntimeConfig(str(tmp_path / "runtime.json"))
 
     data = runtime_config.get()
-    assert data.settings.bot_account_name == "Екатерина Великая"
+    assert data.settings.bot_account_name == "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ"
 
     runtime_config.save(data)
     saved = json.loads((tmp_path / "runtime.json").read_text(encoding="utf-8"))
 
-    assert saved["settings"]["bot_account_name"] == "Екатерина Великая"
+    assert saved["settings"]["bot_account_name"] == "DOMEO | РЕМОНТ КВАРТИР | НЕДВИЖИМОСТЬ"
 
 
 def test_runtime_config_ignores_legacy_proxy_secret_and_does_not_reemit_it(tmp_path):
