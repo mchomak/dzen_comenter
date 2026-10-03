@@ -478,6 +478,59 @@ def test_fetch_article_text_logs_safe_navigation_failure(caplog):
         assert secret not in serialized
 
 
+@pytest.mark.parametrize(
+    ("browser_cause", "expected_description"),
+    [
+        ("Page.goto: net::ERR_CONNECTION_RESET", "browser network error: net::ERR_CONNECTION_RESET"),
+        ("Target page, context or browser has been closed", "browser target was closed"),
+        ("Frame was detached", "browser frame was detached"),
+        (
+            "Execution context was destroyed, most likely because of a navigation",
+            "browser execution context was destroyed",
+        ),
+        ("net::ERR_PRIVATE_TOKEN", "browser operation failed"),
+    ],
+)
+def test_fetch_article_text_logs_allowlisted_browser_causes_without_secrets(
+    caplog, browser_cause, expected_description
+):
+    browser = FakePage([FakeGroup("/a/post", [])])
+    failed = FakeArticlePage(
+        goto_error=RuntimeError(
+            f"{browser_cause} at https://dzen.ru/a/private?token=private-token"
+            "#private-fragment private-author private comment text"
+            " selector [data-author=private-author] credential=private-secret"
+        )
+    )
+    browser.context.article_pages = [failed]
+    page = DzenStudioPage(browser)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        assert page.fetch_article_text(
+            "https://dzen.ru/a/private?token=private-token#private-fragment"
+        ) is None
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "article_text_fetch_failed"
+    )
+    assert record.failure_stage == "article_navigation"
+    assert record.failure_reason == "navigation_exception"
+    assert record.failure_description == expected_description
+    serialized = StructuredFormatter().format(record)
+    for secret in (
+        "private-token",
+        "private-fragment",
+        "private-author",
+        "private comment text",
+        "data-author",
+        "private-secret",
+        "https://",
+        "ERR_PRIVATE_TOKEN",
+    ):
+        assert secret not in serialized
+
+
 def test_fetch_article_text_logs_http_error_without_changing_extraction(caplog):
     browser = FakePage([FakeGroup("/a/post", [])])
     article_page = FakeArticlePage(article_text="private article text", goto_status=503)

@@ -69,6 +69,53 @@ _SAFE_LOOKUP_EXCEPTION_DETAIL_RE = re.compile(
     r"not\s+found|invalid|rejected|aborted|exceeded|error))\b",
     re.IGNORECASE,
 )
+_SAFE_BROWSER_NETWORK_ERRORS = frozenset(
+    {
+        "ERR_ABORTED",
+        "ERR_BLOCKED_BY_CLIENT",
+        "ERR_CERT_AUTHORITY_INVALID",
+        "ERR_CERT_COMMON_NAME_INVALID",
+        "ERR_CONNECTION_CLOSED",
+        "ERR_CONNECTION_REFUSED",
+        "ERR_CONNECTION_RESET",
+        "ERR_INTERNET_DISCONNECTED",
+        "ERR_NAME_NOT_RESOLVED",
+        "ERR_NETWORK_CHANGED",
+        "ERR_PROXY_CONNECTION_FAILED",
+        "ERR_SSL_PROTOCOL_ERROR",
+        "ERR_TIMED_OUT",
+        "ERR_TUNNEL_CONNECTION_FAILED",
+    }
+)
+_SAFE_BROWSER_NETWORK_ERROR_RE = re.compile(r"\bnet::(ERR_[A-Z0-9_]+)\b", re.IGNORECASE)
+_SAFE_BROWSER_TARGET_CLOSED_RE = re.compile(
+    r"\b(?:target page,\s*context\s+or\s+browser|target page|browser context|"
+    r"target|browser|context|page)(?:\s+(?:has been|was|is))?\s+closed\b",
+    re.IGNORECASE,
+)
+_SAFE_BROWSER_FRAME_DETACHED_RE = re.compile(
+    r"\b(?:frame\s+(?:(?:was|has been|is)\s+)?detached|detached\s+frame)\b",
+    re.IGNORECASE,
+)
+_SAFE_BROWSER_EXECUTION_CONTEXT_DESTROYED_RE = re.compile(
+    r"\bexecution\s+context\s+(?:(?:was|has been|is)\s+)?destroyed\b",
+    re.IGNORECASE,
+)
+
+
+def _safe_browser_exception_cause(message: str) -> str | None:
+    network_error = _SAFE_BROWSER_NETWORK_ERROR_RE.search(message)
+    if network_error:
+        code = network_error.group(1).upper()
+        if code in _SAFE_BROWSER_NETWORK_ERRORS:
+            return f"browser network error: net::{code}"
+    if _SAFE_BROWSER_TARGET_CLOSED_RE.search(message):
+        return "browser target was closed"
+    if _SAFE_BROWSER_FRAME_DETACHED_RE.search(message):
+        return "browser frame was detached"
+    if _SAFE_BROWSER_EXECUTION_CONTEXT_DESTROYED_RE.search(message):
+        return "browser execution context was destroyed"
+    return None
 
 
 def _safe_exception_fields(exc: Exception) -> dict[str, str]:
@@ -78,7 +125,10 @@ def _safe_exception_fields(exc: Exception) -> dict[str, str]:
         message = str(exc).casefold()
     except Exception:
         message = ""
-    if "timeout" in exception_name.casefold() or "timeout" in message:
+    safe_cause = _safe_browser_exception_cause(message)
+    if safe_cause:
+        description = safe_cause
+    elif "timeout" in exception_name.casefold() or "timeout" in message:
         description = "browser operation timed out"
     elif "navigation" in message:
         description = "browser navigation failed"
