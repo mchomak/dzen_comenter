@@ -26,13 +26,17 @@ def test_admin_starts_on_database_readiness_independently_of_bot_health():
     )
     app_section = compose.split("  app:\n", 1)[1].split("  admin:\n", 1)[0]
     admin_section = compose.split("  admin:\n", 1)[1].split("\n  postgres:\n", 1)[0]
+    postgres_section = compose.split("  postgres:\n", 1)[1]
 
     # The app entrypoint applies migrations; its healthcheck means worker-ready.
     assert "alembic upgrade head" in entrypoint
+    assert "RUN_DB_MIGRATIONS: ${RUN_DB_MIGRATIONS:-true}" in app_section
     assert "dzen_commenter.bot_health" in app_section
 
     # admin runs no alembic itself.
     assert "alembic" not in admin_section
+    assert "RUN_DB_MIGRATIONS" not in admin_section
+    assert "RUN_DB_MIGRATIONS" not in postgres_section
 
     # admin is independent of Dzen authentication and app readiness.
     assert "depends_on:\n      postgres:\n        condition: service_healthy" in admin_section

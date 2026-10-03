@@ -50,7 +50,9 @@ if [ "$headless_mode" = false ]; then
   websockify_pid=$!
 fi
 
-alembic upgrade head
+if [ "${RUN_DB_MIGRATIONS:-true}" != "false" ]; then
+  alembic upgrade head
+fi
 
 "$@" &
 app_pid=$!

@@ -16,7 +16,13 @@ def _shell_path(path: Path) -> str:
     return f"/mnt/{drive[0].lower()}{tail.replace(chr(92), '/') }"
 
 
-def test_headless_entrypoint_skips_display_and_vnc_helpers(tmp_path):
+@pytest.mark.parametrize(
+    ("migration_setting", "migration_runs"),
+    [(None, True), ("true", True), ("false", False)],
+)
+def test_headless_entrypoint_controls_migrations_and_returns_app_status(
+    tmp_path, migration_setting, migration_runs
+):
     bash = shutil.which("bash")
     if bash is None:
         pytest.skip("Bash is not installed")
@@ -35,8 +41,14 @@ def test_headless_entrypoint_skips_display_and_vnc_helpers(tmp_path):
     env = os.environ.copy()
     if os.name == "nt":
         fake_path = f"{_shell_path(fake_bin)}:/usr/bin:/bin"
+        migration_environment = (
+            f'export RUN_DB_MIGRATIONS="{migration_setting}"; '
+            if migration_setting is not None
+            else "unset RUN_DB_MIGRATIONS; "
+        )
         shell_command = (
             f'export PATH="{fake_path}" HEADLESS=true; '
+            f"{migration_environment}"
             f'exec "{_shell_path(ROOT / "docker" / "entrypoint.sh")}" '
             'bash -c "exit 7"'
         )
@@ -46,6 +58,9 @@ def test_headless_entrypoint_skips_display_and_vnc_helpers(tmp_path):
             f'exec "{ROOT / "docker" / "entrypoint.sh"}" bash -c "exit 7"'
         )
     env["HEADLESS"] = "true"
+    env.pop("RUN_DB_MIGRATIONS", None)
+    if migration_setting is not None:
+        env["RUN_DB_MIGRATIONS"] = migration_setting
     env.pop("DISPLAY", None)
     result = subprocess.run(
         [bash, "-c", shell_command],
@@ -55,7 +70,7 @@ def test_headless_entrypoint_skips_display_and_vnc_helpers(tmp_path):
     )
 
     assert result.returncode == 7, "entrypoint did not return the app process status"
-    assert "called:alembic" in result.stdout
+    assert ("called:alembic" in result.stdout) is migration_runs
     assert "called:Xvfb" not in result.stdout
     assert "called:xdpyinfo" not in result.stdout
     assert "called:x11vnc" not in result.stdout
