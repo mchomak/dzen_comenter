@@ -61,6 +61,64 @@ _STUDIO_CONFIRM_DELAY_MS = 2_000
 _SUBMIT_TRACE_LIMIT = 5
 
 
+def _safe_exception_fields(exc: Exception) -> dict[str, str]:
+    """Return exception diagnostics without copying its potentially sensitive text."""
+    exception_name = type(exc).__name__
+    try:
+        message = str(exc).casefold()
+    except Exception:
+        message = ""
+    if "timeout" in exception_name.casefold() or "timeout" in message:
+        description = "browser operation timed out"
+    elif "navigation" in message:
+        description = "browser navigation failed"
+    elif "connection" in message:
+        description = "browser connection failed"
+    else:
+        description = "browser operation failed"
+    return {
+        "failure_type": exception_name,
+        "failure_description": description,
+    }
+
+
+def _response_status(response: Any) -> int | None:
+    if response is None:
+        return None
+    try:
+        return int(response.status)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _publication_failure_location(exc: Exception) -> tuple[str, str]:
+    if isinstance(exc, SourceCommentUnavailableError):
+        return "studio_source_comment_search", "source_comment_not_found"
+    try:
+        message = str(exc).casefold()
+    except Exception:
+        message = ""
+    if "public article navigation failed" in message:
+        return "public_article_navigation", "navigation_exception"
+    if "public article comments did not load" in message:
+        return "public_comment_loading", "comments_not_loaded"
+    if "public article comments did not expand" in message:
+        return "public_comment_loading", "additional_comments_not_loaded"
+    if "public article replies did not expand" in message:
+        return "public_thread_expansion", "replies_not_expanded"
+    if "source comment not found in public article" in message:
+        return "public_source_comment_search", "source_comment_not_found"
+    if "not confirmed in public article" in message:
+        return "public_reply_confirmation", "reply_not_confirmed"
+    if "not confirmed in studio" in message:
+        return "studio_reply_confirmation", "reply_not_confirmed"
+    if "send button was not found" in message:
+        return "publication_controls", "send_button_not_found"
+    if "send button remained visible" in message:
+        return "publication_submit", "send_button_still_visible"
+    return "publication_action", "operation_failed"
+
+
 def _post_url(post_href: str) -> str | None:
     if post_href.startswith(_POST_PATH_PREFIXES):
         return f"https://dzen.ru{post_href}"
@@ -135,13 +193,82 @@ class DzenStudioPage:
             return self._article_text_by_url[post_url]
 
         article_page = self._page.context.new_page()
+        text = ""
+        navigation_failed = False
         try:
-            article_page.goto(post_url, wait_until="domcontentloaded")
-            text = self._extract_article_text(article_page)
-        except Exception:
-            text = ""
+            response = article_page.goto(post_url, wait_until="domcontentloaded")
+            http_status = _response_status(response)
+            if http_status is not None and http_status >= 400:
+                logger.info(
+                    "Dzen article navigation returned an unsuccessful HTTP status",
+                    extra={
+                        "event": "article_navigation_failed",
+                        "failure_stage": "article_navigation",
+                        "failure_reason": "http_status",
+                        "failure_type": "HTTPStatus",
+                        "failure_description": "navigation returned an unsuccessful HTTP status",
+                        "http_status": http_status,
+                        "navigation_result": "http_error",
+                    },
+                )
+            else:
+                logger.info(
+                    "Dzen article navigation completed",
+                    extra={
+                        "event": "article_navigation_completed",
+                        "http_status": http_status,
+                        "navigation_result": "completed",
+                    },
+                )
+            try:
+                text = self._extract_article_text(article_page)
+            except Exception as exc:
+                logger.info(
+                    "Failed to extract Dzen article text",
+                    extra={
+                        "event": "article_text_fetch_failed",
+                        "failure_stage": "article_text_extraction",
+                        "failure_reason": "article_text_extraction_failed",
+                        **_safe_exception_fields(exc),
+                        "http_status": http_status,
+                        "article_text_length": 0,
+                    },
+                )
+        except Exception as exc:
+            navigation_failed = True
+            logger.info(
+                "Failed to navigate to Dzen article",
+                extra={
+                    "event": "article_text_fetch_failed",
+                    "failure_stage": "article_navigation",
+                    "failure_reason": "navigation_exception",
+                    **_safe_exception_fields(exc),
+                    "navigation_result": "exception",
+                    "article_text_length": 0,
+                },
+            )
         finally:
             article_page.close()
+        if not text and not navigation_failed:
+            logger.info(
+                "Dzen article text was not found",
+                extra={
+                    "event": "article_text_fetch_failed",
+                    "failure_stage": "article_text_extraction",
+                    "failure_reason": "article_text_not_found",
+                    "failure_type": "ContentNotFound",
+                    "failure_description": "article text was empty or unavailable",
+                    "article_text_length": len(text),
+                },
+            )
+        elif text:
+            logger.info(
+                "Dzen article text extracted",
+                extra={
+                    "event": "article_text_fetch_completed",
+                    "article_text_length": len(text),
+                },
+            )
         self._article_text_by_url[post_url] = text or None
         return self._article_text_by_url[post_url]
 
@@ -200,46 +327,80 @@ class DzenStudioPage:
     def fetch_comments(self) -> list[Comment]:
         comments: list[Comment] = []
         now = moscow_now()
-        for group in self._page.query_selector_all(selectors.POST_GROUP):
-            post_href = _post_href(group)
-            if not post_href:
-                # dzen_comment_id hashes in post_href, so a comment scraped once
-                # with a real link and once with a failed extraction would get two
-                # different ids — a phantom duplicate with no post_url, potentially
-                # a duplicate reply. Skip the group; a later cycle retries it.
-                continue
-            title_el = group.query_selector(selectors.POST_TITLE)
-            publication_title = title_el.inner_text().strip() if title_el else ""
-            previous_messages: list[str] = []
-
-            for node in group.query_selector_all(selectors.COMMENT_NODE):
-                author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
-                author_href = author_link.get_attribute("href") or "" if author_link else ""
-                author_el = node.query_selector(selectors.COMMENT_AUTHOR_TEXT)
-                text_el = node.query_selector(selectors.COMMENT_TEXT)
-                date_el = node.query_selector(selectors.COMMENT_DATE_TEXT)
-                author = author_el.inner_text().strip() if author_el else ""
-                text = text_el.inner_text().strip() if text_el else ""
-                comments.append(
-                    Comment(
-                        id=None,
-                        dzen_comment_id=synthetic_id(post_href, author_href, text),
-                        publication_id=0,
-                        author=author,
-                        text=text,
-                        parent_comment_id=self._parent_comment_id(node, post_href),
-                        posted_at=parse_relative_time(
-                            date_el.inner_text() if date_el else None, now
-                        ),
-                        fetched_at=now,
-                        status=CommentStatus.NEW,
-                        publication_title=publication_title,
-                        thread_text="\n".join(previous_messages),
-                        post_url=_post_url(post_href),
+        skipped_missing_link_count = 0
+        try:
+            groups = self._page.query_selector_all(selectors.POST_GROUP)
+            for card_index, group in enumerate(groups, start=1):
+                post_href = _post_href(group)
+                if not post_href:
+                    # Keep the existing skip behavior: an unresolved link would
+                    # create an unstable synthetic comment id.
+                    skipped_missing_link_count += 1
+                    logger.info(
+                        "Skipped Dzen publication card without a recognized link",
+                        extra={
+                            "event": "studio_publication_skipped",
+                            "failure_stage": "studio_publication_link",
+                            "failure_reason": "post_link_not_found",
+                            "publication_card_index": card_index,
+                        },
                     )
-                )
-                if text:
-                    previous_messages.append(f"{author or 'Автор'}: {text}")
+                    continue
+                title_el = group.query_selector(selectors.POST_TITLE)
+                publication_title = title_el.inner_text().strip() if title_el else ""
+                previous_messages: list[str] = []
+
+                for node in group.query_selector_all(selectors.COMMENT_NODE):
+                    author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+                    author_href = author_link.get_attribute("href") or "" if author_link else ""
+                    author_el = node.query_selector(selectors.COMMENT_AUTHOR_TEXT)
+                    text_el = node.query_selector(selectors.COMMENT_TEXT)
+                    date_el = node.query_selector(selectors.COMMENT_DATE_TEXT)
+                    author = author_el.inner_text().strip() if author_el else ""
+                    text = text_el.inner_text().strip() if text_el else ""
+                    comments.append(
+                        Comment(
+                            id=None,
+                            dzen_comment_id=synthetic_id(post_href, author_href, text),
+                            publication_id=0,
+                            author=author,
+                            text=text,
+                            parent_comment_id=self._parent_comment_id(node, post_href),
+                            posted_at=parse_relative_time(
+                                date_el.inner_text() if date_el else None, now
+                            ),
+                            fetched_at=now,
+                            status=CommentStatus.NEW,
+                            publication_title=publication_title,
+                            thread_text="\n".join(previous_messages),
+                            post_url=_post_url(post_href),
+                        )
+                    )
+                    if text:
+                        previous_messages.append(f"{author or 'Автор'}: {text}")
+        except Exception as exc:
+            logger.info(
+                "Failed to read Dzen Studio feed and comments",
+                extra={
+                    "event": "studio_comments_read_failed",
+                    "failure_stage": "studio_feed_read",
+                    "failure_reason": "page_read_failed",
+                    **_safe_exception_fields(exc),
+                    "publication_card_count": len(groups) if "groups" in locals() else 0,
+                    "comments_extracted": len(comments),
+                    "skipped_missing_link_count": skipped_missing_link_count,
+                },
+            )
+            raise
+        logger.info(
+            "Read Dzen Studio feed and comments",
+            extra={
+                "event": "studio_comments_read_completed",
+                "publication_card_count": len(groups),
+                "comments_extracted": len(comments),
+                "skipped_missing_link_count": skipped_missing_link_count,
+            },
+        )
         return comments
 
     @staticmethod
@@ -283,10 +444,7 @@ class DzenStudioPage:
         auto_publish: bool,
         reply_id: int | None = None,
     ) -> None:
-        correlation = {
-            "comment_id": comment.dzen_comment_id,
-            "reply_id": reply_id,
-        }
+        correlation = {"reply_id": reply_id}
         logger.info(
             "Dzen publication action started",
             extra={
@@ -303,12 +461,15 @@ class DzenStudioPage:
                 reply_id=reply_id,
             )
         except Exception as exc:
+            failure_stage, failure_reason = _publication_failure_location(exc)
             logger.info(
                 "Dzen publication action failed",
                 extra={
                     "event": "publication_action_failed",
                     **correlation,
-                    "failure_type": type(exc).__name__,
+                    "failure_stage": failure_stage,
+                    "failure_reason": failure_reason,
+                    **_safe_exception_fields(exc),
                 },
             )
             raise
@@ -321,10 +482,7 @@ class DzenStudioPage:
         auto_publish: bool,
         reply_id: int | None,
     ) -> None:
-        correlation = {
-            "comment_id": comment.dzen_comment_id,
-            "reply_id": reply_id,
-        }
+        correlation = {"reply_id": reply_id}
         logger.info(
             "Searching for Dzen source comment",
             extra={
@@ -333,18 +491,8 @@ class DzenStudioPage:
             },
         )
         node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
-        logger.info(
-            "Dzen source comment search completed",
-            extra={
-                "event": "publication_source_comment_search_completed",
-                **correlation,
-                "result": "found" if node is not None else "not_found",
-            },
-        )
         if node is None:
-            raise SourceCommentUnavailableError(
-                f"comment {comment.dzen_comment_id!r} not found on page for reply"
-            )
+            raise SourceCommentUnavailableError("source comment not found on Studio page")
 
         if auto_publish and self._has_published_reply(node, text):
             logger.info(
@@ -362,22 +510,32 @@ class DzenStudioPage:
             )
             try:
                 public_visible = self._verify_public_reply(
-                    comment, text, source_author_href, comment.author
+                    comment, text, source_author_href, comment.author, reply_id=reply_id
                 )
             except Exception as exc:
+                failure_stage, failure_reason = _publication_failure_location(exc)
                 logger.info(
                     "Dzen public article verification failed",
                     extra={
                         "event": "publication_article_verification_failed",
                         **correlation,
-                        "failure_type": type(exc).__name__,
+                        "failure_stage": failure_stage,
+                        "failure_reason": failure_reason,
+                        **_safe_exception_fields(exc),
                     },
                 )
                 raise
             if not public_visible:
                 logger.info(
                     "Existing Dzen reply was not confirmed in public article",
-                    extra={"event": "publication_article_verification_failed", **correlation},
+                    extra={
+                        "event": "publication_article_verification_failed",
+                        **correlation,
+                        "failure_stage": "public_reply_confirmation",
+                        "failure_reason": "reply_not_confirmed",
+                        "failure_type": "ReplyNotConfirmed",
+                        "failure_description": "reply was not visible in the public article",
+                    },
                 )
                 raise RuntimeError("reply not confirmed in public article")
             logger.info(
@@ -397,14 +555,18 @@ class DzenStudioPage:
                 already_public = self._verify_public_reply(
                     comment, text, source_author_href, comment.author,
                     wait_for_reply=False,
+                    reply_id=reply_id,
                 )
             except Exception as exc:
+                failure_stage, failure_reason = _publication_failure_location(exc)
                 logger.info(
                     "Public article preflight failed before Dzen reply submit",
                     extra={
                         "event": "publication_public_preflight_failed",
                         **correlation,
-                        "failure_type": type(exc).__name__,
+                        "failure_stage": failure_stage,
+                        "failure_reason": failure_reason,
+                        **_safe_exception_fields(exc),
                     },
                 )
                 raise
@@ -424,7 +586,6 @@ class DzenStudioPage:
                 node,
                 text,
                 auto_publish=False,
-                comment_id=comment.dzen_comment_id,
                 reply_id=reply_id,
             )
             logger.info(
@@ -515,7 +676,6 @@ class DzenStudioPage:
                 text,
                 auto_publish=True,
                 submission_started=submission_started,
-                comment_id=comment.dzen_comment_id,
                 reply_id=reply_id,
             )
             logger.info(
@@ -568,7 +728,16 @@ class DzenStudioPage:
             if not reply_visible:
                 logger.info(
                     "Dzen reply was not confirmed in Studio",
-                    extra={"event": "publication_studio_verification_failed", **correlation},
+                    extra={
+                        "event": "publication_studio_verification_failed",
+                        **correlation,
+                        "failure_stage": "studio_reply_confirmation",
+                        "failure_reason": "reply_not_confirmed",
+                        "failure_type": "ReplyNotConfirmed",
+                        "failure_description": "reply was not visible in Studio after waiting",
+                        "poll_count": _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS + 1,
+                        "source_found": node is not None,
+                    },
                 )
                 outcomes = ", ".join(
                     f"{item['method']} {item['host']} "
@@ -591,22 +760,32 @@ class DzenStudioPage:
             )
             try:
                 public_visible = self._verify_public_reply(
-                    comment, text, source_author_href, comment.author
+                    comment, text, source_author_href, comment.author, reply_id=reply_id
                 )
             except Exception as exc:
+                failure_stage, failure_reason = _publication_failure_location(exc)
                 logger.info(
                     "Dzen public article verification failed",
                     extra={
                         "event": "publication_article_verification_failed",
                         **correlation,
-                        "failure_type": type(exc).__name__,
+                        "failure_stage": failure_stage,
+                        "failure_reason": failure_reason,
+                        **_safe_exception_fields(exc),
                     },
                 )
                 raise
             if not public_visible:
                 logger.info(
                     "Dzen reply was not confirmed in public article",
-                    extra={"event": "publication_article_verification_failed", **correlation},
+                    extra={
+                        "event": "publication_article_verification_failed",
+                        **correlation,
+                        "failure_stage": "public_reply_confirmation",
+                        "failure_reason": "reply_not_confirmed",
+                        "failure_type": "ReplyNotConfirmed",
+                        "failure_description": "reply was not visible in the public article",
+                    },
                 )
                 raise RuntimeError("reply not confirmed in public article")
             logger.info(
@@ -625,6 +804,7 @@ class DzenStudioPage:
         source_author: str = "",
         *,
         wait_for_reply: bool = True,
+        reply_id: int | None = None,
     ) -> bool:
         """Confirm the reply inside its source comment on the public article."""
         post_url = _post_url(comment.post_url or "")
@@ -635,29 +815,67 @@ class DzenStudioPage:
             raise RuntimeError("public article verification requires a bot author")
 
         article_page = self._page.context.new_page()
+        navigation_status = None
+        navigation_attempt_count = 0
         try:
             for attempt in range(1, _PUBLIC_NAVIGATION_ATTEMPTS + 1):
+                navigation_attempt_count = attempt
                 try:
-                    article_page.goto(
+                    response = article_page.goto(
                         post_url,
                         wait_until="commit",
                         timeout=_PUBLIC_NAVIGATION_TIMEOUT_MS,
                     )
-                    break
                 except Exception as exc:
                     logger.info(
                         "Public article navigation attempt failed",
                         extra={
                             "event": "publication_article_navigation_retry",
-                            "comment_id": comment.dzen_comment_id,
                             "attempt": attempt,
-                            "failure_type": type(exc).__name__,
+                            "reply_id": reply_id,
+                            "navigation_attempt_count": attempt,
+                            "navigation_result": "exception",
+                            "failure_stage": "public_article_navigation",
+                            "failure_reason": "navigation_exception",
+                            **_safe_exception_fields(exc),
                         },
                     )
                     if attempt == _PUBLIC_NAVIGATION_ATTEMPTS:
                         raise RuntimeError("public article navigation failed") from exc
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                    continue
+                navigation_status = _response_status(response)
+                if navigation_status is not None and navigation_status >= 400:
+                    logger.info(
+                        "Public article navigation returned an unsuccessful HTTP status",
+                        extra={
+                            "event": "publication_article_navigation_failed",
+                            "failure_stage": "public_article_navigation",
+                            "failure_reason": "http_status",
+                            "failure_type": "HTTPStatus",
+                            "failure_description": "navigation returned an unsuccessful HTTP status",
+                            "navigation_attempt_count": attempt,
+                            "reply_id": reply_id,
+                            "navigation_result": "http_error",
+                            "http_status": navigation_status,
+                        },
+                    )
+                else:
+                    logger.info(
+                        "Public article navigation completed",
+                        extra={
+                            "event": "publication_article_navigation_completed",
+                            "navigation_attempt_count": attempt,
+                            "reply_id": reply_id,
+                            "navigation_result": "completed",
+                            "http_status": navigation_status,
+                        },
+                    )
+                break
+            comment_wait_count = 0
+            last_loading_exception = None
             for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                comment_wait_count += 1
                 try:
                     article_page.evaluate(
                         "window.scrollTo(0, document.body?.scrollHeight || 0)"
@@ -666,11 +884,45 @@ class DzenStudioPage:
                     if comments is not None:
                         comments.scroll_into_view_if_needed()
                         break
-                except Exception:
+                except Exception as exc:
+                    last_loading_exception = exc
                     pass  # The document may still be loading after navigation commit.
                 article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
             else:
+                failure_details = (
+                    _safe_exception_fields(last_loading_exception)
+                    if last_loading_exception is not None
+                    else {
+                        "failure_type": "WaitTimeout",
+                        "failure_description": "public comments did not load within the wait limit",
+                    }
+                )
+                logger.info(
+                    "Public article comments did not load",
+                    extra={
+                        "event": "publication_article_comments_failed",
+                        "failure_stage": "public_comment_loading",
+                        "failure_reason": "comments_not_loaded",
+                        **failure_details,
+                        "navigation_attempt_count": navigation_attempt_count,
+                        "reply_id": reply_id,
+                        "navigation_result": "http_error" if navigation_status is not None and navigation_status >= 400 else "completed",
+                        "http_status": navigation_status,
+                        "wait_count": comment_wait_count,
+                    },
+                )
                 raise RuntimeError("public article comments did not load")
+            logger.info(
+                "Public article comments loaded",
+                extra={
+                    "event": "publication_article_comments_loaded",
+                    "navigation_attempt_count": navigation_attempt_count,
+                    "reply_id": reply_id,
+                    "navigation_result": "http_error" if navigation_status is not None and navigation_status >= 400 else "completed",
+                    "http_status": navigation_status,
+                    "wait_count": comment_wait_count,
+                },
+            )
 
             sort_button = article_page.query_selector(selectors.ARTICLE_SORT)
             if sort_button is not None:
@@ -692,15 +944,19 @@ class DzenStudioPage:
                                 "Sorted public article comments by newest",
                                 extra={
                                     "event": "publication_article_sorted_newest",
-                                    "comment_id": comment.dzen_comment_id,
+                                    "navigation_attempt_count": navigation_attempt_count,
+                                    "reply_id": reply_id,
                                 },
                             )
-                except Exception:
+                except Exception as exc:
                     logger.info(
                         "Public article sort option was unavailable",
                         extra={
                             "event": "publication_article_sort_unavailable",
-                            "comment_id": comment.dzen_comment_id,
+                            "failure_stage": "public_comment_sort",
+                            "failure_reason": "sort_unavailable",
+                            "reply_id": reply_id,
+                            **_safe_exception_fields(exc),
                         },
                     )
 
@@ -709,17 +965,29 @@ class DzenStudioPage:
             source_href = urlsplit(source_author_href).path.rstrip("/")
             source_name = " ".join((source_author or comment.author).split()).casefold()
             load = 0
+            load_more_click_attempt_count = 0
             empty_polls = 0
+            roots_checked = 0
+            candidates_checked = 0
+            candidate_read_failure_count = 0
+            branch_expansion_attempt_count = 0
+            branch_expansion_click_count = 0
+            branch_expansion_count = 0
+            branch_expansion_wait_count = 0
+            reply_confirmation_wait_count = 0
             while True:
                 roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
+                roots_checked += len(roots)
                 for index, root in enumerate(roots):
                     try:
                         data = self._read_public_comment(root)
                     except Exception:
+                        candidate_read_failure_count += 1
                         continue  # React can replace a comment while it renders.
                     if data is None:
                         continue
                     candidates = [data, *data["replies"]]
+                    candidates_checked += len(candidates)
                     source = next(
                         (
                             candidate for candidate in candidates
@@ -734,8 +1002,12 @@ class DzenStudioPage:
                             expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
                             if expand is not None and "Свернуть" not in expand.inner_text():
                                 previous_reply_count = len(data["replies"])
+                                branch_expansion_attempt_count += 1
                                 expand.click()
+                                branch_expansion_click_count += 1
+                                expansion_observed = False
                                 for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                                    branch_expansion_wait_count += 1
                                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                                     current_roots = article_page.query_selector_all(
                                         selectors.ARTICLE_ROOT_COMMENT
@@ -755,8 +1027,41 @@ class DzenStudioPage:
                                         None,
                                     )
                                     if source is not None or len(data["replies"]) > previous_reply_count:
+                                        expansion_observed = True
                                         break
-                        except Exception:
+                                if expansion_observed:
+                                    branch_expansion_count += 1
+                                else:
+                                    logger.info(
+                                        "Public article comment branch did not expand",
+                                        extra={
+                                            "event": "publication_article_branch_expansion_failed",
+                                            "reply_id": reply_id,
+                                            "failure_stage": "public_thread_expansion",
+                                            "failure_reason": "replies_not_expanded",
+                                            "failure_type": "ExpansionTimeout",
+                                            "failure_description": "reply count did not increase after expanding the branch",
+                                            "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                                            "branch_expansion_click_count": branch_expansion_click_count,
+                                            "branch_expansion_count": branch_expansion_count,
+                                            "wait_count": _PUBLIC_COMMENT_POLL_LIMIT,
+                                        },
+                                    )
+                        except Exception as exc:
+                            logger.info(
+                                "Public article comment branch expansion failed",
+                                extra={
+                                    "event": "publication_article_branch_expansion_failed",
+                                    "reply_id": reply_id,
+                                    "failure_stage": "public_thread_expansion",
+                                    "failure_reason": "branch_expansion_exception",
+                                    **_safe_exception_fields(exc),
+                                    "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                                    "branch_expansion_click_count": branch_expansion_click_count,
+                                    "branch_expansion_count": branch_expansion_count,
+                                    "wait_count": branch_expansion_wait_count,
+                                },
+                            )
                             article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     if source is None:
                         continue
@@ -764,8 +1069,13 @@ class DzenStudioPage:
                         "Found source comment in public article",
                         extra={
                             "event": "publication_article_source_found",
-                            "comment_id": comment.dzen_comment_id,
-                            "load": load,
+                            "reply_id": reply_id,
+                            "load_more_click_count": load,
+                            "roots_checked": roots_checked,
+                            "candidates_checked": candidates_checked,
+                            "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                            "branch_expansion_click_count": branch_expansion_click_count,
+                            "branch_expansion_count": branch_expansion_count,
                             "source_kind": "root" if source is data else "child",
                         },
                     )
@@ -776,14 +1086,19 @@ class DzenStudioPage:
                     for poll in range(poll_limit + 1):
                         current_roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
                         if index >= len(current_roots):
+                            reply_confirmation_wait_count += 1
                             article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                             continue
                         root = current_roots[index]
                         try:
                             data = self._read_public_comment(root)
                         except Exception:
+                            candidate_read_failure_count += 1
+                            reply_confirmation_wait_count += 1
                             article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                             continue
+                        reply_candidates = data["replies"] if data is not None else []
+                        candidates_checked += len(reply_candidates)
                         if data is not None and any(
                             is_bot_account_author(reply["author"], account_name)
                             and " ".join(reply["text"].split()) == expected_reply_text
@@ -798,22 +1113,82 @@ class DzenStudioPage:
                                 "Found matching child reply in public article",
                                 extra={
                                     "event": "publication_article_reply_found",
-                                    "comment_id": comment.dzen_comment_id,
+                                    "reply_id": reply_id,
                                     "poll": poll + 1,
+                                    "candidates_checked": candidates_checked,
+                                    "reply_confirmation_wait_count": reply_confirmation_wait_count,
+                                    "load_more_click_count": load,
                                 },
                             )
                             return True
                         try:
                             expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
                             if expand is not None and "Свернуть" not in expand.inner_text():
+                                branch_expansion_attempt_count += 1
                                 expand.click()
-                        except Exception:
+                                branch_expansion_click_count += 1
+                                branch_expansion_wait_count += 1
+                        except Exception as exc:
+                            logger.info(
+                                "Public article reply branch expansion failed",
+                                extra={
+                                    "event": "publication_article_branch_expansion_failed",
+                                    "reply_id": reply_id,
+                                    "failure_stage": "public_thread_expansion",
+                                    "failure_reason": "branch_expansion_exception",
+                                    **_safe_exception_fields(exc),
+                                    "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                                    "branch_expansion_click_count": branch_expansion_click_count,
+                                    "branch_expansion_count": branch_expansion_count,
+                                    "wait_count": branch_expansion_wait_count,
+                                },
+                            )
                             pass  # Re-query the comment after a transient DOM replacement.
                         if poll < poll_limit:
+                            reply_confirmation_wait_count += 1
                             article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
                     if expand is not None and "Свернуть" not in expand.inner_text():
+                        logger.info(
+                            "Public article reply branch did not expand",
+                            extra={
+                                "event": "publication_article_branch_expansion_failed",
+                                "reply_id": reply_id,
+                                "failure_stage": "public_thread_expansion",
+                                "failure_reason": "replies_not_expanded",
+                                "failure_type": "ExpansionTimeout",
+                                "failure_description": "reply branch remained collapsed after waiting",
+                                "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                                "branch_expansion_click_count": branch_expansion_click_count,
+                                "branch_expansion_count": branch_expansion_count,
+                                "wait_count": reply_confirmation_wait_count,
+                                "candidates_checked": candidates_checked,
+                            },
+                        )
                         raise RuntimeError("public article replies did not expand")
+                    logger.info(
+                        "Public article reply check completed",
+                        extra={
+                            "event": "publication_article_reply_check_completed",
+                            "result": "not_found",
+                            "reply_id": reply_id,
+                            **(
+                                {
+                                    "failure_stage": "public_reply_confirmation",
+                                    "failure_reason": "reply_not_confirmed",
+                                    "failure_type": "ReplyNotConfirmed",
+                                    "failure_description": "matching reply was not visible after waiting",
+                                }
+                                if wait_for_reply else {}
+                            ),
+                            "candidates_checked": candidates_checked,
+                            "reply_confirmation_wait_count": reply_confirmation_wait_count,
+                            "load_more_click_count": load,
+                            "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                            "branch_expansion_click_count": branch_expansion_click_count,
+                            "branch_expansion_count": branch_expansion_count,
+                        },
+                    )
                     return False
 
                 more = article_page.query_selector(selectors.ARTICLE_MORE_COMMENTS)
@@ -826,28 +1201,80 @@ class DzenStudioPage:
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     continue
                 previous_count = len(roots)
-                more.click()
+                load_more_click_attempt_count += 1
+                try:
+                    more.click()
+                except Exception as exc:
+                    logger.info(
+                        "Failed to click load-more comments control",
+                        extra={
+                            "event": "publication_article_more_comments_failed",
+                            "reply_id": reply_id,
+                            "failure_stage": "public_comment_loading",
+                            "failure_reason": "load_more_click_failed",
+                            **_safe_exception_fields(exc),
+                            "load_more_click_count": load,
+                            "load_more_click_attempt_count": load_more_click_attempt_count,
+                            "roots_checked": roots_checked,
+                        },
+                    )
+                    raise
                 load += 1
                 logger.info(
                     "Loaded more public article comments",
                     extra={
                         "event": "publication_article_more_comments_clicked",
-                        "comment_id": comment.dzen_comment_id,
-                        "load": load,
+                        "reply_id": reply_id,
+                        "load_more_click_count": load,
+                        "load_more_click_attempt_count": load_more_click_attempt_count,
+                        "roots_checked": roots_checked,
                     },
                 )
+                load_wait_count = 0
                 for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                    load_wait_count += 1
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     if len(article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)) > previous_count:
                         empty_polls = 0
                         break
                 else:
+                    logger.info(
+                        "Additional public article comments did not load",
+                        extra={
+                            "event": "publication_article_more_comments_failed",
+                            "reply_id": reply_id,
+                            "failure_stage": "public_comment_loading",
+                            "failure_reason": "additional_comments_not_loaded",
+                            "failure_type": "WaitTimeout",
+                            "failure_description": "comment count did not increase after clicking load more",
+                            "load_more_click_count": load,
+                            "load_more_click_attempt_count": load_more_click_attempt_count,
+                            "roots_checked": roots_checked,
+                            "wait_count": load_wait_count,
+                        },
+                    )
                     raise RuntimeError("public article comments did not expand")
             logger.info(
                 "Source comment was not found in public article",
                 extra={
                     "event": "publication_article_source_missing",
-                    "comment_id": comment.dzen_comment_id,
+                    "reply_id": reply_id,
+                    "failure_stage": "public_source_comment_search",
+                    "failure_reason": "source_comment_not_found",
+                    "failure_type": "SourceCommentUnavailableError",
+                    "failure_description": "source comment was not found after loading public comments",
+                    "navigation_attempt_count": navigation_attempt_count,
+                    "navigation_result": "http_error" if navigation_status is not None and navigation_status >= 400 else "completed",
+                    "http_status": navigation_status,
+                    "roots_checked": roots_checked,
+                    "candidates_checked": candidates_checked,
+                    "candidate_read_failure_count": candidate_read_failure_count,
+                    "load_more_click_count": load,
+                    "load_more_click_attempt_count": load_more_click_attempt_count,
+                    "branch_expansion_attempt_count": branch_expansion_attempt_count,
+                    "branch_expansion_click_count": branch_expansion_click_count,
+                    "branch_expansion_count": branch_expansion_count,
+                    "wait_count": empty_polls,
                 },
             )
             raise RuntimeError("source comment not found in public article")
@@ -943,17 +1370,51 @@ class DzenStudioPage:
             return "invalid_response"
 
     def _find_comment_node_with_scroll(self, comment_id: str):
-        node, _ = self._find_comment_node(comment_id)
+        node, pass_candidate_count = self._find_comment_node(comment_id)
+        candidates_checked = pass_candidate_count
+        scroll_attempt_count = 0
         if node is not None:
+            logger.info(
+                "Dzen source comment search completed",
+                extra={
+                    "event": "publication_source_comment_search_completed",
+                    "result": "found",
+                    "scroll_attempt_count": scroll_attempt_count,
+                    "candidates_checked": candidates_checked,
+                },
+            )
             return node
 
         try:
-            for _ in range(_REPLY_SEARCH_MAX_SCROLLS):
+            for scroll_attempt_count in range(1, _REPLY_SEARCH_MAX_SCROLLS + 1):
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                node, _ = self._find_comment_node(comment_id)
+                node, pass_candidate_count = self._find_comment_node(comment_id)
+                candidates_checked += pass_candidate_count
                 if node is not None:
+                    logger.info(
+                        "Dzen source comment search completed",
+                        extra={
+                            "event": "publication_source_comment_search_completed",
+                            "result": "found",
+                            "scroll_attempt_count": scroll_attempt_count,
+                            "candidates_checked": candidates_checked,
+                        },
+                    )
                     return node
+            logger.info(
+                "Dzen source comment search completed",
+                extra={
+                    "event": "publication_source_comment_search_completed",
+                    "result": "not_found",
+                    "failure_stage": "studio_source_comment_search",
+                    "failure_reason": "source_comment_not_found",
+                    "failure_type": "SourceCommentUnavailableError",
+                    "failure_description": "source comment was not found after scrolling",
+                    "scroll_attempt_count": scroll_attempt_count,
+                    "candidates_checked": candidates_checked,
+                },
+            )
             return None
         finally:
             try:
@@ -1043,17 +1504,17 @@ class DzenStudioPage:
         raise RuntimeError("source comment thread is uninspectable: replies did not expand")
 
     def _find_comment_node(self, comment_id: str):
-        seen_ids: set[str] = set()
+        candidates_checked = 0
         for node, post_href in self._iter_comment_nodes():
+            candidates_checked += 1
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
             author_href = author_link.get_attribute("href") or "" if author_link else ""
             text_el = node.query_selector(selectors.COMMENT_TEXT)
             node_text = text_el.inner_text() if text_el else ""
             node_id = synthetic_id(post_href, author_href, node_text)
-            seen_ids.add(node_id)
             if node_id == comment_id:
-                return node, seen_ids
-        return None, seen_ids
+                return node, candidates_checked
+        return None, candidates_checked
 
     def _submit_reply(
         self,
@@ -1062,10 +1523,9 @@ class DzenStudioPage:
         *,
         auto_publish: bool,
         submission_started: Callable[[], bool] | None = None,
-        comment_id: str,
         reply_id: int | None,
     ) -> None:
-        correlation = {"comment_id": comment_id, "reply_id": reply_id}
+        correlation = {"reply_id": reply_id}
         reply_button = node.query_selector(selectors.COMMENT_REPLY_BUTTON)
         logger.info(
             "Dzen reply button search completed",
@@ -1073,10 +1533,58 @@ class DzenStudioPage:
                 "event": "publication_reply_button_search",
                 **correlation,
                 "result": "found" if reply_button is not None else "missing",
+                **(
+                    {
+                        "failure_stage": "publication_controls",
+                        "failure_reason": "reply_button_not_found",
+                        "failure_type": "ControlNotFound",
+                        "failure_description": "reply button was not present",
+                    }
+                    if reply_button is None else {}
+                ),
             },
         )
-        reply_button.click()
-        node.query_selector(selectors.REPLY_INPUT).fill(text)
+        try:
+            reply_button.click()
+        except Exception as exc:
+            logger.info(
+                "Dzen reply button click failed",
+                extra={
+                    "event": "publication_reply_button_failed",
+                    **correlation,
+                    "failure_stage": "publication_controls",
+                    "failure_reason": "reply_button_click_failed",
+                    **_safe_exception_fields(exc),
+                },
+            )
+            raise
+        reply_input = node.query_selector(selectors.REPLY_INPUT)
+        if reply_input is None:
+            logger.info(
+                "Dzen reply input was not found",
+                extra={
+                    "event": "publication_reply_input_failed",
+                    **correlation,
+                    "failure_stage": "publication_controls",
+                    "failure_reason": "reply_input_not_found",
+                    "failure_type": "ControlNotFound",
+                    "failure_description": "reply input was not present",
+                },
+            )
+        try:
+            reply_input.fill(text)
+        except Exception as exc:
+            logger.info(
+                "Dzen reply input fill failed",
+                extra={
+                    "event": "publication_reply_input_failed",
+                    **correlation,
+                    "failure_stage": "publication_controls",
+                    "failure_reason": "reply_input_fill_failed",
+                    **_safe_exception_fields(exc),
+                },
+            )
+            raise
         if auto_publish:
             send_button = node.query_selector(selectors.REPLY_SUBMIT)
             logger.info(
@@ -1086,6 +1594,15 @@ class DzenStudioPage:
                     **correlation,
                     "attempt": 1,
                     "result": "found" if send_button is not None else "missing",
+                    **(
+                        {
+                            "failure_stage": "publication_controls",
+                            "failure_reason": "send_button_not_found",
+                            "failure_type": "ControlNotFound",
+                            "failure_description": "send button was not present",
+                        }
+                        if send_button is None else {}
+                    ),
                 },
             )
             if send_button is None:
@@ -1098,9 +1615,23 @@ class DzenStudioPage:
                     "attempt": 1,
                 },
             )
-            send_button.click()
+            try:
+                send_button.click()
+            except Exception as exc:
+                logger.info(
+                    "Dzen reply submit click failed",
+                    extra={
+                        "event": "publication_submit_failed",
+                        **correlation,
+                        "failure_stage": "publication_submit",
+                        "failure_reason": "submit_exception",
+                        "attempt": 1,
+                        **_safe_exception_fields(exc),
+                    },
+                )
+                raise
             if self._wait_for_send_button_to_hide(
-                node, wait_attempt=1, comment_id=comment_id, reply_id=reply_id
+                node, wait_attempt=1, reply_id=reply_id
             ):
                 return
 
@@ -1113,6 +1644,15 @@ class DzenStudioPage:
                         **correlation,
                         "attempt": 2,
                         "result": "found" if send_button is not None else "missing",
+                    **(
+                        {
+                            "failure_stage": "publication_controls",
+                            "failure_reason": "send_button_not_found",
+                            "failure_type": "ControlNotFound",
+                            "failure_description": "send button was not present",
+                        }
+                        if send_button is None else {}
+                    ),
                     },
                 )
                 if send_button is not None and send_button.is_visible():
@@ -1124,10 +1664,24 @@ class DzenStudioPage:
                             "attempt": 2,
                         },
                     )
-                    send_button.click()
+                    try:
+                        send_button.click()
+                    except Exception as exc:
+                        logger.info(
+                            "Dzen reply submit click failed",
+                            extra={
+                                "event": "publication_submit_failed",
+                                **correlation,
+                                "failure_stage": "publication_submit",
+                                "failure_reason": "submit_exception",
+                                "attempt": 2,
+                                **_safe_exception_fields(exc),
+                            },
+                        )
+                        raise
 
             if not self._wait_for_send_button_to_hide(
-                node, wait_attempt=2, comment_id=comment_id, reply_id=reply_id
+                node, wait_attempt=2, reply_id=reply_id
             ):
                 raise RuntimeError(
                     "Dzen reply send button remained visible after submit; page was not reloaded"
@@ -1140,7 +1694,6 @@ class DzenStudioPage:
         node: Any,
         *,
         wait_attempt: int,
-        comment_id: str,
         reply_id: int | None,
     ) -> bool:
         for _ in range(
@@ -1152,7 +1705,6 @@ class DzenStudioPage:
                     "Dzen send button visibility wait completed",
                     extra={
                         "event": "publication_send_button_wait",
-                        "comment_id": comment_id,
                         "reply_id": reply_id,
                         "attempt": wait_attempt,
                         "result": "hidden",
@@ -1166,10 +1718,18 @@ class DzenStudioPage:
             "Dzen send button visibility wait completed",
             extra={
                 "event": "publication_send_button_wait",
-                "comment_id": comment_id,
                 "reply_id": reply_id,
                 "attempt": wait_attempt,
                 "result": "hidden" if hidden else "still_visible",
+                **(
+                    {
+                        "failure_stage": "publication_submit",
+                        "failure_reason": "send_button_still_visible",
+                        "failure_type": "SubmitAcknowledgmentTimeout",
+                        "failure_description": "send button stayed visible after submit",
+                    }
+                    if not hidden else {}
+                ),
             },
         )
         return hidden

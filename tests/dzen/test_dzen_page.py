@@ -207,6 +207,11 @@ class FakeBrowserContext:
         return self.article_pages.pop(0)
 
 
+class FakeResponse:
+    def __init__(self, status: int) -> None:
+        self.status = status
+
+
 class FakeArticlePage:
     def __init__(
         self,
@@ -215,6 +220,8 @@ class FakeArticlePage:
         article_content: dict | None = None,
         goto_error: Exception | None = None,
         goto_errors: list[Exception | None] | None = None,
+        goto_status: int | None = None,
+        comments_available: bool = True,
         public_roots: list | None = None,
         hidden_roots: list | None = None,
         newest_roots: list | None = None,
@@ -225,6 +232,8 @@ class FakeArticlePage:
         self.article_content = article_content
         self.goto_error = goto_error
         self.goto_errors = list(goto_errors or [])
+        self.goto_status = goto_status
+        self.comments_available = comments_available
         self.goto_calls: list[tuple[str, str]] = []
         self.goto_timeouts: list[int | None] = []
         self.close_calls = 0
@@ -262,12 +271,13 @@ class FakeArticlePage:
                 raise error
         if self.goto_error is not None:
             raise self.goto_error
+        return FakeResponse(self.goto_status) if self.goto_status is not None else None
 
     def query_selector(self, selector: str):
         if selector == "article" and self.article_text:
             return FakeText(self.article_text)
         if selector == selectors.ARTICLE_COMMENTS:
-            return self
+            return self if self.comments_available else None
         if selector == selectors.ARTICLE_MORE_COMMENTS and self.hidden_roots:
             return self.more_button
         if selector == selectors.ARTICLE_SORT and self.sort_label is not None:
@@ -355,18 +365,25 @@ def test_implements_dzen_page_contract():
         assert list(proto_sig.parameters) == list(impl_sig.parameters)
 
 
-def test_fetch_article_text_uses_article_body_and_closes_temporary_tab():
+def test_fetch_article_text_uses_article_body_and_closes_temporary_tab(caplog):
     browser = FakePage([FakeGroup("/a/post", [])])
     article_page = FakeArticlePage(article_text="Article body")
     browser.context.article_pages = [article_page]
     page = DzenStudioPage(browser)
 
-    assert page.fetch_article_text("https://dzen.ru/a/post") == "Article body"
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        assert page.fetch_article_text("https://dzen.ru/a/post") == "Article body"
     assert article_page.goto_calls == [("https://dzen.ru/a/post", "domcontentloaded")]
     assert article_page.close_calls == 1
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "article_text_fetch_completed"
+    )
+    assert record.article_text_length == len("Article body")
+    assert "Article body" not in StructuredFormatter().format(record)
 
 
-def test_fetch_article_text_does_not_fall_back_to_the_page_main_element():
+def test_fetch_article_text_does_not_fall_back_to_the_page_main_element(caplog):
     class MainOnlyArticlePage(FakeArticlePage):
         def query_selector(self, selector: str):
             if selector == "main":
@@ -378,8 +395,16 @@ def test_fetch_article_text_does_not_fall_back_to_the_page_main_element():
     browser.context.article_pages = [article_page]
     page = DzenStudioPage(browser)
 
-    assert page.fetch_article_text("https://dzen.ru/a/post") is None
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        assert page.fetch_article_text("https://dzen.ru/a/post") is None
     assert article_page.close_calls == 1
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "article_text_fetch_failed"
+    )
+    assert record.failure_stage == "article_text_extraction"
+    assert record.failure_reason == "article_text_not_found"
+    assert record.article_text_length == 0
 
 
 def test_fetch_article_text_keeps_content_blocks_and_removes_promotional_noise():
@@ -421,6 +446,63 @@ def test_fetch_article_text_closes_failed_temporary_tab_and_caches_none():
     assert page.fetch_article_text("https://dzen.ru/a/post") is None
     assert failed.close_calls == 1
     assert browser.context.new_page_calls == 1
+
+
+def test_fetch_article_text_logs_safe_navigation_failure(caplog):
+    browser = FakePage([FakeGroup("/a/post", [])])
+    failed = FakeArticlePage(
+        goto_error=RuntimeError(
+            "navigation failed at https://dzen.ru/a/private?token=private-token"
+            "#private-fragment private article text"
+        )
+    )
+    browser.context.article_pages = [failed]
+    page = DzenStudioPage(browser)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        assert page.fetch_article_text(
+            "https://dzen.ru/a/private?token=private-token#private-fragment"
+        ) is None
+
+    records = [
+        record for record in caplog.records
+        if getattr(record, "event", None) == "article_text_fetch_failed"
+    ]
+    assert len(records) == 1
+    assert records[0].failure_stage == "article_navigation"
+    assert records[0].failure_reason == "navigation_exception"
+    assert records[0].failure_type == "RuntimeError"
+    assert records[0].failure_description == "browser navigation failed"
+    serialized = StructuredFormatter().format(records[0])
+    for secret in ("private-token", "private-fragment", "private article text", "https://"):
+        assert secret not in serialized
+
+
+def test_fetch_article_text_logs_http_error_without_changing_extraction(caplog):
+    browser = FakePage([FakeGroup("/a/post", [])])
+    article_page = FakeArticlePage(article_text="private article text", goto_status=503)
+    browser.context.article_pages = [article_page]
+    page = DzenStudioPage(browser)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        assert page.fetch_article_text("https://dzen.ru/a/post?token=private-token") == (
+            "private article text"
+        )
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "article_navigation_failed"
+    )
+    assert record.failure_stage == "article_navigation"
+    assert record.failure_reason == "http_status"
+    assert record.http_status == 503
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    assert "private-token" not in serialized
+    assert "private article text" not in serialized
 
 
 # Acceptance 3 — двухуровневый разбор: 2 группы (2 + 1 комментарий) → 3 Comment.
@@ -580,7 +662,7 @@ def test_auto_publication_logs_both_confirmations_without_reply_text(caplog):
     events = [record.event for record in records]
     assert events.index("publication_studio_visibility_check") < events.index("publication_article_check_started")
     assert events.index("publication_article_reply_found") < events.index("publication_confirmed")
-    assert all(record.comment_id == comment.dzen_comment_id for record in records)
+    assert all(not hasattr(record, "comment_id") for record in records)
     assert all(record.reply_id == 73 for record in records if hasattr(record, "reply_id"))
     serialized = "\n".join(StructuredFormatter().format(record) for record in records)
     for secret in ("private-reply-content", "text0", "author0", "/a/post1"):
@@ -600,7 +682,56 @@ def test_missing_send_button_fails_before_public_check(caplog):
     assert fake.reload_calls == []
     assert article.goto_calls == []
     assert node.reply_submit.clicks == 0
-    assert any(getattr(record, "event", None) == "publication_action_failed" for record in caplog.records)
+    failure = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_send_button_search"
+    )
+    assert failure.result == "missing"
+    assert failure.failure_stage == "publication_controls"
+    assert failure.failure_reason == "send_button_not_found"
+    assert failure.failure_type == "ControlNotFound"
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    assert "private-reply-content" not in serialized
+    assert not any(hasattr(record, "comment_id") for record in caplog.records)
+
+
+def test_submit_exception_logs_safe_failure_details(caplog):
+    node = make_node(0)
+    fake, page, _ = make_publication_page(node)
+
+    def fail_submit():
+        raise RuntimeError(
+            "submit failed for private reply at "
+            "https://dzen.ru/a/private?token=private-token#fragment"
+        )
+
+    node.reply_submit.on_click = fail_submit
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="submit failed"):
+            page.publish_reply(comment, "private reply text", auto_publish=True, reply_id=73)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_submit_failed"
+    )
+    assert record.failure_stage == "publication_submit"
+    assert record.failure_reason == "submit_exception"
+    assert record.failure_type == "RuntimeError"
+    assert record.reply_id == 73
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in ("private reply text", "private-token", "fragment", "https://"):
+        assert secret not in serialized
+    assert fake.listeners == {"request": [], "response": []}
 
 
 def test_send_button_retries_once_before_studio_and_public_checks():
@@ -927,17 +1058,33 @@ def test_public_article_requires_reply_from_bot_in_source_thread():
     assert fake.reload_calls == []
 
 
-def test_public_article_requires_exact_reply_text():
+def test_public_article_requires_exact_reply_text(caplog):
     node = make_node(0)
     article = FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")])
     fake, page, _ = make_publication_page(node, article=article)
     node.reply_submit.on_click = lambda: node.published_replies.append(
         {"author": "Configured Bot", "text": "мой ответ"}
     )
-    with pytest.raises(RuntimeError, match="not confirmed in public article"):
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="not confirmed in public article"):
+            page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
     assert article.close_calls == 1
     assert fake.reload_calls == []
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_reply_check_completed"
+        and getattr(record, "failure_reason", None) == "reply_not_confirmed"
+    )
+    assert record.failure_stage == "public_reply_confirmation"
+    assert record.failure_type == "ReplyNotConfirmed"
+    assert record.result == "not_found"
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    assert "мой ответ" not in serialized
+    assert "author0" not in serialized
 
 
 def test_preexisting_studio_reply_still_requires_public_verification():
@@ -1026,21 +1173,267 @@ def test_public_preflight_uses_load_more_when_newest_sort_is_unavailable():
     assert article.close_calls == 1
 
 
-def test_public_reply_preflight_error_stops_before_any_repeat_submit():
+def test_public_reply_preflight_error_stops_before_any_repeat_submit(caplog):
     node = make_node(0)
-    article = FakeArticlePage(goto_error=RuntimeError("article unavailable"))
+    article = FakeArticlePage(
+        goto_error=TimeoutError(
+            "navigation timeout https://dzen.ru/a/post?token=private-token"
+            "#private-fragment private comment text"
+        )
+    )
     fake, page, _ = make_publication_page(node, article=article)
     fake.context.article_pages = [article]
 
-    with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, reply_id=73)
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
+            page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, reply_id=73)
 
-    assert str(exc_info.value.__cause__) == "article unavailable"
+    assert isinstance(exc_info.value.__cause__, TimeoutError)
     assert node.reply_button.clicks == 0
     assert node.reply_submit.clicks == 0
     assert fake.listeners == {}
     assert article.close_calls == 1
     assert fake.reload_calls == []
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_navigation_retry"
+    )
+    assert record.failure_stage == "public_article_navigation"
+    assert record.failure_reason == "navigation_exception"
+    assert record.failure_type == "TimeoutError"
+    assert record.failure_description == "browser operation timed out"
+    assert record.attempt == 1
+    assert record.reply_id == 73
+    assert not hasattr(record, "comment_id")
+    serialized = StructuredFormatter().format(record)
+    for secret in ("private-token", "private-fragment", "private comment text", "https://"):
+        assert secret not in serialized
+
+
+def test_public_reply_preflight_logs_comment_loading_timeout(caplog):
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    article = FakeArticlePage(comments_available=False)
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="public article comments did not load"):
+            page.publish_reply(comment, "мой ответ", auto_publish=True)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_comments_failed"
+    )
+    assert record.failure_stage == "public_comment_loading"
+    assert record.failure_reason == "comments_not_loaded"
+    assert record.failure_type == "WaitTimeout"
+    assert record.wait_count == 20
+    assert record.http_status is None
+    assert article.close_calls == 1
+
+
+def test_public_article_http_status_is_logged_without_stopping_publication(caplog):
+    node = make_node(0)
+    preflight = FakeArticlePage(
+        public_roots=[
+            FakePublicRoot(author="author0", author_href="/user/u0", text="text0")
+        ],
+        goto_status=503,
+    )
+    final_article = FakeArticlePage(
+        public_roots=[public_root_for(node, reply_text="private reply")],
+        goto_status=200,
+    )
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.context.article_pages = [preflight, final_article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    node.reply_submit.hide_on_click = True
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "private reply"}
+    )
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        page.publish_reply(comment, "private reply", auto_publish=True, reply_id=73)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_navigation_failed"
+    )
+    assert record.failure_stage == "public_article_navigation"
+    assert record.failure_reason == "http_status"
+    assert record.http_status == 503
+    assert record.navigation_result == "http_error"
+    assert node.reply_submit.clicks == 1
+    assert any(
+        getattr(item, "event", None) == "publication_confirmed"
+        for item in caplog.records
+    )
+    serialized = "\n".join(
+        StructuredFormatter().format(item)
+        for item in caplog.records
+        if item.name == "dzen_commenter.dzen.page"
+    )
+    assert "private reply" not in serialized
+    assert "/a/post1" not in serialized
+
+
+def test_public_reply_preflight_logs_missing_source_comment(caplog):
+    node = make_node(0)
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    article = FakeArticlePage(
+        public_roots=[
+            FakePublicRoot(
+                author="private author",
+                author_href="/user/private-author",
+                text="private unrelated comment",
+            )
+        ]
+    )
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="source comment not found in public article"):
+            page.publish_reply(comment, "private reply text", auto_publish=True, reply_id=73)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_source_missing"
+    )
+    assert record.failure_stage == "public_source_comment_search"
+    assert record.failure_reason == "source_comment_not_found"
+    assert record.failure_type == "SourceCommentUnavailableError"
+    assert record.roots_checked == 1
+    assert record.candidates_checked == 1
+    assert record.load_more_click_count == 0
+    assert record.reply_id == 73
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in ("private author", "private unrelated comment", "private reply text", "/user/private-author"):
+        assert secret not in serialized
+    assert not any(hasattr(record, "comment_id") for record in caplog.records)
+
+
+def test_public_reply_preflight_logs_collapsed_branch_timeout(caplog):
+    node = make_node(0)
+    root = FakePublicRoot(
+        author="other author",
+        author_href="/user/other",
+        text="other comment",
+        hidden_replies=[
+            {"author": "author0", "authorHref": "/user/u0", "text": "text0"}
+        ],
+    )
+    root.expand_button.on_click = lambda: None
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    article = FakeArticlePage(public_roots=[root])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="source comment not found in public article"):
+            page.publish_reply(comment, "мой ответ", auto_publish=True)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_branch_expansion_failed"
+        and getattr(record, "failure_reason", None) == "replies_not_expanded"
+    )
+    assert record.failure_stage == "public_thread_expansion"
+    assert record.failure_type == "ExpansionTimeout"
+    assert record.branch_expansion_attempt_count == 1
+    assert record.branch_expansion_count == 0
+    assert record.wait_count == 20
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in ("other author", "other comment", "author0", "text0", "мой ответ"):
+        assert secret not in serialized
+
+
+def test_public_reply_preflight_logs_load_more_click_exception(caplog):
+    node = make_node(0)
+    unrelated = FakePublicRoot(
+        author="private author",
+        author_href="/user/private-author",
+        text="private unrelated comment",
+    )
+    hidden = FakePublicRoot(author="other", author_href="/user/other", text="other")
+    article = FakeArticlePage(public_roots=[unrelated], hidden_roots=[hidden])
+
+    def fail_load_more():
+        raise RuntimeError("load more failed for https://dzen.ru/a/x?token=private-token")
+
+    article.more_button.on_click = fail_load_more
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="load more failed"):
+            page.publish_reply(comment, "private reply", auto_publish=True)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_more_comments_failed"
+    )
+    assert record.failure_stage == "public_comment_loading"
+    assert record.failure_reason == "load_more_click_failed"
+    assert record.failure_type == "RuntimeError"
+    assert record.load_more_click_count == 0
+    assert record.load_more_click_attempt_count == 1
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in ("private author", "private unrelated comment", "private reply", "private-token", "https://"):
+        assert secret not in serialized
+
+
+def test_public_reply_preflight_logs_load_more_timeout(caplog):
+    node = make_node(0)
+    unrelated = FakePublicRoot(author="other", author_href="/user/other", text="other")
+    hidden = FakePublicRoot(author="author0", author_href="/user/u0", text="text0")
+    article = FakeArticlePage(public_roots=[unrelated], hidden_roots=[hidden])
+    article.more_button.on_click = lambda: None
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="public article comments did not expand"):
+            page.publish_reply(comment, "мой ответ", auto_publish=True)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_article_more_comments_failed"
+        and getattr(record, "failure_reason", None) == "additional_comments_not_loaded"
+    )
+    assert record.failure_stage == "public_comment_loading"
+    assert record.failure_type == "WaitTimeout"
+    assert record.load_more_click_count == 1
+    assert record.load_more_click_attempt_count == 1
+    assert record.wait_count == 20
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in ("author0", "text0", "мой ответ"):
+        assert secret not in serialized
 
 
 def test_public_preflight_retries_transient_article_navigation():
@@ -1188,7 +1581,7 @@ def test_publish_reply_fills_draft_and_waits_without_submitting():
     assert fake.listeners == {}
 
 
-def test_publish_reply_unmatched_raises_lookup_error():
+def test_publish_reply_unmatched_raises_lookup_error(caplog):
     groups = [FakeGroup("/a/post1", [make_node(0)])]
     fake = FakePage(groups)
     page = DzenStudioPage(fake)
@@ -1203,12 +1596,34 @@ def test_publish_reply_unmatched_raises_lookup_error():
         fetched_at=datetime.now(timezone.utc),
         status=CommentStatus.NEW,
     )
-    with pytest.raises(LookupError) as error:
-        page.publish_reply(comment, "ответ", auto_publish=True)
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(LookupError) as error:
+            page.publish_reply(comment, "ответ", auto_publish=True)
     assert isinstance(error.value, SourceCommentUnavailableError)
     assert len(fake.mouse.wheel_calls) == 20
     assert fake.waited_ms == [500] * 20
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+    search = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_source_comment_search_completed"
+    )
+    assert search.result == "not_found"
+    assert search.failure_stage == "studio_source_comment_search"
+    assert search.failure_reason == "source_comment_not_found"
+    assert search.scroll_attempt_count == 20
+    assert search.candidates_checked == 21
+    failure = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_action_failed"
+    )
+    assert failure.failure_stage == "studio_source_comment_search"
+    assert failure.failure_reason == "source_comment_not_found"
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    assert "deadbeef-not-on-page" not in serialized
 
 
 def test_find_comment_after_three_stalled_scrolls_restores_page_top():
@@ -1327,9 +1742,44 @@ def test_publish_reply_keeps_lookup_error_when_scroll_cleanup_fails():
 
 
 # Acceptance 8 — пустая страница.
-def test_fetch_comments_empty_page():
+def test_fetch_comments_empty_page(caplog):
     page = DzenStudioPage(FakePage([]))
-    assert page.fetch_comments() == []
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        assert page.fetch_comments() == []
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_comments_read_completed"
+    )
+    assert record.publication_card_count == 0
+    assert record.comments_extracted == 0
+    assert record.skipped_missing_link_count == 0
+
+
+def test_fetch_comments_logs_studio_feed_read_failure(caplog):
+    fake = FakePage([])
+
+    def fail_read(_selector):
+        raise RuntimeError("private feed text https://dzen.ru/studio?token=private-token")
+
+    fake.query_selector_all = fail_read
+    page = DzenStudioPage(fake)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="private feed text"):
+            page.fetch_comments()
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_comments_read_failed"
+    )
+    assert record.failure_stage == "studio_feed_read"
+    assert record.failure_reason == "page_read_failed"
+    assert record.failure_type == "RuntimeError"
+    assert record.comments_extracted == 0
+    serialized = StructuredFormatter().format(record)
+    assert "private feed text" not in serialized
+    assert "private-token" not in serialized
+    assert "https://" not in serialized
 
 
 def test_fetch_comments_uses_page_replaced_after_browser_restart():
@@ -1376,6 +1826,29 @@ def test_fetch_comments_skips_group_without_a_resolvable_post_link():
     comments = page.fetch_comments()
 
     assert [c.post_url for c in comments] == ["https://dzen.ru/a/post2"]
+
+
+def test_fetch_comments_logs_safe_read_summary(caplog):
+    groups = [
+        FakeGroup("", [make_node(1)], title="private article title"),
+        FakeGroup("/a/post?token=private-token", [make_node(0)]),
+    ]
+    page = DzenStudioPage(FakePage(groups))
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        page.fetch_comments()
+
+    records = [
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_comments_read_completed"
+    ]
+    assert len(records) == 1
+    assert records[0].publication_card_count == 2
+    assert records[0].comments_extracted == 1
+    assert records[0].skipped_missing_link_count == 1
+    serialized = StructuredFormatter().format(records[0])
+    for secret in ("private article title", "private-token", "author0", "text0"):
+        assert secret not in serialized
 
 
 def test_fetch_comments_accepts_absolute_post_href():
