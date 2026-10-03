@@ -1638,7 +1638,7 @@ def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
 
     def fail_lookup(_selector):
         raise RuntimeError(
-            "lookup failed private-comment https://dzen.ru/a/post?token=private-token#fragment"
+            "locator lookup failed: https://dzen.ru/a/post?token=private-token#fragment"
         )
 
     fake.query_selector_all = fail_lookup
@@ -1656,7 +1656,7 @@ def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
     )
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="lookup failed private-comment") as exc_info:
+        with pytest.raises(RuntimeError, match="locator lookup failed") as exc_info:
             page.publish_reply(comment, "private reply", auto_publish=True, reply_id=73)
 
     assert "private-token" in str(exc_info.value)
@@ -1668,7 +1668,7 @@ def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
     assert record.failure_stage == "studio_source_comment_search"
     assert record.failure_reason == "lookup_exception"
     assert record.failure_type == "RuntimeError"
-    assert record.failure_description == "browser operation failed"
+    assert record.failure_description == "locator lookup failed"
     assert record.reply_id == 73
     serialized = "\n".join(
         StructuredFormatter().format(record)
@@ -1678,14 +1678,18 @@ def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
     for secret in (
         "private-comment",
         "private-token",
+        "token=",
         "fragment",
         "private author",
         "private comment text",
         "private reply",
         "synthetic-private-id",
         "https://",
+        "dzen.ru",
+        "/a/post",
     ):
         assert secret not in serialized
+    assert "locator lookup failed" in serialized
 
 
 def test_source_comment_scrolling_exception_logs_safely_and_propagates(caplog):

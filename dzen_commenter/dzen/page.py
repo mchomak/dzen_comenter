@@ -60,6 +60,16 @@ _PUBLIC_NAVIGATION_ATTEMPTS = 2
 _STUDIO_CONFIRM_DELAY_MS = 2_000
 _SUBMIT_TRACE_LIMIT = 5
 
+_SAFE_LOOKUP_EXCEPTION_DETAIL_RE = re.compile(
+    r"\b((?:(?:browser|studio|page|locator|selector|source|comment|element|"
+    r"target|execution|network|request|response|context)\s+){0,3}"
+    r"(?:lookup|search|scroll|navigation|connection|operation|evaluation|"
+    r"query|request|response|context|page|element|selector)\s+"
+    r"(?:failed|timed\s+out|closed|detached|destroyed|missing|unavailable|"
+    r"not\s+found|invalid|rejected|aborted|exceeded|error))\b",
+    re.IGNORECASE,
+)
+
 
 def _safe_exception_fields(exc: Exception) -> dict[str, str]:
     """Return exception diagnostics without copying its potentially sensitive text."""
@@ -80,6 +90,23 @@ def _safe_exception_fields(exc: Exception) -> dict[str, str]:
         "failure_type": exception_name,
         "failure_description": description,
     }
+
+
+def _safe_lookup_exception_fields(exc: Exception) -> dict[str, str]:
+    fields = _safe_exception_fields(exc)
+    if fields["failure_description"] != "browser operation failed":
+        return fields
+    try:
+        message = str(exc)
+    except Exception:
+        return fields
+    # Only retain a recognized browser diagnostic phrase. This excludes arbitrary
+    # exception text while still providing a useful cause when one is present.
+    message = re.sub(r"https?://\S+", " ", message, flags=re.IGNORECASE)
+    match = _SAFE_LOOKUP_EXCEPTION_DETAIL_RE.search(message)
+    if match:
+        fields["failure_description"] = " ".join(match.group(1).casefold().split())
+    return fields
 
 
 def _response_status(response: Any) -> int | None:
@@ -1385,7 +1412,7 @@ class DzenStudioPage:
                     "reply_id": reply_id,
                     "failure_stage": "studio_source_comment_search",
                     "failure_reason": "lookup_exception",
-                    **_safe_exception_fields(exc),
+                    **_safe_lookup_exception_fields(exc),
                     "scroll_attempt_count": 0,
                     "candidates_checked": candidates_checked,
                 },
@@ -1450,7 +1477,7 @@ class DzenStudioPage:
                     "reply_id": reply_id,
                     "failure_stage": "studio_source_comment_search",
                     "failure_reason": "scroll_exception" if phase == "scroll" else "lookup_exception",
-                    **_safe_exception_fields(exc),
+                    **_safe_lookup_exception_fields(exc),
                     "scroll_attempt_count": scroll_attempt_count,
                     "candidates_checked": candidates_checked,
                 },
