@@ -784,6 +784,88 @@ def test_public_article_expands_hidden_replies_and_loads_more_comments():
     assert fake.reload_calls == []
 
 
+@pytest.mark.parametrize("source_present", [True, False])
+def test_public_article_loads_all_batches_until_source_found_or_exhausted(source_present):
+    class PagedArticlePage(FakeArticlePage):
+        def __init__(self, batches):
+            super().__init__(
+                public_roots=[
+                    FakePublicRoot(author="other", author_href="/user/other", text="other")
+                ]
+            )
+            self.batches = batches
+
+        def _load_more(self):
+            self.public_roots.extend(self.batches.pop(0))
+
+        def query_selector(self, selector):
+            if selector == selectors.ARTICLE_MORE_COMMENTS and self.batches:
+                return self.more_button
+            return super().query_selector(selector)
+
+    node = make_node(0)
+    source = public_root_for(node, reply_text="long-tail reply")
+    unrelated_batches = [
+        [FakePublicRoot(author=f"other{i}", author_href=f"/user/other{i}", text=f"other{i}")]
+        for i in range(27)
+    ]
+    final_batch = [source] if source_present else [
+        FakePublicRoot(author="last", author_href="/user/last", text="last")
+    ]
+    article = PagedArticlePage([*unrelated_batches, final_batch])
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+
+    comment = page.fetch_comments()[0]
+    if source_present:
+        assert page._verify_public_reply(
+            comment, "long-tail reply", "/user/u0", "author0"
+        )
+    else:
+        with pytest.raises(RuntimeError, match="source comment not found"):
+            page._verify_public_reply(
+                comment, "long-tail reply", "/user/u0", "author0"
+            )
+    assert article.more_button.clicks == 28
+    assert article.batches == []
+    assert article.close_calls == 1
+
+
+def test_public_article_stalled_load_more_has_bounded_wait():
+    node = make_node(0)
+    article = FakeArticlePage(
+        public_roots=[FakePublicRoot(author="other", author_href="/user/other", text="other")],
+        hidden_roots=[public_root_for(node)],
+    )
+    article.more_button.on_click = lambda: None
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+
+    with pytest.raises(RuntimeError, match="public article comments did not expand"):
+        page._verify_public_reply(page.fetch_comments()[0], "reply", "/user/u0", "author0")
+
+    assert article.more_button.clicks == 1
+    assert article.waited_ms == [500] * 20
+    assert article.close_calls == 1
+
+
+def test_public_article_empty_comment_list_has_bounded_wait():
+    node = make_node(0)
+    article = FakeArticlePage()
+    fake = FakePage([FakeGroup("/a/post1", [node])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+
+    with pytest.raises(RuntimeError, match="source comment not found"):
+        page._verify_public_reply(page.fetch_comments()[0], "reply", "/user/u0", "author0")
+
+    assert article.more_button.clicks == 0
+    assert article.waited_ms == [500] * 19
+    assert article.close_calls == 1
+
+
 def test_public_article_requires_source_author_even_when_text_matches():
     node = make_node(0)
     wrong_source = FakePublicRoot(

@@ -52,7 +52,6 @@ _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 10_000
 _REPLY_EXPANSION_TIMEOUT_MS = 10_000
-_PUBLIC_COMMENT_LOAD_LIMIT = 25
 _PUBLIC_COMMENT_WAIT_MS = 500
 _PUBLIC_COMMENT_POLL_LIMIT = 20
 _PUBLIC_PREFLIGHT_POLL_LIMIT = 4
@@ -709,7 +708,9 @@ class DzenStudioPage:
             expected_reply_text = " ".join(text.split())
             source_href = urlsplit(source_author_href).path.rstrip("/")
             source_name = " ".join((source_author or comment.author).split()).casefold()
-            for load in range(_PUBLIC_COMMENT_LOAD_LIMIT + 1):
+            load = 0
+            empty_polls = 0
+            while True:
                 roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
                 for index, root in enumerate(roots):
                     try:
@@ -815,27 +816,30 @@ class DzenStudioPage:
                         raise RuntimeError("public article replies did not expand")
                     return False
 
-                if load == _PUBLIC_COMMENT_LOAD_LIMIT:
-                    break
                 more = article_page.query_selector(selectors.ARTICLE_MORE_COMMENTS)
                 if more is None:
                     if roots:
+                        break
+                    empty_polls += 1
+                    if empty_polls == _PUBLIC_COMMENT_POLL_LIMIT:
                         break
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     continue
                 previous_count = len(roots)
                 more.click()
+                load += 1
                 logger.info(
                     "Loaded more public article comments",
                     extra={
                         "event": "publication_article_more_comments_clicked",
                         "comment_id": comment.dzen_comment_id,
-                        "load": load + 1,
+                        "load": load,
                     },
                 )
                 for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     if len(article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)) > previous_count:
+                        empty_polls = 0
                         break
                 else:
                     raise RuntimeError("public article comments did not expand")
