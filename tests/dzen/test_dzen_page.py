@@ -664,6 +664,12 @@ def test_auto_publication_logs_both_confirmations_without_reply_text(caplog):
     assert events.index("publication_article_reply_found") < events.index("publication_confirmed")
     assert all(not hasattr(record, "comment_id") for record in records)
     assert all(record.reply_id == 73 for record in records if hasattr(record, "reply_id"))
+    search = next(
+        record for record in records
+        if record.event == "publication_source_comment_search_completed"
+    )
+    assert search.result == "found"
+    assert search.reply_id == 73
     serialized = "\n".join(StructuredFormatter().format(record) for record in records)
     for secret in ("private-reply-content", "text0", "author0", "/a/post1"):
         assert secret not in serialized
@@ -1598,7 +1604,7 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
     )
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
         with pytest.raises(LookupError) as error:
-            page.publish_reply(comment, "ответ", auto_publish=True)
+            page.publish_reply(comment, "ответ", auto_publish=True, reply_id=73)
     assert isinstance(error.value, SourceCommentUnavailableError)
     assert len(fake.mouse.wheel_calls) == 20
     assert fake.waited_ms == [500] * 20
@@ -1610,6 +1616,7 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
     assert search.result == "not_found"
     assert search.failure_stage == "studio_source_comment_search"
     assert search.failure_reason == "source_comment_not_found"
+    assert search.reply_id == 73
     assert search.scroll_attempt_count == 20
     assert search.candidates_checked == 21
     failure = next(
@@ -1624,6 +1631,117 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
         if record.name == "dzen_commenter.dzen.page"
     )
     assert "deadbeef-not-on-page" not in serialized
+
+
+def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
+    fake = FakePage([])
+
+    def fail_lookup(_selector):
+        raise RuntimeError(
+            "lookup failed private-comment https://dzen.ru/a/post?token=private-token#fragment"
+        )
+
+    fake.query_selector_all = fail_lookup
+    page = DzenStudioPage(fake)
+    comment = Comment(
+        id=None,
+        dzen_comment_id="synthetic-private-id",
+        publication_id=0,
+        author="private author",
+        text="private comment text",
+        parent_comment_id=None,
+        posted_at=None,
+        fetched_at=datetime.now(timezone.utc),
+        status=CommentStatus.NEW,
+    )
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="lookup failed private-comment") as exc_info:
+            page.publish_reply(comment, "private reply", auto_publish=True, reply_id=73)
+
+    assert "private-token" in str(exc_info.value)
+    assert fake.mouse.wheel_calls == []
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_source_comment_search_failed"
+    )
+    assert record.failure_stage == "studio_source_comment_search"
+    assert record.failure_reason == "lookup_exception"
+    assert record.failure_type == "RuntimeError"
+    assert record.failure_description == "browser operation failed"
+    assert record.reply_id == 73
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in (
+        "private-comment",
+        "private-token",
+        "fragment",
+        "private author",
+        "private comment text",
+        "private reply",
+        "synthetic-private-id",
+        "https://",
+    ):
+        assert secret not in serialized
+
+
+def test_source_comment_scrolling_exception_logs_safely_and_propagates(caplog):
+    fake = FakePage([FakeGroup("/a/post1", [make_node(0)])])
+
+    def fail_scroll(_delta_x, _delta_y):
+        raise TimeoutError(
+            "scroll timeout for private comment https://dzen.ru/a/post?token=private-token"
+        )
+
+    fake.mouse.wheel = fail_scroll
+    page = DzenStudioPage(fake)
+    comment = Comment(
+        id=None,
+        dzen_comment_id="synthetic-private-id",
+        publication_id=0,
+        author="private author",
+        text="private comment text",
+        parent_comment_id=None,
+        posted_at=None,
+        fetched_at=datetime.now(timezone.utc),
+        status=CommentStatus.NEW,
+    )
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(TimeoutError, match="scroll timeout") as exc_info:
+            page.publish_reply(comment, "private reply", auto_publish=True, reply_id=74)
+
+    assert "private-token" in str(exc_info.value)
+    assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_source_comment_search_failed"
+    )
+    assert record.failure_stage == "studio_source_comment_search"
+    assert record.failure_reason == "scroll_exception"
+    assert record.failure_type == "TimeoutError"
+    assert record.failure_description == "browser operation timed out"
+    assert record.scroll_attempt_count == 1
+    assert record.candidates_checked == 1
+    assert record.reply_id == 74
+    serialized = "\n".join(
+        StructuredFormatter().format(item)
+        for item in caplog.records
+        if item.name == "dzen_commenter.dzen.page"
+    )
+    for secret in (
+        "private comment",
+        "private-token",
+        "private author",
+        "private comment text",
+        "private reply",
+        "synthetic-private-id",
+        "https://",
+    ):
+        assert secret not in serialized
 
 
 def test_find_comment_after_three_stalled_scrolls_restores_page_top():

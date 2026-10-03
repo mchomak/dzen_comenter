@@ -490,7 +490,9 @@ class DzenStudioPage:
                 **correlation,
             },
         )
-        node = self._find_comment_node_with_scroll(comment.dzen_comment_id)
+        node = self._find_comment_node_with_scroll(
+            comment.dzen_comment_id, reply_id=reply_id
+        )
         if node is None:
             raise SourceCommentUnavailableError("source comment not found on Studio page")
 
@@ -1369,8 +1371,26 @@ class DzenStudioPage:
         except Exception:
             return "invalid_response"
 
-    def _find_comment_node_with_scroll(self, comment_id: str):
-        node, pass_candidate_count = self._find_comment_node(comment_id)
+    def _find_comment_node_with_scroll(
+        self, comment_id: str, *, reply_id: int | None = None
+    ):
+        candidates_checked = 0
+        try:
+            node, pass_candidate_count = self._find_comment_node(comment_id)
+        except Exception as exc:
+            logger.info(
+                "Dzen source comment lookup failed",
+                extra={
+                    "event": "publication_source_comment_search_failed",
+                    "reply_id": reply_id,
+                    "failure_stage": "studio_source_comment_search",
+                    "failure_reason": "lookup_exception",
+                    **_safe_exception_fields(exc),
+                    "scroll_attempt_count": 0,
+                    "candidates_checked": candidates_checked,
+                },
+            )
+            raise
         candidates_checked = pass_candidate_count
         scroll_attempt_count = 0
         if node is not None:
@@ -1378,6 +1398,7 @@ class DzenStudioPage:
                 "Dzen source comment search completed",
                 extra={
                     "event": "publication_source_comment_search_completed",
+                    "reply_id": reply_id,
                     "result": "found",
                     "scroll_attempt_count": scroll_attempt_count,
                     "candidates_checked": candidates_checked,
@@ -1385,10 +1406,12 @@ class DzenStudioPage:
             )
             return node
 
+        phase = "scroll"
         try:
             for scroll_attempt_count in range(1, _REPLY_SEARCH_MAX_SCROLLS + 1):
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                phase = "lookup"
                 node, pass_candidate_count = self._find_comment_node(comment_id)
                 candidates_checked += pass_candidate_count
                 if node is not None:
@@ -1396,16 +1419,19 @@ class DzenStudioPage:
                         "Dzen source comment search completed",
                         extra={
                             "event": "publication_source_comment_search_completed",
+                            "reply_id": reply_id,
                             "result": "found",
                             "scroll_attempt_count": scroll_attempt_count,
                             "candidates_checked": candidates_checked,
                         },
                     )
                     return node
+                phase = "scroll"
             logger.info(
                 "Dzen source comment search completed",
                 extra={
                     "event": "publication_source_comment_search_completed",
+                    "reply_id": reply_id,
                     "result": "not_found",
                     "failure_stage": "studio_source_comment_search",
                     "failure_reason": "source_comment_not_found",
@@ -1416,6 +1442,20 @@ class DzenStudioPage:
                 },
             )
             return None
+        except Exception as exc:
+            logger.info(
+                "Dzen source comment search failed",
+                extra={
+                    "event": "publication_source_comment_search_failed",
+                    "reply_id": reply_id,
+                    "failure_stage": "studio_source_comment_search",
+                    "failure_reason": "scroll_exception" if phase == "scroll" else "lookup_exception",
+                    **_safe_exception_fields(exc),
+                    "scroll_attempt_count": scroll_attempt_count,
+                    "candidates_checked": candidates_checked,
+                },
+            )
+            raise
         finally:
             try:
                 self._page.evaluate("window.scrollTo(0, 0)")
