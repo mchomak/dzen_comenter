@@ -1190,6 +1190,32 @@ def test_public_reply_preflight_prevents_duplicate_when_studio_loses_reply():
     assert fake.reload_calls == []
 
 
+def test_public_preflight_waits_for_delayed_reply_before_submit():
+    node = make_node(0)
+    public_root = public_root_for(node)
+    public_root.replies.clear()
+    article = FakeArticlePage(public_roots=[public_root])
+    elapsed_ms = 0
+
+    def reveal_delayed_reply(timeout_ms: int) -> None:
+        nonlocal elapsed_ms
+        elapsed_ms += timeout_ms
+        if elapsed_ms > 2_000 and not public_root.replies:
+            public_root.replies.append(
+                {"author": "Configured Bot", "text": "мой ответ"}
+            )
+
+    article.wait_for_timeout = reveal_delayed_reply
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert elapsed_ms > 2_000
+    assert elapsed_ms <= 10_000
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+
+
 def test_public_preflight_sorts_newest_to_find_fresh_reply():
     node = make_node(0)
     unrelated = FakePublicRoot(author="other", author_href="/user/other", text="old")

@@ -110,6 +110,8 @@ class OrchestratorLoop:
             else:
                 comment_id = self.repository.upsert_comment(comment)
             comment.id = comment_id
+            if self.repository.has_published_reply(comment_id):
+                continue
 
         if generation_limit_available:
             self.repository.enqueue_pending_generations(queued_at=now)

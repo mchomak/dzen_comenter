@@ -8,7 +8,7 @@ import pytest
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
 from dzen_commenter.contracts.errors import SourceCommentUnavailableError
-from dzen_commenter.contracts.models import Publication
+from dzen_commenter.contracts.models import Publication, Reply
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotificationHandler
 from dzen_commenter.monitoring.logging_config import StructuredFormatter
 from dzen_commenter.orchestrator import OrchestratorLoop
@@ -94,6 +94,36 @@ def test_run_cycle_persists_eligible_comments_through_atomic_generation_seam(
     harness.loop.run_cycle()
 
     assert harness.repository.upsert_eligible_comment_calls == [comment]
+    assert harness.repository.has_published_reply_calls == [comment.id]
+
+
+def test_run_cycle_checks_database_before_processing_already_published_comment(
+    loop_factory, comment_factory
+):
+    incoming = comment_factory(1)
+    harness = loop_factory(comments=[incoming])
+    previously_saved = comment_factory(1)
+    previously_saved.status = CommentStatus.PUBLISHED
+    comment_id = harness.repository.upsert_comment(previously_saved)
+    harness.repository.save_reply(
+        Reply(
+            id=None,
+            comment_id=comment_id,
+            generated_text="Previously published reply",
+            ai_provider="fake-ai",
+            ai_model="fake-model",
+            status=ReplyStatus.PUBLISHED,
+            published_at=datetime(2026, 9, 18, 12, 0, 0),
+            error_reason=None,
+            created_at=datetime(2026, 9, 18, 12, 0, 0),
+        )
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.has_published_reply_calls == [comment_id]
+    assert harness.ai_provider.calls == []
+    assert harness.repository.publication_queue == {}
 
 
 @pytest.mark.parametrize(
