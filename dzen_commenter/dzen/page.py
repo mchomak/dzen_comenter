@@ -1165,16 +1165,18 @@ class DzenStudioPage:
                     for poll in range(poll_limit + 1):
                         current_roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
                         if index >= len(current_roots):
-                            reply_confirmation_wait_count += 1
-                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                            if poll < poll_limit:
+                                reply_confirmation_wait_count += 1
+                                article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                             continue
                         root = current_roots[index]
                         try:
                             data = self._read_public_comment(root)
                         except Exception:
                             candidate_read_failure_count += 1
-                            reply_confirmation_wait_count += 1
-                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                            if poll < poll_limit:
+                                reply_confirmation_wait_count += 1
+                                article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                             continue
                         reply_candidates = data["replies"] if data is not None else []
                         candidates_checked += len(reply_candidates)

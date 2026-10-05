@@ -1216,6 +1216,40 @@ def test_public_preflight_waits_for_delayed_reply_before_submit():
     assert node.reply_button.clicks == node.reply_submit.clicks == 0
 
 
+@pytest.mark.parametrize("failure_mode", ["missing_root", "read_error"])
+def test_public_preflight_failure_polls_do_not_exceed_ten_seconds(failure_mode):
+    node = make_node(0)
+    public_root = public_root_for(node)
+    public_root.replies.clear()
+    article = FakeArticlePage(public_roots=[public_root])
+    original_evaluate = public_root.evaluate
+    read_count = 0
+
+    def evaluate_with_transient_failure(script: str):
+        nonlocal read_count
+        read_count += 1
+        if failure_mode == "read_error" and read_count > 1:
+            raise RuntimeError("transient public comment read failure")
+        data = original_evaluate(script)
+        if failure_mode == "missing_root" and read_count == 1:
+            article.public_roots.clear()
+        return data
+
+    public_root.evaluate = evaluate_with_transient_failure
+    fake, page, _ = make_publication_page(node, article=article)
+    fake.context.article_pages = [article]
+
+    def stop_before_submit(*args, **kwargs):
+        raise RuntimeError("stopped after preflight")
+
+    page._submit_reply = stop_before_submit
+
+    with pytest.raises(RuntimeError, match="stopped after preflight"):
+        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True)
+
+    assert sum(article.waited_ms) <= 10_000
+
+
 def test_public_preflight_sorts_newest_to_find_fresh_reply():
     node = make_node(0)
     unrelated = FakePublicRoot(author="other", author_href="/user/other", text="old")
