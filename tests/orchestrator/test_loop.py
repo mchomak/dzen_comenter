@@ -261,6 +261,48 @@ def test_unconfirmed_publication_stops_automatic_retries(
     assert len(harness.ai_provider.calls) == 1
 
 
+@pytest.mark.parametrize("marker_persisted", (False, True))
+def test_submit_marker_failure_before_click_uses_retry_cooldown(
+    loop_factory, comment_factory, monkeypatch, marker_persisted
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    clock = {"now": datetime(2026, 9, 18, 12, 0, 0)}
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: clock["now"])
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["Готовый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    original_marker = harness.repository.mark_publication_submitting
+
+    def fail_marker(*args, **kwargs):
+        if marker_persisted:
+            original_marker(*args, **kwargs)
+        raise RuntimeError("DB unavailable")
+
+    harness.repository.mark_publication_submitting = fail_marker
+    harness.loop.run_cycle()
+
+    queue = harness.repository.publication_queue[1]
+    assert harness.page.publish_calls == []
+    assert queue["state"] == "queued"
+    assert queue["attempt_count"] == 1
+    assert queue["next_attempt_at"] == clock["now"] + timedelta(minutes=60)
+    assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_RETRY
+    assert harness.repository.replies[1].status is ReplyStatus.GENERATED
+
+    clock["now"] += timedelta(minutes=59)
+    harness.loop.run_cycle()
+    assert harness.page.publish_calls == []
+
+    clock["now"] += timedelta(minutes=1)
+    harness.repository.mark_publication_submitting = original_marker
+    harness.loop.run_cycle()
+    assert queue["attempt_count"] == 2
+    assert harness.repository.replies[1].status is ReplyStatus.PUBLISHED
+
+
 def test_unavailable_source_exhausts_publication_without_developer_alert(
     loop_factory, comment_factory, monkeypatch, caplog
 ):

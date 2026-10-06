@@ -169,8 +169,8 @@ class OrchestratorLoop:
                             claimed.reply_id, claim_token=claimed.claim_token
                         )
                     except Exception as marker_error:
-                        raise PublicationUnconfirmedError(
-                            "publication submit marker could not be verified"
+                        raise RuntimeError(
+                            "publication submit marker failed before click"
                         ) from marker_error
 
                 with self._browser_access():
