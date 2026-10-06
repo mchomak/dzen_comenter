@@ -1,8 +1,10 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from dzen_commenter.prompt import PromptBrandConfig, load_brand_config
+from dzen_commenter.prompt.config_loader import DEFAULT_ANTI_RULES
 
 
 def _valid_config():
@@ -77,3 +79,38 @@ def test_load_brand_config_missing_cta_link_raises_value_error(tmp_path):
 
     with pytest.raises(ValueError, match="missing required keys.*cta_link"):
         load_brand_config(str(config_path))
+
+
+def test_default_prompt_preserves_factual_caution_without_broad_skip():
+    instructions = DEFAULT_ANTI_RULES.casefold()
+
+    no_facts_rule = 'не выдумывай факты'
+    partial_reply_rule = 'ответь по понятной части или задай короткий уточняющий вопрос'
+    broad_skip_rule = 'если смысл комментария непонятен'
+    skip_on_unclear_rule = 'в таком случае верни только SKIP'
+
+    assert no_facts_rule in instructions
+    assert partial_reply_rule in instructions
+    assert broad_skip_rule not in instructions
+    assert skip_on_unclear_rule not in instructions
+
+
+@pytest.mark.parametrize(
+    ("path", "prompt_key"),
+    [
+        ("prompt_config.example.json", None),
+        ("runtime_config.example.json", "prompt"),
+    ],
+)
+def test_tracked_prompt_examples_do_not_skip_unclear_comments_by_default(
+    path, prompt_key
+):
+    repo_root = Path(__file__).resolve().parents[2]
+    prompt = json.loads((repo_root / path).read_text(encoding="utf-8"))
+    if prompt_key is not None:
+        prompt = prompt[prompt_key]
+    instructions = "\n".join(prompt.values()).casefold()
+
+    assert 'ответь по понятной части или задай короткий уточняющий вопрос' in instructions
+    assert 'если смысл комментария непонятен' not in instructions
+    assert 'если смысл непонятен' not in instructions

@@ -24,6 +24,17 @@ _OUTPUT_RULE = (
     "Не добавляй пояснения, метки или заголовки: «тип:», «статус:», «ответ:», "
     "type:, status:, answer:."
 )
+_FINAL_REPLY_POLICY = (
+    "ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ВЫБОРА ОТВЕТА (имеет приоритет над инструкциями выше): "
+    "если комментарий можно понять и безопасно прокомментировать, ответь по сути. "
+    "Если понятна только часть, ответь по понятной части или задай короткий уточняющий "
+    "вопрос, не выдумывая фактов. Критика, негативная оценка, несогласие, шутка, "
+    "короткая реплика и отсутствие интереса к услуге сами по себе не являются "
+    "причиной для SKIP. SKIP используй только для тем из перечисленного выше "
+    "запретного списка, очевидной рекламы или спама, пустого либо полностью "
+    "нечитаемого текста. На критику отвечай спокойно и по теме, без CTA и "
+    "неподтверждённых технических утверждений."
+)
 
 
 def make_context(reply_type):
@@ -46,6 +57,7 @@ def _expected_default_prompt(task: str) -> str:
                 f"Ветка обсуждения: {THREAD_TEXT}"
             ),
             task,
+            _FINAL_REPLY_POLICY,
             _OUTPUT_RULE,
         ]
     ).replace("{cta_link}", DEFAULT_CTA_LINK)
@@ -270,7 +282,61 @@ def test_anti_rules_present(reply_type):
 def test_prompt_ends_with_publishable_output_protocol(reply_type):
     result = DameoPromptBuilder().build(make_context(reply_type))
 
-    assert result.endswith("type:, status:, answer:.")
+    assert result.endswith(_FINAL_REPLY_POLICY + "\n\n" + _OUTPUT_RULE)
+    assert result.index(_FINAL_REPLY_POLICY) < result.index(_OUTPUT_RULE)
+
+
+def test_final_reply_policy_overrides_legacy_skip_instructions():
+    config = PromptBrandConfig(
+        role="role",
+        tone_of_voice="tone",
+        anti_rules="Если смысл комментария неясен — верни ровно SKIP.",
+        task_lead="lead",
+        task_engage="Если нет интереса к услуге — верни ровно SKIP.",
+        cta_marker="cta",
+        cta_link="https://example.test",
+        language="ru",
+    )
+    builder = DameoPromptBuilder(config_provider=lambda: config)
+
+    result = builder.build(
+        PromptContext(
+            publication_title="article",
+            thread_text="",
+            comment_text="Не уверен, что это удобно.",
+            reply_type="engage",
+        )
+    )
+    policy_position = result.index("ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ВЫБОРА ОТВЕТА")
+
+    assert result.index("Если смысл комментария неясен") < policy_position
+    assert result.index("Если нет интереса к услуге") < policy_position
+    assert policy_position < result.index("type:, status:, answer:.")
+    assert result.endswith(_FINAL_REPLY_POLICY + "\n\n" + _OUTPUT_RULE)
+
+
+def test_wall_hung_toilet_criticism_gets_calm_no_cta_safe_reply_rule():
+    # Standalone regression input; it is absent from the audited CSV fields.
+    comment = (
+        "У подвисного унитаза много проблем. "
+        "Если потечёт гофра то надо будет очень долго мучатся "
+        "что бы поставить новую. Установка рамы это вообще "
+        "отдельная тема. Не ловкое движение и крепёж подвисного "
+        "унитаза ломается. Так что лучше напольного ни чего не придумали."
+    )
+    result = DameoPromptBuilder().build(
+        PromptContext(
+            publication_title="Ванная комната и выбор сантехники",
+            thread_text="",
+            comment_text=comment,
+            reply_type="engage",
+        )
+    )
+
+    assert comment in result
+    assert "Критика, негативная оценка" in result
+    assert "ответь по понятной части или задай короткий уточняющий вопрос" in result
+    assert "без CTA и неподтверждённых технических утверждений" in result
 
 
 def test_default_language_is_russian():
