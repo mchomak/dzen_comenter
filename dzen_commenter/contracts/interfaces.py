@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -144,6 +145,9 @@ class CommentRepository(Protocol):
     def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
         ...
 
+    def mark_publication_submitting(self, reply_id: int, *, claim_token: str) -> None:
+        ...
+
     def complete_publication(
         self,
         reply_id: int,
@@ -163,6 +167,15 @@ class CommentRepository(Protocol):
         retry_cooldown_minutes: int,
         max_attempts_per_reply: int,
     ) -> PublicationFailureOutcome:
+        ...
+
+    def mark_publication_unconfirmed(
+        self,
+        reply_id: int,
+        *,
+        claim_token: str,
+        reason: str,
+    ) -> None:
         ...
 
     def count_cta_candidates_produced(self) -> int:
@@ -225,6 +238,7 @@ class DzenPage(Protocol):
         *,
         auto_publish: bool,
         reply_id: int | None = None,
+        before_submit: Callable[[], None] | None = None,
     ) -> None:
         ...
 

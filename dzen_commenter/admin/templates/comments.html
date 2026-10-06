@@ -18,6 +18,7 @@
     <select name="status">
       <option value="" {% if not status %}selected{% endif %}>Все</option>
       <option value="error" {% if status == "error" %}selected{% endif %}>Ошибка</option>
+      <option value="unconfirmed" {% if status == "unconfirmed" %}selected{% endif %}>Публикация не подтверждена</option>
       <option value="no_reply" {% if status == "no_reply" %}selected{% endif %}>Нет ответа</option>
       <option value="generated" {% if status == "generated" %}selected{% endif %}>Сгенерирован</option>
       <option value="published" {% if status == "published" %}selected{% endif %}>Опубликован</option>
@@ -121,6 +122,8 @@
           <span class="status-badge status-error">Повтор публикации</span>{% if row.publication_last_error %}<span class="error-reason"> Техническая ошибка: {{ row.publication_last_error }}</span>{% endif %}
         {% elif row.comment_status == "publication_error" %}
           <span class="status-badge status-error">Ошибка публикации</span>{% if row.publication_last_error %}<span class="error-reason"> Техническая ошибка: {{ row.publication_last_error }}</span>{% endif %}
+        {% elif row.comment_status == "publication_unconfirmed" or row.reply_status == "unconfirmed" %}
+          <span class="status-badge status-generated">Публикация не подтверждена</span>{% if row.publication_last_error or row.error_reason %}<span class="error-reason"> {{ row.publication_last_error or row.error_reason }}</span>{% endif %}
         {% elif row.reply_status is none %}
           <span class="status-badge status-no-reply">Нет ответа</span>
         {% elif row.reply_status == "error" %}

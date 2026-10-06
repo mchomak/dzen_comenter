@@ -7,7 +7,10 @@ from datetime import datetime, timedelta
 import pytest
 
 from dzen_commenter.contracts.enums import CommentStatus, ReplyStatus
-from dzen_commenter.contracts.errors import SourceCommentUnavailableError
+from dzen_commenter.contracts.errors import (
+    PublicationUnconfirmedError,
+    SourceCommentUnavailableError,
+)
 from dzen_commenter.contracts.models import Publication, Reply
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotificationHandler
 from dzen_commenter.monitoring.logging_config import StructuredFormatter
@@ -226,6 +229,36 @@ def test_publication_retry_preserves_generated_text_and_never_regenerates(loop_f
     assert len(harness.ai_provider.calls) == 1
     assert harness.repository.replies[1].generated_text == saved_text
     assert harness.repository.replies[1].status is ReplyStatus.PUBLISHED
+
+
+def test_unconfirmed_publication_stops_automatic_retries(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    clock = {"now": datetime(2026, 9, 18, 12, 0, 0)}
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: clock["now"])
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["Готовый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+
+    def unconfirmed(*args, **kwargs):
+        raise PublicationUnconfirmedError("public confirmation timed out")
+
+    harness.page.publish_reply = unconfirmed
+    harness.loop.run_cycle()
+    clock["now"] += timedelta(hours=3)
+    harness.loop.run_cycle()
+
+    queue = harness.repository.publication_queue[1]
+    assert queue["state"] == "completed"
+    assert queue["attempt_count"] == 1
+    assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_UNCONFIRMED
+    assert harness.repository.replies[1].status is ReplyStatus.UNCONFIRMED
+    assert harness.repository.replies[1].published_at is None
+    assert len(harness.ai_provider.calls) == 1
 
 
 def test_unavailable_source_exhausts_publication_without_developer_alert(

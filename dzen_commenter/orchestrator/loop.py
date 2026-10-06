@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from dzen_commenter.config.runtime_config import RuntimeConfig, is_bot_account_author
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.enums import CommentStatus, PublicationFailureOutcome
-from dzen_commenter.contracts.errors import SourceCommentUnavailableError
+from dzen_commenter.contracts.errors import (
+    PublicationUnconfirmedError,
+    SourceCommentUnavailableError,
+)
 from dzen_commenter.contracts.interfaces import (
     AIProvider,
     AuthAssistant,
@@ -160,13 +163,39 @@ class OrchestratorLoop:
                 },
             )
             try:
+                def before_submit() -> None:
+                    try:
+                        self.repository.mark_publication_submitting(
+                            claimed.reply_id, claim_token=claimed.claim_token
+                        )
+                    except Exception as marker_error:
+                        raise PublicationUnconfirmedError(
+                            "publication submit marker could not be verified"
+                        ) from marker_error
+
                 with self._browser_access():
                     self.page.publish_reply(
                         claimed.comment,
                         claimed.text,
                         auto_publish=runtime_settings.auto_publish,
                         reply_id=claimed.reply_id,
+                        before_submit=before_submit,
                     )
+            except PublicationUnconfirmedError as exc:
+                self.repository.mark_publication_unconfirmed(
+                    claimed.reply_id,
+                    claim_token=claimed.claim_token,
+                    reason=str(exc),
+                )
+                logger.warning(
+                    "Dzen reply publication was not confirmed",
+                    extra={
+                        "event": "publication_unconfirmed",
+                        **correlation,
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+                continue
             except Exception as exc:
                 error_reason = f"Dzen reply publication failed: {exc}"
                 outcome = self.repository.fail_publication(

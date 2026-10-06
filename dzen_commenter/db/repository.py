@@ -35,7 +35,7 @@ class PostgresCommentRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    _PUBLICATION_CLAIM_LEASE = timedelta(minutes=5)
+    _PUBLICATION_CLAIM_LEASE = timedelta(hours=2)
     _GENERATION_CLAIM_LEASE = timedelta(minutes=5)
 
     def upsert_publication(self, pub: Publication) -> int:
@@ -141,6 +141,7 @@ class PostgresCommentRepository:
                         ReplyStatus.PUBLISHED.value,
                         ReplyStatus.SKIPPED.value,
                         ReplyStatus.ERROR.value,
+                        ReplyStatus.UNCONFIRMED.value,
                     ]
                 ),
             )
@@ -241,6 +242,7 @@ class PostgresCommentRepository:
                     ReplyStatus.PUBLISHED.value,
                     ReplyStatus.ERROR.value,
                     ReplyStatus.SKIPPED.value,
+                    ReplyStatus.UNCONFIRMED.value,
                 ]
             ),
             ReplyTable.created_at >= since,
@@ -259,6 +261,7 @@ class PostgresCommentRepository:
                         ReplyStatus.PUBLISHED.value,
                         ReplyStatus.SKIPPED.value,
                         ReplyStatus.ERROR.value,
+                        ReplyStatus.UNCONFIRMED.value,
                     ]
                 ),
             )
@@ -712,6 +715,45 @@ class PostgresCommentRepository:
             | (ReplyPublicationQueueTable.next_attempt_at <= now)
         )
         with self._engine.begin() as conn:
+            expired_submitting = conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(
+                    ReplyPublicationQueueTable.state == "submitting",
+                    or_(
+                        ReplyPublicationQueueTable.claimed_at.is_(None),
+                        ReplyPublicationQueueTable.claimed_at
+                        <= now - self._PUBLICATION_CLAIM_LEASE,
+                    ),
+                )
+                .values(
+                    state="completed",
+                    next_attempt_at=None,
+                    last_error="publication outcome unknown after worker interruption",
+                    claimed_at=None,
+                    claim_token=None,
+                )
+                .returning(ReplyPublicationQueueTable.reply_id)
+            ).scalars().all()
+            if expired_submitting:
+                conn.execute(
+                    update(ReplyTable)
+                    .where(ReplyTable.id.in_(expired_submitting))
+                    .values(
+                        status=ReplyStatus.UNCONFIRMED.value,
+                        error_reason="publication outcome unknown after worker interruption",
+                    )
+                )
+                conn.execute(
+                    update(CommentTable)
+                    .where(
+                        CommentTable.id.in_(
+                            select(ReplyTable.comment_id).where(
+                                ReplyTable.id.in_(expired_submitting)
+                            )
+                        )
+                    )
+                    .values(status=CommentStatus.PUBLICATION_UNCONFIRMED.value)
+                )
             conn.execute(
                 update(ReplyPublicationQueueTable)
                 .where(
@@ -793,6 +835,21 @@ class PostgresCommentRepository:
             claim_token=claim_token,
         )
 
+    def mark_publication_submitting(self, reply_id: int, *, claim_token: str) -> None:
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(
+                    ReplyPublicationQueueTable.reply_id == reply_id,
+                    ReplyPublicationQueueTable.state == "claimed",
+                    ReplyPublicationQueueTable.claim_token == claim_token,
+                )
+                .values(state="submitting")
+                .returning(ReplyPublicationQueueTable.reply_id)
+            ).one_or_none()
+            if row is None:
+                raise ValueError("Publication queue claim is no longer active")
+
     def complete_publication(
         self,
         reply_id: int,
@@ -805,7 +862,7 @@ class PostgresCommentRepository:
                 select(ReplyPublicationQueueTable.reply_id)
                 .where(
                     ReplyPublicationQueueTable.reply_id == reply_id,
-                    ReplyPublicationQueueTable.state == "claimed",
+                    ReplyPublicationQueueTable.state.in_(("claimed", "submitting")),
                     ReplyPublicationQueueTable.claim_token == claim_token,
                 )
                 .with_for_update()
@@ -866,7 +923,7 @@ class PostgresCommentRepository:
                 )
                 .where(
                     ReplyPublicationQueueTable.reply_id == reply_id,
-                    ReplyPublicationQueueTable.state == "claimed",
+                    ReplyPublicationQueueTable.state.in_(("claimed", "submitting")),
                     ReplyPublicationQueueTable.claim_token == claim_token,
                 )
                 .with_for_update()
@@ -917,10 +974,60 @@ class PostgresCommentRepository:
                 else PublicationFailureOutcome.TERMINAL
             )
 
+    def mark_publication_unconfirmed(
+        self,
+        reply_id: int,
+        *,
+        claim_token: str,
+        reason: str,
+    ) -> None:
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                select(ReplyPublicationQueueTable.reply_id)
+                .where(
+                    ReplyPublicationQueueTable.reply_id == reply_id,
+                    ReplyPublicationQueueTable.state.in_(("claimed", "submitting")),
+                    ReplyPublicationQueueTable.claim_token == claim_token,
+                )
+                .with_for_update()
+            ).one_or_none()
+            if row is None:
+                raise ValueError("Publication queue claim is no longer active")
+            conn.execute(
+                update(ReplyTable)
+                .where(ReplyTable.id == reply_id)
+                .values(status=ReplyStatus.UNCONFIRMED.value, error_reason=reason)
+            )
+            conn.execute(
+                update(ReplyPublicationQueueTable)
+                .where(ReplyPublicationQueueTable.reply_id == reply_id)
+                .values(
+                    state="completed",
+                    next_attempt_at=None,
+                    last_error=reason,
+                    claimed_at=None,
+                    claim_token=None,
+                )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(
+                    CommentTable.id
+                    == select(ReplyTable.comment_id)
+                    .where(ReplyTable.id == reply_id)
+                    .scalar_subquery()
+                )
+                .values(status=CommentStatus.PUBLICATION_UNCONFIRMED.value)
+            )
+
     def count_cta_candidates_produced(self) -> int:
         stmt = select(func.count()).select_from(ReplyTable).where(
             ReplyTable.status.in_(
-                [ReplyStatus.GENERATED.value, ReplyStatus.PUBLISHED.value]
+                [
+                    ReplyStatus.GENERATED.value,
+                    ReplyStatus.PUBLISHED.value,
+                    ReplyStatus.UNCONFIRMED.value,
+                ]
             ),
             ReplyTable.is_cta_candidate.is_(True),
         )
@@ -945,7 +1052,11 @@ class PostgresCommentRepository:
             .where(
                 ReplyTable.comment_id == comment_id,
                 ReplyTable.status.in_(
-                    [ReplyStatus.GENERATED.value, ReplyStatus.PUBLISHED.value]
+                    [
+                        ReplyStatus.GENERATED.value,
+                        ReplyStatus.PUBLISHED.value,
+                        ReplyStatus.UNCONFIRMED.value,
+                    ]
                 ),
             )
             .exists()

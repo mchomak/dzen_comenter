@@ -215,7 +215,8 @@ def test_fake_repository_rejects_an_expired_publication_claim(
     )
     first_claim = repository.claim_next_publication(now)
     assert first_claim is not None
-    second_claim = repository.claim_next_publication(now + timedelta(minutes=6))
+    assert repository.claim_next_publication(now + timedelta(minutes=6)) is None
+    second_claim = repository.claim_next_publication(now + timedelta(hours=2, minutes=1))
     assert second_claim is not None
     assert first_claim.claim_token != second_claim.claim_token
 

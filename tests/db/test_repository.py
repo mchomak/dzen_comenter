@@ -1226,7 +1226,7 @@ def test_expire_stale_publications_completes_only_queued_stale_jobs(repo, engine
         fresh_reply_id: "generated",
     }
     assert comment_states == {
-        claimed_comment_id: "new",
+        claimed_comment_id: "publishing",
         stale_comment_id: "skipped",
         fresh_comment_id: "new",
     }
@@ -1237,7 +1237,7 @@ def test_expire_stale_publications_completes_only_queued_stale_jobs(repo, engine
     assert claimed_fresh.reply_id == fresh_reply_id
 
 
-def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo):
+def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo, engine):
     publication_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 9, 10, 10, 0, 0)
     comment_id = repo.upsert_comment(
@@ -1249,7 +1249,8 @@ def test_stale_publication_claim_is_recovered_without_stealing_fresh_claim(repo)
     assert publication_claim is not None
 
     assert repo.claim_next_publication(now + timedelta(seconds=1)) is None
-    recovered = repo.claim_next_publication(now + timedelta(hours=1))
+    assert repo.claim_next_publication(now + timedelta(hours=1)) is None
+    recovered = repo.claim_next_publication(now + timedelta(hours=2, minutes=1))
 
     assert recovered is not None
     assert recovered.reply_id == reply_id
@@ -1274,7 +1275,8 @@ def test_stale_publication_claim_cannot_finish_a_newer_claim(repo, finish):
     assert repo.enqueue_publication(reply_id, created_at=now)
     first_claim = repo.claim_next_publication(now)
     assert first_claim is not None
-    second_claim = repo.claim_next_publication(now + timedelta(minutes=6))
+    assert repo.claim_next_publication(now + timedelta(minutes=6)) is None
+    second_claim = repo.claim_next_publication(now + timedelta(hours=2, minutes=1))
     assert second_claim is not None
     assert first_claim.claim_token != second_claim.claim_token
 
@@ -1309,6 +1311,8 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_publicat
     publication_claim = repo.claim_next_publication(now)
     assert publication_claim is not None
 
+    repo.mark_publication_submitting(reply_id, claim_token=publication_claim.claim_token)
+
     retry_outcome = repo.fail_publication(
         reply_id,
         claim_token=publication_claim.claim_token,
@@ -1329,11 +1333,12 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_publicat
             select(
                 ReplyPublicationQueueTable.state,
                 ReplyPublicationQueueTable.last_error,
+                ReplyPublicationQueueTable.next_attempt_at,
             ).where(ReplyPublicationQueueTable.reply_id == reply_id)
         ).one()
     assert retry_reply_status == "generated"
     assert retry_comment_status == "publication_retry"
-    assert retry_queue == ("queued", "comment not in DOM")
+    assert retry_queue == ("queued", "comment not in DOM", now + timedelta(minutes=60))
     assert repo.claim_next_publication(now + timedelta(minutes=59)) is None
     terminal_claim = repo.claim_next_publication(now + timedelta(minutes=60))
     assert terminal_claim is not None
@@ -1371,3 +1376,115 @@ def test_publication_failure_retries_without_new_generation_and_ends_as_publicat
     assert queue == ("completed", "comment not in DOM")
     assert reply_count == 1
     assert generation_state is None
+
+
+def test_unconfirmed_publication_is_atomic_terminal_and_rejects_stale_token(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(_make_comment(publication_id, fetched_at=now))
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+    claim = repo.claim_next_publication(now)
+    assert claim is not None
+
+    repo.mark_publication_submitting(reply_id, claim_token=claim.claim_token)
+
+    repo.mark_publication_unconfirmed(
+        reply_id, claim_token=claim.claim_token, reason="public confirmation timed out"
+    )
+
+    with engine.connect() as conn:
+        reply = conn.execute(
+            select(ReplyTable.status, ReplyTable.published_at, ReplyTable.error_reason)
+            .where(ReplyTable.id == reply_id)
+        ).one()
+        comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+        queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.next_attempt_at,
+                ReplyPublicationQueueTable.last_error,
+                ReplyPublicationQueueTable.claim_token,
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
+        ).one()
+    assert reply == ("unconfirmed", None, "public confirmation timed out")
+    assert comment_status == "publication_unconfirmed"
+    assert queue == ("completed", None, "public confirmation timed out", None)
+    assert repo.claim_next_publication(now + timedelta(hours=3)) is None
+    with pytest.raises(ValueError, match="claim"):
+        repo.mark_publication_unconfirmed(
+            reply_id, claim_token=claim.claim_token, reason="stale worker"
+        )
+
+
+def test_expired_submitting_claim_becomes_unconfirmed_without_reclaim(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(_make_comment(publication_id, fetched_at=now))
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+    claim = repo.claim_next_publication(now)
+    assert claim is not None
+    with pytest.raises(ValueError, match="claim"):
+        repo.mark_publication_submitting(reply_id, claim_token="stale")
+    repo.mark_publication_submitting(reply_id, claim_token=claim.claim_token)
+
+    assert repo.claim_next_publication(now + timedelta(hours=1)) is None
+    assert repo.claim_next_publication(now + timedelta(hours=2, minutes=1)) is None
+    with engine.connect() as conn:
+        reply = conn.execute(
+            select(ReplyTable.status, ReplyTable.published_at, ReplyTable.error_reason)
+            .where(ReplyTable.id == reply_id)
+        ).one()
+        comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+        queue = conn.execute(
+            select(
+                ReplyPublicationQueueTable.state,
+                ReplyPublicationQueueTable.attempt_count,
+                ReplyPublicationQueueTable.claim_token,
+            ).where(ReplyPublicationQueueTable.reply_id == reply_id)
+        ).one()
+    assert reply == (
+        "unconfirmed",
+        None,
+        "publication outcome unknown after worker interruption",
+    )
+    assert comment_status == "publication_unconfirmed"
+    assert queue == ("completed", 1, None)
+    with pytest.raises(ValueError, match="claim"):
+        repo.complete_publication(
+            reply_id, claim_token=claim.claim_token, published_at=now
+        )
+
+
+def test_confirmed_submitting_claim_marks_reply_and_comment_published(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 10, 10, 0, 0)
+    comment_id = repo.upsert_comment(_make_comment(publication_id, fetched_at=now))
+    reply_id = repo.save_reply(_make_reply(comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+    claim = repo.claim_next_publication(now)
+    assert claim is not None
+    repo.mark_publication_submitting(reply_id, claim_token=claim.claim_token)
+
+    repo.complete_publication(reply_id, claim_token=claim.claim_token, published_at=now)
+
+    with engine.connect() as conn:
+        reply = conn.execute(
+            select(ReplyTable.status, ReplyTable.published_at).where(ReplyTable.id == reply_id)
+        ).one()
+        comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+        queue_state = conn.execute(
+            select(ReplyPublicationQueueTable.state).where(
+                ReplyPublicationQueueTable.reply_id == reply_id
+            )
+        ).scalar_one()
+    assert reply == ("published", now)
+    assert comment_status == "published"
+    assert queue_state == "completed"

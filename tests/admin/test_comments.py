@@ -278,6 +278,37 @@ def test_history_shows_publication_retry_and_error_with_the_last_technical_error
     assert "Техническая ошибка: Browser disconnected" in body
 
 
+def test_history_shows_unconfirmed_without_error_label(client, engine):
+    _add_comment(
+        engine,
+        cid=1,
+        author="uncertain",
+        text="hi",
+        post_url="/a/p",
+        fetched_at=datetime.now(),
+        status="publication_unconfirmed",
+    )
+    _add_reply(
+        engine,
+        rid=1,
+        comment_id=1,
+        generated_text="saved reply",
+        status="unconfirmed",
+        error_reason="public confirmation timed out",
+    )
+    _add_publication_job(
+        engine, reply_id=1, state="completed", last_error="public confirmation timed out"
+    )
+
+    body = client.get("/comments?status=unconfirmed").text
+
+    assert "Публикация не подтверждена" in body
+    assert "public confirmation timed out" in body
+    assert "Ошибка публикации" not in body
+    assert "Отправлен" not in body
+    assert fetch_status_counts(engine)["unconfirmed"] == 1
+
+
 # --- parse_thread_messages unit ---
 
 

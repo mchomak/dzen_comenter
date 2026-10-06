@@ -3,6 +3,7 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -11,7 +12,10 @@ from dzen_commenter.config.runtime_config import (
     is_bot_account_author,
 )
 from dzen_commenter.contracts.enums import CommentStatus
-from dzen_commenter.contracts.errors import SourceCommentUnavailableError
+from dzen_commenter.contracts.errors import (
+    PublicationUnconfirmedError,
+    SourceCommentUnavailableError,
+)
 from dzen_commenter.contracts.models import Comment
 from dzen_commenter.dzen import selectors
 from dzen_commenter.time_utils import moscow_now
@@ -46,17 +50,19 @@ _PROMOTIONAL_ARTICLE_MARKERS = (
     "посмотреть больше работ",
     "советует начать свой ремонт",
 )
-_REPLY_SEARCH_MAX_SCROLLS = 20
-_REPLY_SEARCH_WAIT_MS = 500
+_REPLY_SEARCH_MAX_SCROLLS = 40
+_REPLY_SEARCH_WAIT_MS = 750
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
-_REPLY_SUBMIT_ACK_TIMEOUT_MS = 10_000
-_REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 10_000
-_REPLY_EXPANSION_TIMEOUT_MS = 10_000
-_PUBLIC_COMMENT_WAIT_MS = 500
-_PUBLIC_COMMENT_POLL_LIMIT = 20
+_REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
+_REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
+_REPLY_EXPANSION_TIMEOUT_MS = 30_000
+_PUBLIC_COMMENT_WAIT_MS = 750
+_PUBLIC_COMMENT_POLL_LIMIT = 40
 _PUBLIC_PREFLIGHT_POLL_LIMIT = _PUBLIC_COMMENT_POLL_LIMIT
-_PUBLIC_NAVIGATION_TIMEOUT_MS = 60_000
+_PUBLIC_NAVIGATION_TIMEOUT_MS = 90_000
 _PUBLIC_NAVIGATION_ATTEMPTS = 2
+_PUBLIC_MAX_LOAD_MORE_CLICKS = 30
+_PUBLIC_VERIFICATION_TIMEOUT_MS = 20 * 60_000
 _STUDIO_CONFIRM_DELAY_MS = 2_000
 _SUBMIT_TRACE_LIMIT = 5
 
@@ -169,6 +175,8 @@ def _response_status(response: Any) -> int | None:
 
 
 def _publication_failure_location(exc: Exception) -> tuple[str, str]:
+    if isinstance(exc, PublicationUnconfirmedError) and isinstance(exc.__cause__, Exception):
+        return _publication_failure_location(exc.__cause__)
     if isinstance(exc, SourceCommentUnavailableError):
         return "studio_source_comment_search", "source_comment_not_found"
     try:
@@ -179,6 +187,8 @@ def _publication_failure_location(exc: Exception) -> tuple[str, str]:
         return "public_article_navigation", "navigation_exception"
     if "public article comments did not load" in message:
         return "public_comment_loading", "comments_not_loaded"
+    if "public article verification time limit reached" in message:
+        return "public_reply_confirmation", "verification_timeout"
     if "public article comments did not expand" in message:
         return "public_comment_loading", "additional_comments_not_loaded"
     if "public article replies did not expand" in message:
@@ -520,6 +530,7 @@ class DzenStudioPage:
         *,
         auto_publish: bool,
         reply_id: int | None = None,
+        before_submit: Callable[[], None] | None = None,
     ) -> None:
         correlation = {"reply_id": reply_id}
         logger.info(
@@ -536,6 +547,7 @@ class DzenStudioPage:
                 text,
                 auto_publish=auto_publish,
                 reply_id=reply_id,
+                before_submit=before_submit,
             )
         except Exception as exc:
             failure_stage, failure_reason = _publication_failure_location(exc)
@@ -558,6 +570,7 @@ class DzenStudioPage:
         *,
         auto_publish: bool,
         reply_id: int | None,
+        before_submit: Callable[[], None] | None,
     ) -> None:
         correlation = {"reply_id": reply_id}
         logger.info(
@@ -734,18 +747,14 @@ class DzenStudioPage:
                 return
 
         acknowledged = False
+        submit_attempted = False
 
-        def submission_started() -> bool:
-            nonlocal acknowledged
-            if (
-                self._creation_response_outcome(
-                    creation_response, creation_payload, normalized_text
-                )
-                == "accepted"
-            ):
-                return True
-            acknowledged = acknowledged or self._has_published_reply(node, text)
-            return acknowledged
+        def mark_submit_attempted() -> None:
+            nonlocal submit_attempted
+            if before_submit is None:
+                raise RuntimeError("durable publication submit marker is required")
+            before_submit()
+            submit_attempted = True
 
         page.on("request", on_request)
         page.on("response", on_response)
@@ -754,7 +763,7 @@ class DzenStudioPage:
                 node,
                 text,
                 auto_publish=True,
-                submission_started=submission_started,
+                on_submit_attempt=mark_submit_attempted,
                 reply_id=reply_id,
             )
             logger.info(
@@ -784,6 +793,8 @@ class DzenStudioPage:
                     "response_outcome": creation_outcome,
                 },
             )
+            if creation_outcome == "non_2xx":
+                raise RuntimeError("Dzen create response was non-2xx")
 
             page.wait_for_timeout(_STUDIO_CONFIRM_DELAY_MS)
             reply_visible = False
@@ -871,6 +882,18 @@ class DzenStudioPage:
                 "Dzen reply confirmed in Studio and public article",
                 extra={"event": "publication_confirmed", **correlation},
             )
+        except Exception as exc:
+            creation_outcome = self._creation_response_outcome(
+                creation_response, creation_payload, normalized_text
+            )
+            if submit_attempted and creation_outcome != "non_2xx":
+                failure_stage, failure_reason = _publication_failure_location(exc)
+                raise PublicationUnconfirmedError(
+                    "publication not confirmed after submit; "
+                    f"failure_stage={failure_stage}; failure_reason={failure_reason}; "
+                    f"creation_outcome={creation_outcome}"
+                ) from exc
+            raise
         finally:
             page.remove_listener("request", on_request)
             page.remove_listener("response", on_response)
@@ -893,11 +916,18 @@ class DzenStudioPage:
         if not account_name.strip():
             raise RuntimeError("public article verification requires a bot author")
 
+        deadline = monotonic() + _PUBLIC_VERIFICATION_TIMEOUT_MS / 1_000
+
+        def ensure_time_budget() -> None:
+            if monotonic() >= deadline:
+                raise RuntimeError("public article verification time limit reached")
+
         article_page = self._page.context.new_page()
         navigation_status = None
         navigation_attempt_count = 0
         try:
             for attempt in range(1, _PUBLIC_NAVIGATION_ATTEMPTS + 1):
+                ensure_time_budget()
                 navigation_attempt_count = attempt
                 try:
                     response = article_page.goto(
@@ -954,6 +984,7 @@ class DzenStudioPage:
             comment_wait_count = 0
             last_loading_exception = None
             for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                ensure_time_budget()
                 comment_wait_count += 1
                 try:
                     article_page.evaluate(
@@ -1055,9 +1086,11 @@ class DzenStudioPage:
             branch_expansion_wait_count = 0
             reply_confirmation_wait_count = 0
             while True:
+                ensure_time_budget()
                 roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
                 roots_checked += len(roots)
                 for index, root in enumerate(roots):
+                    ensure_time_budget()
                     try:
                         data = self._read_public_comment(root)
                     except Exception:
@@ -1163,6 +1196,7 @@ class DzenStudioPage:
                         if wait_for_reply else _PUBLIC_PREFLIGHT_POLL_LIMIT
                     )
                     for poll in range(poll_limit + 1):
+                        ensure_time_budget()
                         current_roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
                         if index >= len(current_roots):
                             if poll < poll_limit:
@@ -1282,6 +1316,8 @@ class DzenStudioPage:
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     continue
                 previous_count = len(roots)
+                if load >= _PUBLIC_MAX_LOAD_MORE_CLICKS:
+                    raise RuntimeError("public article source comment search limit reached")
                 load_more_click_attempt_count += 1
                 try:
                     more.click()
@@ -1313,6 +1349,7 @@ class DzenStudioPage:
                 )
                 load_wait_count = 0
                 for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                    ensure_time_budget()
                     load_wait_count += 1
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     if len(article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)) > previous_count:
@@ -1641,7 +1678,7 @@ class DzenStudioPage:
         text: str,
         *,
         auto_publish: bool,
-        submission_started: Callable[[], bool] | None = None,
+        on_submit_attempt: Callable[[], None] | None = None,
         reply_id: int | None,
     ) -> None:
         correlation = {"reply_id": reply_id}
@@ -1734,6 +1771,8 @@ class DzenStudioPage:
                     "attempt": 1,
                 },
             )
+            if on_submit_attempt is not None:
+                on_submit_attempt()
             try:
                 send_button.click()
             except Exception as exc:
@@ -1749,62 +1788,7 @@ class DzenStudioPage:
                     },
                 )
                 raise
-            if self._wait_for_send_button_to_hide(
-                node, wait_attempt=1, reply_id=reply_id
-            ):
-                return
-
-            if submission_started is None or not submission_started():
-                send_button = node.query_selector(selectors.REPLY_SUBMIT)
-                logger.info(
-                    "Dzen send button search completed",
-                    extra={
-                        "event": "publication_send_button_search",
-                        **correlation,
-                        "attempt": 2,
-                        "result": "found" if send_button is not None else "missing",
-                    **(
-                        {
-                            "failure_stage": "publication_controls",
-                            "failure_reason": "send_button_not_found",
-                            "failure_type": "ControlNotFound",
-                            "failure_description": "send button was not present",
-                        }
-                        if send_button is None else {}
-                    ),
-                    },
-                )
-                if send_button is not None and send_button.is_visible():
-                    logger.info(
-                        "Attempting to click Dzen send button",
-                        extra={
-                            "event": "publication_send_click_attempt",
-                            **correlation,
-                            "attempt": 2,
-                        },
-                    )
-                    try:
-                        send_button.click()
-                    except Exception as exc:
-                        logger.info(
-                            "Dzen reply submit click failed",
-                            extra={
-                                "event": "publication_submit_failed",
-                                **correlation,
-                                "failure_stage": "publication_submit",
-                                "failure_reason": "submit_exception",
-                                "attempt": 2,
-                                **_safe_exception_fields(exc),
-                            },
-                        )
-                        raise
-
-            if not self._wait_for_send_button_to_hide(
-                node, wait_attempt=2, reply_id=reply_id
-            ):
-                raise RuntimeError(
-                    "Dzen reply send button remained visible after submit; page was not reloaded"
-                )
+            self._wait_for_send_button_to_hide(node, wait_attempt=1, reply_id=reply_id)
         else:
             self._page.wait_for_timeout(5_000)
 

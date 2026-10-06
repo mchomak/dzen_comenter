@@ -12,7 +12,7 @@ class CommentStatus(str, Enum):
     GENERATION_ERROR = "generation_error"
     PUBLICATION_RETRY = "publication_retry"
     PUBLICATION_ERROR = "publication_error"
-
+    PUBLICATION_UNCONFIRMED = "publication_unconfirmed"
 
 
 class ReplyStatus(str, Enum):
@@ -20,6 +20,7 @@ class ReplyStatus(str, Enum):
     PUBLISHED = "published"
     ERROR = "error"
     SKIPPED = "skipped"
+    UNCONFIRMED = "unconfirmed"
 
 
 class PublicationFailureOutcome(str, Enum):

@@ -98,12 +98,14 @@ def test_enum_values():
         "generation_error",
         "publication_retry",
         "publication_error",
+        "publication_unconfirmed",
     } <= {s.value for s in CommentStatus}
     assert {s.value for s in ReplyStatus} == {
         "generated",
         "published",
         "error",
         "skipped",
+        "unconfirmed",
     }
 
 

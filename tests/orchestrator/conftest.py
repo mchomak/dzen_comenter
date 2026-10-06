@@ -170,6 +170,7 @@ class FakeCommentRepository:
                 ReplyStatus.PUBLISHED,
                 ReplyStatus.ERROR,
                 ReplyStatus.SKIPPED,
+                ReplyStatus.UNCONFIRMED,
             )
             and reply.created_at is not None
             and reply.created_at >= since
@@ -178,7 +179,7 @@ class FakeCommentRepository:
 
     def count_cta_candidates_produced(self) -> int:
         return sum(
-            reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED)
+            reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED, ReplyStatus.UNCONFIRMED)
             and reply.is_cta_candidate
             for reply in self.replies.values()
         )
@@ -191,7 +192,7 @@ class FakeCommentRepository:
         self.has_generated_reply_calls.append(comment_id)
         return comment_id in self.published_reply_comment_ids or any(
             reply.comment_id == comment_id
-            and reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED)
+            and reply.status in (ReplyStatus.GENERATED, ReplyStatus.PUBLISHED, ReplyStatus.UNCONFIRMED)
             for reply in self.replies.values()
         )
 
@@ -218,6 +219,7 @@ class FakeCommentRepository:
                     ReplyStatus.PUBLISHED,
                     ReplyStatus.SKIPPED,
                     ReplyStatus.ERROR,
+                    ReplyStatus.UNCONFIRMED,
                 )
                 for reply in self.replies.values()
             )
@@ -460,10 +462,25 @@ class FakeCommentRepository:
         return len(stale_reply_ids)
 
     def claim_next_publication(self, now: datetime) -> ClaimedPublication | None:
-        for row in self.publication_queue.values():
+        for reply_id, row in self.publication_queue.items():
+            if row["state"] == "submitting" and (
+                row["claimed_at"] is None
+                or row["claimed_at"] <= now - timedelta(hours=2)
+            ):
+                reason = "publication outcome unknown after worker interruption"
+                row["state"] = "completed"
+                row["next_attempt_at"] = None
+                row["last_error"] = reason
+                row["claimed_at"] = None
+                row["claim_token"] = None
+                self.set_reply_status(reply_id, ReplyStatus.UNCONFIRMED, reason)
+                self.set_comment_status(
+                    self.replies[reply_id].comment_id,
+                    CommentStatus.PUBLICATION_UNCONFIRMED,
+                )
             if row["state"] == "claimed" and (
                 row["claimed_at"] is None
-                or row["claimed_at"] <= now - timedelta(minutes=5)
+                or row["claimed_at"] <= now - timedelta(hours=2)
             ):
                 row["state"] = "queued"
                 row["claimed_at"] = None
@@ -495,6 +512,12 @@ class FakeCommentRepository:
             claim_token=claim_token,
         )
 
+    def mark_publication_submitting(self, reply_id: int, *, claim_token: str) -> None:
+        row = self.publication_queue[reply_id]
+        if row["state"] != "claimed" or row["claim_token"] != claim_token:
+            raise ValueError("Publication queue claim is no longer active")
+        row["state"] = "submitting"
+
     def complete_publication(
         self,
         reply_id: int,
@@ -504,7 +527,7 @@ class FakeCommentRepository:
     ) -> None:
         self.complete_publication_calls.append(reply_id)
         row = self.publication_queue[reply_id]
-        if row["state"] != "claimed" or row["claim_token"] != claim_token:
+        if row["state"] not in ("claimed", "submitting") or row["claim_token"] != claim_token:
             raise ValueError("Publication queue claim is no longer active")
         row["state"] = "completed"
         row["next_attempt_at"] = None
@@ -536,7 +559,7 @@ class FakeCommentRepository:
     ) -> PublicationFailureOutcome:
         self.fail_publication_calls.append((reply_id, error_reason))
         row = self.publication_queue[reply_id]
-        if row["state"] != "claimed" or row["claim_token"] != claim_token:
+        if row["state"] not in ("claimed", "submitting") or row["claim_token"] != claim_token:
             raise ValueError("Publication queue claim is no longer active")
         retry = int(row["attempt_count"]) < max_attempts_per_reply
         row["state"] = "queued" if retry else "completed"
@@ -558,6 +581,27 @@ class FakeCommentRepository:
             PublicationFailureOutcome.RETRY
             if retry
             else PublicationFailureOutcome.TERMINAL
+        )
+
+    def mark_publication_unconfirmed(
+        self,
+        reply_id: int,
+        *,
+        claim_token: str,
+        reason: str,
+    ) -> None:
+        row = self.publication_queue[reply_id]
+        if row["state"] not in ("claimed", "submitting") or row["claim_token"] != claim_token:
+            raise ValueError("Publication queue claim is no longer active")
+        row["state"] = "completed"
+        row["next_attempt_at"] = None
+        row["last_error"] = reason
+        row["claimed_at"] = None
+        row["claim_token"] = None
+        self.set_reply_status(reply_id, ReplyStatus.UNCONFIRMED, reason)
+        self.set_comment_status(
+            self.replies[reply_id].comment_id,
+            CommentStatus.PUBLICATION_UNCONFIRMED,
         )
 
 
@@ -659,7 +703,10 @@ class FakeDzenPage:
         *,
         auto_publish: bool,
         reply_id: int | None = None,
+        before_submit=None,
     ) -> None:
+        if auto_publish and before_submit is not None:
+            before_submit()
         self.publish_calls.append((comment, text, auto_publish))
 
 

@@ -91,7 +91,7 @@ def _is_video_post_url(value: str | None) -> bool:
         return False
 
 
-STATUS_CATEGORIES = ("published", "generated", "error", "skipped", "no_reply")
+STATUS_CATEGORIES = ("published", "generated", "unconfirmed", "error", "skipped", "no_reply")
 
 
 def _row_category(row: FeedRow) -> str:
@@ -142,7 +142,7 @@ def fetch_feed(
 
 
 def fetch_status_counts(engine: Engine, limit: int = 100) -> dict[str, int]:
-    """Подсчёт строк ленты (последние `limit`) по 5 категориям статуса.
+    """Подсчёт строк ленты (последние `limit`) по категориям статуса.
 
     Сумма значений равна числу строк ленты.
     """
