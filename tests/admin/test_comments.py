@@ -293,17 +293,56 @@ def test_history_shows_unconfirmed_without_error_label(client, engine):
         rid=1,
         comment_id=1,
         generated_text="saved reply",
-        status="unconfirmed",
-        error_reason="public confirmation timed out",
+        status="error",
+        error_reason=(
+            "publication not confirmed after submit; "
+            "failure_stage=public_reply_confirmation; "
+            "failure_reason=reply_not_confirmed; creation_outcome=accepted"
+        ),
     )
     _add_publication_job(
-        engine, reply_id=1, state="completed", last_error="public confirmation timed out"
+        engine,
+        reply_id=1,
+        state="completed",
+        last_error=None,
+    )
+    _add_comment(
+        engine,
+        cid=2,
+        author="uncertain reply status",
+        text="hi",
+        post_url="/a/p",
+        fetched_at=datetime.now(),
+        status="publication_error",
+    )
+    _add_reply(
+        engine,
+        rid=2,
+        comment_id=2,
+        generated_text="saved reply",
+        status="unconfirmed",
+        error_reason=None,
+    )
+    _add_publication_job(
+        engine,
+        reply_id=2,
+        state="completed",
+        last_error="queue: public confirmation timed out",
     )
 
-    body = client.get("/comments?status=unconfirmed").text
+    body = client.get("/comments").text
 
-    assert "Публикация не подтверждена" in body
-    assert "public confirmation timed out" in body
+    assert (
+        body.count(
+            '<span class="status-badge status-generated">Публикация не подтверждена</span>'
+        )
+        == 2
+    )
+    assert "publication not confirmed after submit" not in body
+    assert "failure_stage=public_reply_confirmation" not in body
+    assert "failure_reason=reply_not_confirmed" not in body
+    assert "creation_outcome=accepted" not in body
+    assert "queue: public confirmation timed out" not in body
     assert "Ошибка публикации" not in body
     assert "Отправлен" not in body
     assert fetch_status_counts(engine)["unconfirmed"] == 1
