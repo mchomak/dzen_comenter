@@ -27,10 +27,17 @@ class FakeText:
 
 
 class FakeButton:
-    def __init__(self, on_click=None, *, hide_on_click: bool = False) -> None:
+    def __init__(
+        self,
+        on_click=None,
+        *,
+        hide_on_click: bool = False,
+        text: str = "2 ответа",
+    ) -> None:
         self.clicks = 0
         self.on_click = on_click
         self.hide_on_click = hide_on_click
+        self._text = text
         self.visible = True
         self.attached = True
 
@@ -45,7 +52,10 @@ class FakeButton:
         return self.attached and self.visible
 
     def inner_text(self) -> str:
-        return "2 ответа"
+        return self._text
+
+    def evaluate(self, _script: str) -> int:
+        return id(self)
 
 
 class FakeInput:
@@ -72,9 +82,14 @@ class FakeCommentNode:
         self.query_selector_calls: list[str] = []
         self.published_replies: list[dict[str, str]] = []
         self.hidden_replies: list[dict[str, str]] = []
+        self.visible_comment_children: list[FakeCommentNode] = []
+        self.hidden_comment_children: list[FakeCommentNode] = []
+        self.parent_node: FakeCommentNode | None = None
+        self.scroll_calls = 0
         self.more_button = FakeButton(
             lambda: self.published_replies.extend(self.hidden_replies)
         )
+        self.reply_more_button = FakeButton(self._expand_comment_children)
         self.has_thread_wrapper = True
         self._children = {
             selectors.COMMENT_AUTHOR_LINK: FakeLink(author_href),
@@ -93,8 +108,40 @@ class FakeCommentNode:
             return None
         return self._children.get(selector)
 
+    def query_selector_all(self, selector: str):
+        if selector == selectors.COMMENT_OPEN_MORE:
+            buttons = [self.reply_more_button] if self.hidden_comment_children else []
+            for child in self.visible_comment_children:
+                buttons.extend(child.query_selector_all(selector))
+            return buttons
+        if selector == selectors.COMMENT_NODE:
+            return self.visible_comment_nodes()
+        return []
+
+    def _expand_comment_children(self) -> None:
+        for child in self.hidden_comment_children:
+            child.parent_node = self
+        self.visible_comment_children.extend(self.hidden_comment_children)
+        self.hidden_comment_children.clear()
+
+    def visible_comment_nodes(self) -> list["FakeCommentNode"]:
+        nodes = [self]
+        for child in self.visible_comment_children:
+            nodes.extend(child.visible_comment_nodes())
+        return nodes
+
+    def scroll_into_view_if_needed(self) -> None:
+        self.scroll_calls += 1
+
     def evaluate(self, script: str, arg=None):
         if "authorHref:" in script:
+            if self.parent_node is not None:
+                author_link = self.parent_node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+                text_el = self.parent_node.query_selector(selectors.COMMENT_TEXT)
+                return {
+                    "authorHref": author_link.get_attribute("href") if author_link else "",
+                    "text": text_el.inner_text() if text_el else "",
+                }
             return None
         if isinstance(arg, dict):
             if not self.has_thread_wrapper:
@@ -120,6 +167,7 @@ class FakeGroup:
         self._post_link = FakeLink(post_href)
         self._nodes = nodes
         self._title = FakeText(title) if title is not None else None
+        self.scroll_calls = 0
 
     def query_selector(self, selector: str):
         if selector == selectors.POST_LINK:
@@ -132,8 +180,21 @@ class FakeGroup:
 
     def query_selector_all(self, selector: str):
         if selector == selectors.COMMENT_NODE:
-            return list(self._nodes)
+            return [
+                node
+                for root in self._nodes
+                for node in root.visible_comment_nodes()
+            ]
+        if selector == selectors.COMMENT_OPEN_MORE:
+            return [
+                button
+                for root in self._nodes
+                for button in root.query_selector_all(selector)
+            ]
         return []
+
+    def scroll_into_view_if_needed(self) -> None:
+        self.scroll_calls += 1
 
 
 class FakeMouse:
@@ -179,6 +240,12 @@ class FakePage:
     def query_selector_all(self, selector: str):
         if selector == selectors.POST_GROUP:
             return list(self._groups)
+        if selector == selectors.COMMENT_OPEN_MORE:
+            return [
+                button
+                for group in self._groups
+                for button in group.query_selector_all(selector)
+            ]
         return []
 
     def wait_for_timeout(self, timeout_ms: float) -> None:
@@ -583,6 +650,97 @@ def test_fetch_comments_two_level_parse():
         assert c.fetched_at.tzinfo is None
         assert c.author == f"author{i}"
         assert c.text == f"text{i}"
+
+
+@pytest.mark.parametrize(
+    ("reply_count", "button_label"),
+    [
+        (1, "1 ответ"),
+        (3, "3 ответа"),
+        (5, "5 ответов"),
+        (5, "5\u00a0ответов"),
+    ],
+)
+def test_fetch_comments_expands_hidden_replies_without_reading_button_label(
+    reply_count, button_label
+):
+    parent = make_node(0)
+    parent.reply_more_button._text = button_label
+    parent.hidden_comment_children = [make_node(index + 1) for index in range(reply_count)]
+    page = DzenStudioPage(FakePage([FakeGroup("/a/post1", [parent])]))
+
+    comments = page.fetch_comments()
+
+    assert len(comments) == reply_count + 1
+    assert parent.reply_more_button.clicks == 1
+    assert all(
+        comment.parent_comment_id == comments[0].dzen_comment_id
+        for comment in comments[1:]
+    )
+
+
+def test_fetch_comments_expands_nested_reply_buttons_once_each():
+    parent, child, grandchild = make_node(0), make_node(1), make_node(2)
+    parent.hidden_comment_children = [child]
+    child.hidden_comment_children = [grandchild]
+    page = DzenStudioPage(FakePage([FakeGroup("/a/post1", [parent])]))
+
+    comments = page.fetch_comments()
+
+    assert [comment.text for comment in comments] == ["text0", "text1", "text2"]
+    assert [
+        comment.parent_comment_id for comment in comments
+    ] == [None, comments[0].dzen_comment_id, comments[1].dzen_comment_id]
+    assert parent.reply_more_button.clicks == 1
+    assert child.reply_more_button.clicks == 1
+
+
+def test_hidden_reply_expansion_does_not_click_the_same_button_twice_in_one_pass():
+    button = FakeButton()
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button] if selector == selectors.COMMENT_OPEN_MORE else []
+    )
+    page = DzenStudioPage(fake)
+
+    assert page._expand_hidden_replies() == 1
+    assert button.clicks == 1
+
+
+def test_fetch_comments_waits_for_lazy_groups_until_three_stable_passes():
+    first = FakeGroup("/a/post1", [make_node(0)])
+    second = FakeGroup("/a/post2", [make_node(1)])
+    fake = FakePage([first], scroll_groups=[[first, second]])
+    page = DzenStudioPage(fake)
+
+    comments = page.fetch_comments()
+
+    assert [comment.text for comment in comments] == ["text0", "text1"]
+    assert len(fake.mouse.wheel_calls) == 4
+    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * 4
+
+
+def test_fetch_comments_logs_incomplete_result_at_scan_pass_limit(caplog):
+    groups = [FakeGroup(f"/a/post{index}", [make_node(index)]) for index in range(41)]
+    scroll_groups = [groups[: index + 2] for index in range(40)]
+    fake = FakePage([groups[0]], scroll_groups=scroll_groups)
+    page = DzenStudioPage(fake)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        comments = page.fetch_comments()
+
+    assert len(comments) == 41
+    assert len(fake.mouse.wheel_calls) == dzen_page._STUDIO_FEED_MAX_SCAN_PASSES
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_comments_read_incomplete"
+    )
+    assert incomplete.failure_reason == "stability_pass_limit_reached"
+    assert incomplete.scan_pass_count == dzen_page._STUDIO_FEED_MAX_SCAN_PASSES
+    assert not any(
+        getattr(record, "event", None) == "studio_comments_read_completed"
+        for record in caplog.records
+    )
 
 
 # Acceptance 4 — синтетический id детерминирован и различает комментарии.
@@ -1794,7 +1952,7 @@ def test_publish_reply_fills_draft_and_waits_without_submitting():
     assert node.reply_button.clicks == 1
     assert node.reply_input.filled == ["мой ответ"]
     assert node.reply_submit.clicks == 0
-    assert fake.waited_ms == [5_000]
+    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * 3 + [5_000]
     assert fake.listeners == {}
 
 
@@ -1980,6 +2138,27 @@ def test_find_comment_after_three_stalled_scrolls_restores_page_top():
     assert found is target_node
     assert len(fake.mouse.wheel_calls) == 4
     assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * 4
+    assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+
+
+def test_find_target_child_after_scroll_and_hidden_reply_expansion():
+    target_node = make_node(1)
+    parent_node = make_node(0)
+    parent_node.hidden_comment_children = [target_node]
+    fake = FakePage(
+        [FakeGroup("/a/post1", [make_node(2)])],
+        scroll_groups=[[FakeGroup("/a/post1", [parent_node])]],
+    )
+    page = DzenStudioPage(fake)
+
+    found = page._find_comment_node_with_scroll(
+        synthetic_id("/a/post1", "/user/u1", "text1")
+    )
+
+    assert found is target_node
+    assert parent_node.reply_more_button.clicks == 1
+    assert len(fake.mouse.wheel_calls) == 1
+    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * 2
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
 
 

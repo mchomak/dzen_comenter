@@ -53,6 +53,24 @@ _PROMOTIONAL_ARTICLE_MARKERS = (
 _REPLY_SEARCH_MAX_SCROLLS = 40
 _REPLY_SEARCH_WAIT_MS = 750
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
+_STUDIO_FEED_MAX_SCAN_PASSES = 40
+_STUDIO_FEED_STABLE_PASSES = 3
+_REPLY_BUTTON_ID_SCRIPT = """
+(node) => {
+    const key = Symbol.for('dzen_commenter.reply_button_ids');
+    let state = window[key];
+    if (!state) {
+        state = { nextId: 1, ids: new WeakMap() };
+        window[key] = state;
+    }
+    let id = state.ids.get(node);
+    if (id === undefined) {
+        id = state.nextId++;
+        state.ids.set(node, id);
+    }
+    return id;
+}
+"""
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
@@ -415,8 +433,24 @@ class DzenStudioPage:
         comments: list[Comment] = []
         now = moscow_now()
         skipped_missing_link_count = 0
+        scan_pass_count = 0
+        stable_pass_count = 0
+        scan_complete = False
         try:
-            groups = self._page.query_selector_all(selectors.POST_GROUP)
+            groups, previous_counts = self._studio_feed_snapshot()
+            for scan_pass_count in range(1, _STUDIO_FEED_MAX_SCAN_PASSES + 1):
+                self._scroll_to_last_loaded_item(groups)
+                self._expand_hidden_replies()
+                groups, current_counts = self._studio_feed_snapshot()
+                if current_counts == previous_counts:
+                    stable_pass_count += 1
+                else:
+                    stable_pass_count = 0
+                previous_counts = current_counts
+                if stable_pass_count == _STUDIO_FEED_STABLE_PASSES:
+                    scan_complete = True
+                    break
+
             for card_index, group in enumerate(groups, start=1):
                 post_href = _post_href(group)
                 if not post_href:
@@ -476,19 +510,75 @@ class DzenStudioPage:
                     "publication_card_count": len(groups) if "groups" in locals() else 0,
                     "comments_extracted": len(comments),
                     "skipped_missing_link_count": skipped_missing_link_count,
+                    "scan_pass_count": scan_pass_count,
                 },
             )
             raise
-        logger.info(
-            "Read Dzen Studio feed and comments",
-            extra={
-                "event": "studio_comments_read_completed",
-                "publication_card_count": len(groups),
-                "comments_extracted": len(comments),
-                "skipped_missing_link_count": skipped_missing_link_count,
-            },
-        )
+        if scan_complete:
+            logger.info(
+                "Read Dzen Studio feed and comments",
+                extra={
+                    "event": "studio_comments_read_completed",
+                    "publication_card_count": len(groups),
+                    "comments_extracted": len(comments),
+                    "skipped_missing_link_count": skipped_missing_link_count,
+                    "scan_pass_count": scan_pass_count,
+                    "stable_pass_count": stable_pass_count,
+                },
+            )
+        else:
+            logger.info(
+                "Dzen Studio feed scan reached its pass limit before stabilizing",
+                extra={
+                    "event": "studio_comments_read_incomplete",
+                    "failure_stage": "studio_feed_read",
+                    "failure_reason": "stability_pass_limit_reached",
+                    "publication_card_count": len(groups),
+                    "comments_extracted": len(comments),
+                    "skipped_missing_link_count": skipped_missing_link_count,
+                    "scan_pass_count": scan_pass_count,
+                    "stable_pass_count": stable_pass_count,
+                },
+            )
         return comments
+
+    def _studio_feed_snapshot(self):
+        groups = self._page.query_selector_all(selectors.POST_GROUP)
+        comment_count = sum(
+            len(group.query_selector_all(selectors.COMMENT_NODE)) for group in groups
+        )
+        button_count = len(self._page.query_selector_all(selectors.COMMENT_OPEN_MORE))
+        return groups, (len(groups), comment_count, button_count)
+
+    def _scroll_to_last_loaded_item(self, groups) -> None:
+        last_item = groups[-1] if groups else None
+        for group in reversed(groups):
+            comments = group.query_selector_all(selectors.COMMENT_NODE)
+            if comments:
+                last_item = comments[-1]
+                break
+        if last_item is not None:
+            last_item.scroll_into_view_if_needed()
+        self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
+        self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+
+    def _expand_hidden_replies(self) -> int:
+        clicked_ids: set[int] = set()
+        clicked_count = 0
+        while True:
+            buttons = self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
+            next_button = None
+            for button in buttons:
+                button_id = button.evaluate(_REPLY_BUTTON_ID_SCRIPT)
+                if button_id not in clicked_ids:
+                    clicked_ids.add(button_id)
+                    next_button = button
+                    break
+            if next_button is None:
+                return clicked_count
+            next_button.click()
+            clicked_count += 1
+            self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
 
     @staticmethod
     def _parent_comment_id(node, post_href: str) -> str | None:
@@ -1527,6 +1617,7 @@ class DzenStudioPage:
             for scroll_attempt_count in range(1, _REPLY_SEARCH_MAX_SCROLLS + 1):
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                self._expand_hidden_replies()
                 phase = "lookup"
                 node, pass_candidate_count = self._find_comment_node(comment_id)
                 candidates_checked += pass_candidate_count
