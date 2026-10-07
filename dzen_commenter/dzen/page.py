@@ -179,6 +179,8 @@ _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 10 * 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
+_REPLY_CONTROL_INSPECTION_TIMEOUT_MS = 1_000
+_REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS = 3
 # Replies are already present in Studio's DOM; use a short post-click settle
 # while the feed's regular 750 ms passes allow newly rendered nested replies.
 _REPLY_EXPANSION_POST_CLICK_WAIT_MS = 250
@@ -372,11 +374,15 @@ def _post_href(group) -> str:
     return fallback_href if _post_url(fallback_href) is not None else ""
 
 
-def _post_href_from_locator(group) -> str:
+def _post_href_from_locator(group, *, timeout_ms: int | None = None) -> str:
     for selector in (selectors.POST_LINK, selectors.POST_LINK_FALLBACK):
         links = group.locator(selector)
         for index in range(links.count()):
-            href = links.nth(index).get_attribute("href") or ""
+            link = links.nth(index)
+            if timeout_ms is not None:
+                href = link.get_attribute("href", timeout=timeout_ms) or ""
+            else:
+                href = link.get_attribute("href") or ""
             if _post_url(href) is not None:
                 return href
     return ""
@@ -409,6 +415,7 @@ class DzenStudioPage:
             bot_account_name_provider or (lambda: DEFAULT_BOT_ACCOUNT_NAME)
         )
         self._article_text_by_url: dict[str, str | None] = {}
+        self._reply_expansion_phase = "not_started"
 
     @property
     def _page(self) -> Any:
@@ -672,6 +679,10 @@ class DzenStudioPage:
                     if text:
                         previous_messages.append(f"{author or 'Автор'}: {text}")
         except Exception as exc:
+            if failure_phase == "reply_expansion":
+                failure_phase = (
+                    f"reply_expansion_{self._reply_expansion_phase}"
+                )
             logger.info(
                 "Failed to read Dzen Studio feed and comments",
                 extra={
@@ -806,8 +817,9 @@ class DzenStudioPage:
         first_controls = initial_controls
         unresolved_click_keys: set[str] = set()
 
-        def read_controls() -> tuple[list[tuple[Any, str]], set[str]]:
+        def read_controls_once() -> tuple[list[tuple[Any, str]], set[str]]:
             nonlocal first_controls
+            self._reply_expansion_phase = "control_query"
             if first_controls is not None:
                 buttons = first_controls
                 first_controls = None
@@ -818,7 +830,10 @@ class DzenStudioPage:
                     if (
                         scope is not None
                         and expected_post_href
-                        and _post_href_from_locator(control_scope)
+                        and _post_href_from_locator(
+                            control_scope,
+                            timeout_ms=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
+                        )
                         != expected_post_href
                     ):
                         raise RuntimeError(
@@ -834,6 +849,7 @@ class DzenStudioPage:
                         selectors.COMMENT_OPEN_MORE
                     )
             visibility: list[bool] = []
+            self._reply_expansion_phase = "control_visibility"
             for button in buttons:
                 is_visible = getattr(button, "is_visible", None)
                 if not callable(is_visible):
@@ -854,13 +870,29 @@ class DzenStudioPage:
 
             controls: list[tuple[Any, str]] = []
             present_keys: set[str] = set()
+            self._reply_expansion_phase = "control_identity"
             for button_index, (button, is_visible) in enumerate(
                 zip(buttons, visibility, strict=True)
             ):
-                button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
+                if callable(getattr(button, "count", None)):
+                    button_key = button.evaluate(
+                        _REPLY_BUTTON_KEY_SCRIPT,
+                        timeout=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
+                    )
+                else:
+                    button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
                 if not isinstance(button_key, str) or not button_key:
                     try:
-                        control_class = button.get_attribute("class") or ""
+                        if callable(getattr(button, "count", None)):
+                            control_class = (
+                                button.get_attribute(
+                                    "class",
+                                    timeout=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
+                                )
+                                or ""
+                            )
+                        else:
+                            control_class = button.get_attribute("class") or ""
                         control_text = button.inner_text().strip()
                     except Exception:
                         control_class = ""
@@ -878,6 +910,37 @@ class DzenStudioPage:
                 if is_visible:
                     controls.append((button, button_key))
             return controls, present_keys
+
+        def read_controls() -> tuple[list[tuple[Any, str]], set[str]]:
+            for snapshot_attempt in range(
+                1, _REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS + 1
+            ):
+                try:
+                    return read_controls_once()
+                except Exception as exc:
+                    exception_name = type(exc).__name__.casefold()
+                    exception_message = str(exc).casefold()
+                    is_timeout = (
+                        "timeout" in exception_name
+                        or "timeout" in exception_message
+                    )
+                    if (
+                        not is_timeout
+                        or snapshot_attempt == _REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS
+                    ):
+                        raise
+                    logger.info(
+                        "Dzen reply controls will be re-read after a DOM update",
+                        extra={
+                            "event": "studio_reply_expansion_control_snapshot_deferred",
+                            "failure_stage": "studio_reply_expansion",
+                            "failure_reason": "control_snapshot_timeout",
+                            "snapshot_attempt": snapshot_attempt,
+                        },
+                    )
+                    self._page.wait_for_timeout(
+                        _REPLY_EXPANSION_POST_CLICK_WAIT_MS
+                    )
 
         controls, present_keys = read_controls()
         while True:
@@ -963,6 +1026,7 @@ class DzenStudioPage:
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             previous_control_count = len(present_keys)
             try:
+                self._reply_expansion_phase = "control_click"
                 next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
                 exception_name = type(exc).__name__.casefold()
@@ -992,6 +1056,7 @@ class DzenStudioPage:
                     )
                     remaining_ms = int((deadline - monotonic()) * 1_000)
                     if remaining_ms > 0:
+                        self._reply_expansion_phase = "click_timeout_settle"
                         self._page.wait_for_timeout(
                             min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
                         )
@@ -1024,6 +1089,7 @@ class DzenStudioPage:
             clicked_count += 1
             remaining_ms = int((deadline - monotonic()) * 1_000)
             if remaining_ms > 0:
+                self._reply_expansion_phase = "post_click_settle"
                 self._page.wait_for_timeout(
                     min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
                 )
