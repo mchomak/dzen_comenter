@@ -1100,12 +1100,14 @@ def test_hidden_reply_expansion_allows_a_large_feed_more_than_three_minutes(
     )
     fake.wait_for_timeout = wait_for_timeout
     monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 500)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 750)
     monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
 
     page = DzenStudioPage(fake)
 
     assert page._expand_hidden_replies() == len(buttons)
     assert sum(button.clicks for button in buttons) == len(buttons)
+    assert elapsed_ms > 180_000
 
 
 def test_hidden_reply_expansion_supports_more_than_200_controls_in_one_feed():
@@ -1142,12 +1144,39 @@ def test_fetch_comments_expands_replies_across_a_large_feed_after_three_minutes(
 
     fake.wait_for_timeout = wait_for_timeout
     monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 500)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 750)
     monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
 
     comments = DzenStudioPage(fake).fetch_comments()
 
     assert len(comments) == 500
     assert elapsed_ms > 180_000
+
+
+def test_fetch_comments_expands_replies_for_826_publications_within_time_limit(
+    monkeypatch,
+):
+    groups = []
+    for index in range(826):
+        parent = make_node(index)
+        parent.hidden_comment_children = [make_node(index + 826)]
+        groups.append(FakeGroup(f"/a/post{index}", [parent]))
+
+    fake = FakePage(groups)
+    elapsed_ms = 0
+
+    def wait_for_timeout(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        fake.waited_ms.append(timeout_ms)
+        elapsed_ms += timeout_ms
+
+    fake.wait_for_timeout = wait_for_timeout
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+
+    comments = DzenStudioPage(fake).fetch_comments()
+
+    assert len(comments) == 1_652
+    assert elapsed_ms < dzen_page._REPLY_EXPANSION_OPERATION_TIMEOUT_MS
 
 
 def test_fetch_comments_waits_for_lazy_groups_until_three_stable_passes():
@@ -2606,7 +2635,10 @@ def test_find_target_child_after_scroll_and_hidden_reply_expansion():
     assert found is target_node
     assert parent_node.reply_more_button.clicks == 1
     assert len(fake.mouse.wheel_calls) == 1
-    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * 2
+    assert fake.waited_ms == [
+        dzen_page._REPLY_SEARCH_WAIT_MS,
+        dzen_page._REPLY_EXPANSION_POST_CLICK_WAIT_MS,
+    ]
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
 
 

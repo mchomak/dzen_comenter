@@ -128,6 +128,9 @@ _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 10 * 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
+# Replies are already present in Studio's DOM; use a short post-click settle
+# while the feed's regular 750 ms passes allow newly rendered nested replies.
+_REPLY_EXPANSION_POST_CLICK_WAIT_MS = 250
 _REPLY_EXPANSION_MAX_CLICKS = 1_000
 _REPLY_EXPANSION_MAX_ATTEMPTS = 3
 _PUBLIC_COMMENT_WAIT_MS = 750
@@ -759,7 +762,9 @@ class DzenStudioPage:
             clicked_count += 1
             remaining_ms = int((deadline - monotonic()) * 1_000)
             if remaining_ms > 0:
-                self._page.wait_for_timeout(min(_REPLY_SEARCH_WAIT_MS, remaining_ms))
+                self._page.wait_for_timeout(
+                    min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
+                )
             controls = read_controls()
             if next_button_key not in {key for _, key in controls}:
                 clicked_keys.add(next_button_key)
