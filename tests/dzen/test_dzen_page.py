@@ -985,6 +985,38 @@ def test_hidden_reply_expansion_reacquires_controls_after_group_rerender(
             browser.close()
 
 
+def test_studio_feed_snapshot_counts_comments_and_finds_only_reply_groups():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comment__block-one"></div>
+    </div>
+    <div data-testid="comment">
+      <div class="editor--comment__block-two"></div>
+      <div class="editor--comment__block-three"></div>
+      <button class="editor--root-comment__openMoreButton-two">Показать 2 ответа</button>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            studio_page = DzenStudioPage(page)
+
+            groups, counts = studio_page._studio_feed_snapshot()
+
+            assert counts == (2, 3, 1)
+            assert studio_page._groups_with_reply_controls(groups) == [1]
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_does_not_click_the_same_button_twice_in_one_pass():
     button = FakeButton(hide_on_click=True)
     fake = FakePage([])

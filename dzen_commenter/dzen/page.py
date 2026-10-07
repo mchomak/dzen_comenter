@@ -55,6 +55,25 @@ _REPLY_SEARCH_WAIT_MS = 750
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _STUDIO_FEED_MAX_SCAN_PASSES = 40
 _STUDIO_FEED_STABLE_PASSES = 3
+_STUDIO_FEED_COUNTS_SCRIPT = """
+(selectors) => {
+    const groups = Array.from(document.querySelectorAll(selectors.group));
+    return {
+        group_count: groups.length,
+        comment_count: groups.reduce(
+            (total, group) => total + group.querySelectorAll(selectors.comment).length,
+            0,
+        ),
+        button_count: document.querySelectorAll(selectors.more).length,
+    };
+}
+"""
+_STUDIO_REPLY_GROUP_INDICES_SCRIPT = """
+(selectors) => Array.from(document.querySelectorAll(selectors.group))
+    .flatMap((group, index) =>
+        group.querySelector(selectors.more) ? [index] : []
+    )
+"""
 _REPLY_BUTTON_KEY_SCRIPT = """
 (node) => {
     const commentSelector = '[class*="editor--comment__block-"]';
@@ -523,7 +542,8 @@ class DzenStudioPage:
                     reply_expansion_deadline = (
                         monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
                     )
-                for group_index, group in enumerate(groups):
+                for group_index in self._groups_with_reply_controls(groups):
+                    group = groups[group_index]
                     expected_post_href = _post_href(group)
                     page_locator = getattr(self._page, "locator", None)
                     if callable(page_locator):
@@ -536,17 +556,13 @@ class DzenStudioPage:
                                 "Studio publication order changed during reply expansion"
                             )
                         initial_controls = None
-                        has_controls = (
-                            scope.locator(selectors.COMMENT_OPEN_MORE).count() > 0
-                        )
                     else:
                         scope = group
                         initial_controls = group.query_selector_all(
                             selectors.COMMENT_OPEN_MORE
                         )
-                        has_controls = bool(initial_controls)
-                    if not has_controls:
-                        continue
+                        if not initial_controls:
+                            continue
                     self._expand_hidden_replies(
                         scope=scope,
                         initial_controls=initial_controls,
@@ -662,11 +678,49 @@ class DzenStudioPage:
 
     def _studio_feed_snapshot(self):
         groups = self._page.query_selector_all(selectors.POST_GROUP)
+        page_locator = getattr(self._page, "locator", None)
+        evaluate = getattr(self._page, "evaluate", None)
+        if callable(page_locator) and callable(evaluate):
+            counts = evaluate(
+                _STUDIO_FEED_COUNTS_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "comment": selectors.COMMENT_NODE,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                },
+            )
+            if isinstance(counts, dict) and counts.get("group_count") == len(groups):
+                return groups, (
+                    counts["group_count"],
+                    counts["comment_count"],
+                    counts["button_count"],
+                )
         comment_count = sum(
             len(group.query_selector_all(selectors.COMMENT_NODE)) for group in groups
         )
         button_count = len(self._page.query_selector_all(selectors.COMMENT_OPEN_MORE))
         return groups, (len(groups), comment_count, button_count)
+
+    def _groups_with_reply_controls(self, groups) -> list[int]:
+        evaluate = getattr(self._page, "evaluate", None)
+        if callable(getattr(self._page, "locator", None)) and callable(evaluate):
+            indices = evaluate(
+                _STUDIO_REPLY_GROUP_INDICES_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                },
+            )
+            if isinstance(indices, list) and all(
+                isinstance(index, int) and 0 <= index < len(groups)
+                for index in indices
+            ):
+                return indices
+        return [
+            index
+            for index, group in enumerate(groups)
+            if group.query_selector_all(selectors.COMMENT_OPEN_MORE)
+        ]
 
     def _scroll_to_last_loaded_item(self, groups) -> None:
         last_item = groups[-1] if groups else None
