@@ -41,9 +41,11 @@ class FakeButton:
         self.visible = True
         self.attached = True
         self.click_timeouts: list[int | None] = []
+        self.click_forces: list[bool] = []
 
-    def click(self, *, timeout: int | None = None) -> None:
+    def click(self, *, timeout: int | None = None, force: bool = False) -> None:
         self.click_timeouts.append(timeout)
+        self.click_forces.append(force)
         self.clicks += 1
         if self.hide_on_click:
             self.visible = False
@@ -57,9 +59,6 @@ class FakeButton:
         return self._text
 
     def evaluate(self, script: str) -> int | str:
-        if "node.click()" in script:
-            self.click()
-            return True
         if "editor--comment__block-" in script:
             return f"fake-comment:{id(self)}"
         return id(self)
@@ -928,14 +927,14 @@ def test_hidden_reply_expansion_does_not_repeat_a_recreated_logical_button():
 
     class RecreatedButton:
         def evaluate(self, script: str) -> int | str:
-            nonlocal button_visible, clicks
-            if "node.click()" in script:
-                clicks += 1
-                button_visible = False
-                return True
             if "editor--comment__block-" in script:
                 return "post:/a/post1|comment:/user/1|same text|0"
             return id(self)
+
+        def click(self, *, timeout: int | None = None, force: bool = False) -> None:
+            nonlocal button_visible, clicks
+            clicks += 1
+            button_visible = False
 
     def query_buttons(selector: str):
         nonlocal button_visible, queries
@@ -969,14 +968,14 @@ def test_hidden_reply_expansion_prioritizes_new_controls_before_retries():
             self.key = key
 
         def evaluate(self, script: str) -> int | str:
-            if "node.click()" in script:
-                nonlocal child_visible
-                actions.append(self.key)
-                child_visible = self.key == "parent"
-                return True
             if "editor--comment__block-" in script:
                 return self.key
             return id(self)
+
+        def click(self, *, timeout: int | None = None, force: bool = False) -> None:
+            nonlocal child_visible
+            actions.append(self.key)
+            child_visible = self.key == "parent"
 
     parent = Control("parent")
     child = Control("child")
@@ -994,26 +993,27 @@ def test_hidden_reply_expansion_prioritizes_new_controls_before_retries():
     assert actions == ["parent", "child", "parent", "parent"]
 
 
-def test_hidden_reply_expansion_reports_dom_click_timeout():
+def test_hidden_reply_expansion_caps_playwright_click_timeout():
     button = FakeButton()
-    evaluate = button.evaluate
 
-    def timeout_evaluate(script: str):
-        if "node.click()" in script:
-            raise TimeoutError("reply DOM click timed out")
-        return evaluate(script)
+    def timeout_click(*, timeout=None, force=False):
+        button.click_timeouts.append(timeout)
+        button.click_forces.append(force)
+        raise TimeoutError("reply click timed out")
 
-    button.evaluate = timeout_evaluate
+    button.click = timeout_click
     fake = FakePage([])
     fake.query_selector_all = lambda selector: (
         [button] if selector == selectors.COMMENT_OPEN_MORE else []
     )
     page = DzenStudioPage(fake)
 
-    with pytest.raises(TimeoutError, match="reply DOM click timed out"):
+    with pytest.raises(TimeoutError, match="reply click timed out"):
         page._expand_hidden_replies()
 
     assert button.clicks == 0
+    assert button.click_forces == [True]
+    assert button.click_timeouts == [dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS]
 
 
 def test_hidden_reply_expansion_reports_click_safety_limit(monkeypatch):
@@ -1024,13 +1024,13 @@ def test_hidden_reply_expansion_reports_click_safety_limit(monkeypatch):
 
     class DistinctButton:
         def evaluate(self, script: str) -> int | str:
-            nonlocal clicks
-            if "node.click()" in script:
-                clicks += 1
-                return True
             if "editor--comment__block-" in script:
                 return f"distinct:{id(self)}"
             return id(self)
+
+        def click(self, *, timeout: int | None = None, force: bool = False) -> None:
+            nonlocal clicks
+            clicks += 1
 
     def query_buttons(selector: str):
         nonlocal queries

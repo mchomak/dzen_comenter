@@ -123,13 +123,11 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     ]);
 }
 """
-# Dispatch Dzen's click handler without scrolling each off-screen reply control
-# back into view while the feed is being scanned.
-_REPLY_BUTTON_CLICK_SCRIPT = "(node) => { node.click(); return true; }"
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 10 * 60_000
+_REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
 # Replies are already present in Studio's DOM; use a short post-click settle
 # while the feed's regular 750 ms passes allow newly rendered nested replies.
 _REPLY_EXPANSION_POST_CLICK_WAIT_MS = 250
@@ -766,9 +764,9 @@ class DzenStudioPage:
             attempt_counts[next_button_key] = (
                 attempt_counts.get(next_button_key, 0) + 1
             )
+            click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             try:
-                if next_button.evaluate(_REPLY_BUTTON_CLICK_SCRIPT) is not True:
-                    raise RuntimeError("reply control did not dispatch its click")
+                next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
                 self._log_reply_expansion_incomplete(
                     failure_reason=(
