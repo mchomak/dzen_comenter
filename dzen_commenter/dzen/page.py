@@ -55,25 +55,49 @@ _REPLY_SEARCH_WAIT_MS = 750
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _STUDIO_FEED_MAX_SCAN_PASSES = 40
 _STUDIO_FEED_STABLE_PASSES = 3
-_REPLY_BUTTON_ID_SCRIPT = """
+_REPLY_BUTTON_KEY_SCRIPT = """
 (node) => {
-    const key = Symbol.for('dzen_commenter.reply_button_ids');
-    let state = window[key];
-    if (!state) {
-        state = { nextId: 1, ids: new WeakMap() };
-        window[key] = state;
+    const commentSelector = '[class*="editor--comment__block-"]';
+    const threadSelector = '[class*="editor--comments-page__commentNode-"]';
+    const groupSelector = '[data-testid="comment"]';
+    const comment = node.closest(commentSelector);
+    const thread = comment?.closest(threadSelector);
+    const group = thread?.closest(groupSelector);
+    if (!comment || !thread || !group) return null;
+
+    const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+    const signature = (candidate) => JSON.stringify([
+        candidate.querySelector('[class*="editor--comment__nameLink-"]')
+            ?.getAttribute('href') || '',
+        normalize(candidate.querySelector('[class*="editor--comment__text-"]')
+            ?.innerText),
+    ]);
+    const ownSignature = signature(comment);
+    let occurrence = 0;
+    for (const candidate of thread.querySelectorAll(commentSelector)) {
+        if (signature(candidate) !== ownSignature) continue;
+        if (candidate === comment) break;
+        occurrence++;
     }
-    let id = state.ids.get(node);
-    if (id === undefined) {
-        id = state.nextId++;
-        state.ids.set(node, id);
-    }
-    return id;
+
+    const postHref = group.querySelector(
+        '[class*="editor--comments-page__postContainer-"] a[href]'
+    )?.getAttribute('href') || '';
+    const groupIndex = Array.from(document.querySelectorAll(groupSelector))
+        .indexOf(group);
+    const threadIndex = Array.from(group.querySelectorAll(threadSelector))
+        .indexOf(thread);
+    return JSON.stringify([
+        postHref, groupIndex, threadIndex, ownSignature, occurrence,
+    ]);
 }
 """
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
+_REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 180_000
+_REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
+_REPLY_EXPANSION_MAX_CLICKS = 200
 _PUBLIC_COMMENT_WAIT_MS = 750
 _PUBLIC_COMMENT_POLL_LIMIT = 40
 _PUBLIC_PREFLIGHT_POLL_LIMIT = _PUBLIC_COMMENT_POLL_LIMIT
@@ -436,11 +460,23 @@ class DzenStudioPage:
         scan_pass_count = 0
         stable_pass_count = 0
         scan_complete = False
+        reply_expansion_keys: set[Any] = set()
+        reply_expansion_deadline: float | None = None
         try:
             groups, previous_counts = self._studio_feed_snapshot()
             for scan_pass_count in range(1, _STUDIO_FEED_MAX_SCAN_PASSES + 1):
                 self._scroll_to_last_loaded_item(groups)
-                self._expand_hidden_replies()
+                if (
+                    reply_expansion_deadline is None
+                    and self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
+                ):
+                    reply_expansion_deadline = (
+                        monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                    )
+                self._expand_hidden_replies(
+                    clicked_keys=reply_expansion_keys,
+                    deadline=reply_expansion_deadline,
+                )
                 groups, current_counts = self._studio_feed_snapshot()
                 if current_counts == previous_counts:
                     stable_pass_count += 1
@@ -562,23 +598,93 @@ class DzenStudioPage:
         self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
         self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
 
-    def _expand_hidden_replies(self) -> int:
-        clicked_ids: set[int] = set()
+    def _expand_hidden_replies(
+        self,
+        *,
+        clicked_keys: set[Any] | None = None,
+        deadline: float | None = None,
+    ) -> int:
+        if clicked_keys is None:
+            clicked_keys = set()
         clicked_count = 0
         while True:
             buttons = self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
             next_button = None
             for button in buttons:
-                button_id = button.evaluate(_REPLY_BUTTON_ID_SCRIPT)
-                if button_id not in clicked_ids:
-                    clicked_ids.add(button_id)
+                button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
+                if not isinstance(button_key, str) or not button_key:
+                    self._log_reply_expansion_incomplete(
+                        failure_reason="reply_control_identity_unavailable",
+                        clicked_count=clicked_count,
+                        visible_button_count=len(buttons),
+                    )
+                    raise RuntimeError(
+                        "reply expansion stopped because a control had no stable identity"
+                    )
+                if button_key not in clicked_keys:
                     next_button = button
+                    next_button_key = button_key
                     break
             if next_button is None:
                 return clicked_count
-            next_button.click()
+
+            if len(clicked_keys) >= _REPLY_EXPANSION_MAX_CLICKS:
+                self._log_reply_expansion_incomplete(
+                    failure_reason="click_limit_reached",
+                    clicked_count=clicked_count,
+                    visible_button_count=len(buttons),
+                )
+                raise RuntimeError(
+                    "reply expansion reached its click limit before all controls expanded"
+                )
+
+            if deadline is None:
+                deadline = monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+            remaining_ms = int((deadline - monotonic()) * 1_000)
+            if remaining_ms <= 0:
+                self._log_reply_expansion_incomplete(
+                    failure_reason="time_limit_reached",
+                    clicked_count=clicked_count,
+                    visible_button_count=len(buttons),
+                )
+                raise RuntimeError(
+                    "reply expansion reached its time limit before all controls expanded"
+                )
+
+            clicked_keys.add(next_button_key)
+            click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
+            try:
+                next_button.click(timeout=click_timeout_ms)
+            except Exception as exc:
+                self._log_reply_expansion_incomplete(
+                    failure_reason=(
+                        "click_timeout"
+                        if "timeout" in type(exc).__name__.casefold()
+                        else "click_failed"
+                    ),
+                    clicked_count=clicked_count,
+                    visible_button_count=len(buttons),
+                )
+                raise
             clicked_count += 1
-            self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+            remaining_ms = int((deadline - monotonic()) * 1_000)
+            if remaining_ms > 0:
+                self._page.wait_for_timeout(min(_REPLY_SEARCH_WAIT_MS, remaining_ms))
+
+    @staticmethod
+    def _log_reply_expansion_incomplete(
+        *, failure_reason: str, clicked_count: int, visible_button_count: int
+    ) -> None:
+        logger.info(
+            "Dzen hidden reply expansion stopped before all controls were expanded",
+            extra={
+                "event": "studio_reply_expansion_incomplete",
+                "failure_stage": "studio_reply_expansion",
+                "failure_reason": failure_reason,
+                "clicked_count": clicked_count,
+                "visible_button_count": visible_button_count,
+            },
+        )
 
     @staticmethod
     def _parent_comment_id(node, post_href: str) -> str | None:
@@ -1581,6 +1687,8 @@ class DzenStudioPage:
         self, comment_id: str, *, reply_id: int | None = None
     ):
         candidates_checked = 0
+        reply_expansion_keys: set[Any] = set()
+        reply_expansion_deadline: float | None = None
         try:
             node, pass_candidate_count = self._find_comment_node(comment_id)
         except Exception as exc:
@@ -1617,7 +1725,17 @@ class DzenStudioPage:
             for scroll_attempt_count in range(1, _REPLY_SEARCH_MAX_SCROLLS + 1):
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                self._expand_hidden_replies()
+                if (
+                    reply_expansion_deadline is None
+                    and self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
+                ):
+                    reply_expansion_deadline = (
+                        monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                    )
+                self._expand_hidden_replies(
+                    clicked_keys=reply_expansion_keys,
+                    deadline=reply_expansion_deadline,
+                )
                 phase = "lookup"
                 node, pass_candidate_count = self._find_comment_node(comment_id)
                 candidates_checked += pass_candidate_count

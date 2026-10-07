@@ -40,8 +40,10 @@ class FakeButton:
         self._text = text
         self.visible = True
         self.attached = True
+        self.click_timeouts: list[int | None] = []
 
-    def click(self) -> None:
+    def click(self, *, timeout: int | None = None) -> None:
+        self.click_timeouts.append(timeout)
         self.clicks += 1
         if self.hide_on_click:
             self.visible = False
@@ -54,7 +56,9 @@ class FakeButton:
     def inner_text(self) -> str:
         return self._text
 
-    def evaluate(self, _script: str) -> int:
+    def evaluate(self, script: str) -> int | str:
+        if "editor--comment__block-" in script:
+            return f"fake-comment:{id(self)}"
         return id(self)
 
 
@@ -705,6 +709,131 @@ def test_hidden_reply_expansion_does_not_click_the_same_button_twice_in_one_pass
 
     assert page._expand_hidden_replies() == 1
     assert button.clicks == 1
+
+
+def test_hidden_reply_expansion_does_not_repeat_a_recreated_logical_button():
+    clicks = 0
+    queries = 0
+    button_handles = []
+
+    class RecreatedButton:
+        def evaluate(self, script: str) -> int | str:
+            if "editor--comment__block-" in script:
+                return "post:/a/post1|comment:/user/1|same text|0"
+            return id(self)
+
+        def click(self, *, timeout: int | None = None) -> None:
+            nonlocal clicks
+            clicks += 1
+
+    def query_buttons(selector: str):
+        nonlocal queries
+        assert selector == selectors.COMMENT_OPEN_MORE
+        queries += 1
+        if queries > 5:
+            raise AssertionError("reply expansion kept querying a recreated button")
+        button = RecreatedButton()
+        button_handles.append(button)
+        return [button]
+
+    fake = FakePage([])
+    fake.query_selector_all = query_buttons
+    page = DzenStudioPage(fake)
+    clicked_keys = set()
+
+    assert page._expand_hidden_replies(clicked_keys=clicked_keys) == 1
+    assert page._expand_hidden_replies(clicked_keys=clicked_keys) == 0
+    assert clicks == 1
+
+
+def test_hidden_reply_expansion_caps_playwright_click_timeout():
+    button = FakeButton()
+
+    def timeout_click(*, timeout=None):
+        button.click_timeouts.append(timeout)
+        raise TimeoutError("reply click timed out")
+
+    button.click = timeout_click
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button] if selector == selectors.COMMENT_OPEN_MORE else []
+    )
+    page = DzenStudioPage(fake)
+
+    with pytest.raises(TimeoutError, match="reply click timed out"):
+        page._expand_hidden_replies()
+
+    assert button.click_timeouts == [dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS]
+
+
+def test_hidden_reply_expansion_reports_click_safety_limit(monkeypatch):
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 2, raising=False)
+    clicks = 0
+    queries = 0
+    button_handles = []
+
+    class DistinctButton:
+        def evaluate(self, script: str) -> int | str:
+            if "editor--comment__block-" in script:
+                return f"distinct:{id(self)}"
+            return id(self)
+
+        def click(self, *, timeout: int | None = None) -> None:
+            nonlocal clicks
+            clicks += 1
+
+    def query_buttons(selector: str):
+        nonlocal queries
+        assert selector == selectors.COMMENT_OPEN_MORE
+        queries += 1
+        button = DistinctButton()
+        button_handles.append(button)
+        return [button]
+
+    fake = FakePage([])
+    fake.query_selector_all = query_buttons
+    page = DzenStudioPage(fake)
+
+    with pytest.raises(RuntimeError, match="reply expansion .*limit"):
+        page._expand_hidden_replies()
+
+    assert clicks == 2
+    assert queries <= 3
+
+
+def test_hidden_reply_expansion_reports_operation_deadline(caplog):
+    button = FakeButton()
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button] if selector == selectors.COMMENT_OPEN_MORE else []
+    )
+    page = DzenStudioPage(fake)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="reply expansion reached its time limit"):
+            page._expand_hidden_replies(deadline=0)
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert record.failure_reason == "time_limit_reached"
+    assert record.clicked_count == 0
+    assert button.clicks == 0
+
+
+def test_hidden_reply_expansion_handles_many_distinct_buttons():
+    buttons = [FakeButton(hide_on_click=True) for _ in range(80)]
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button for button in buttons if button.visible]
+        if selector == selectors.COMMENT_OPEN_MORE
+        else []
+    )
+    page = DzenStudioPage(fake)
+
+    assert page._expand_hidden_replies() == len(buttons)
+    assert sum(button.clicks for button in buttons) == len(buttons)
 
 
 def test_fetch_comments_waits_for_lazy_groups_until_three_stable_passes():
