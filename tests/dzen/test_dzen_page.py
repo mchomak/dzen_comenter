@@ -1162,7 +1162,12 @@ def test_fetch_comments_expands_replies_for_826_publications_within_time_limit(
         parent.hidden_comment_children = [make_node(index + 826)]
         groups.append(FakeGroup(f"/a/post{index}", [parent]))
 
-    fake = FakePage(groups)
+    scroll_groups = [
+        groups[: min(1 + (index + 1) * 23, len(groups))]
+        for index in range(36)
+    ]
+    scroll_groups.extend([groups, groups, groups])
+    fake = FakePage(groups[:1], scroll_groups=scroll_groups)
     elapsed_ms = 0
 
     def wait_for_timeout(timeout_ms: float) -> None:
@@ -1176,6 +1181,7 @@ def test_fetch_comments_expands_replies_for_826_publications_within_time_limit(
     comments = DzenStudioPage(fake).fetch_comments()
 
     assert len(comments) == 1_652
+    assert len(fake.mouse.wheel_calls) == 39
     assert elapsed_ms < dzen_page._REPLY_EXPANSION_OPERATION_TIMEOUT_MS
 
 
