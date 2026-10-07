@@ -922,9 +922,13 @@ def test_fetch_comments_logs_incomplete_result_at_scan_pass_limit(caplog):
     page = DzenStudioPage(fake)
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        comments = page.fetch_comments()
+        with pytest.raises(
+            dzen_page.StudioFeedScanIncompleteError,
+            match="Studio feed scan reached its pass limit",
+        ) as error:
+            page.fetch_comments()
 
-    assert len(comments) == 41
+    assert "after 40 passes" in str(error.value)
     assert len(fake.mouse.wheel_calls) == dzen_page._STUDIO_FEED_MAX_SCAN_PASSES
     incomplete = next(
         record for record in caplog.records
@@ -932,6 +936,7 @@ def test_fetch_comments_logs_incomplete_result_at_scan_pass_limit(caplog):
     )
     assert incomplete.failure_reason == "stability_pass_limit_reached"
     assert incomplete.scan_pass_count == dzen_page._STUDIO_FEED_MAX_SCAN_PASSES
+    assert incomplete.comments_extracted == 41
     assert not any(
         getattr(record, "event", None) == "studio_comments_read_completed"
         for record in caplog.records

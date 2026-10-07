@@ -295,6 +295,10 @@ def parse_relative_time(text: str | None, now: datetime) -> datetime | None:
     return now - timedelta(minutes=int(match.group(1)))
 
 
+class StudioFeedScanIncompleteError(RuntimeError):
+    """The Studio feed did not stabilize within the bounded scan passes."""
+
+
 class DzenStudioPage:
     """Read Dzen Studio comments and publish a reply to a matching node."""
 
@@ -578,6 +582,10 @@ class DzenStudioPage:
                     "scan_pass_count": scan_pass_count,
                     "stable_pass_count": stable_pass_count,
                 },
+            )
+            raise StudioFeedScanIncompleteError(
+                "Studio feed scan reached its pass limit "
+                f"after {scan_pass_count} passes"
             )
         return comments
 
