@@ -1017,6 +1017,46 @@ def test_studio_feed_snapshot_counts_comments_and_finds_only_reply_groups():
             browser.close()
 
 
+def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missing(
+    monkeypatch,
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div class="editor--comments-page__groupByPost-3D" data-testid="comment">
+      <button class="editor--root-comment__openMoreButton-first"
+        onclick="window.replyClicks.push('first'); this.remove()">Показать 1 ответ</button>
+      <button class="editor--root-comment__openMoreButton-second"
+        onclick="window.replyClicks.push('second'); this.remove()">Показать 2 ответа</button>
+    </div>
+    <script>window.replyClicks = [];</script>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+            clicked_keys = set()
+
+            expanded = DzenStudioPage(page)._expand_hidden_replies(
+                scope=page.locator('[data-testid="comment"]'),
+                clicked_keys=clicked_keys,
+            )
+
+            assert expanded == 2
+            assert page.evaluate("window.replyClicks") == ["first", "second"]
+            assert clicked_keys == set()
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_does_not_click_the_same_button_twice_in_one_pass():
     button = FakeButton(hide_on_click=True)
     fake = FakePage([])

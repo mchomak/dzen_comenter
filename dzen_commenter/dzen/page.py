@@ -92,12 +92,12 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     const scope = thread || group;
     if (!scope || !group) return null;
 
-    const comments = Array.from(scope.querySelectorAll(commentSelector));
-    const ownerForControl = (control) => {
+    let comments = Array.from(scope.querySelectorAll(commentSelector));
+    const ownerForControl = (control, candidates) => {
         const directOwner = control.closest(commentSelector);
         if (directOwner) return directOwner;
         let precedingOwner = null;
-        for (const candidate of comments) {
+        for (const candidate of candidates) {
             if (candidate.compareDocumentPosition(control)
                 & Node.DOCUMENT_POSITION_FOLLOWING) {
                 precedingOwner = candidate;
@@ -105,10 +105,36 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         }
         return precedingOwner;
     };
-    const comment = directComment || ownerForControl(node);
-    if (!comment) return null;
+    let comment = directComment || ownerForControl(node, comments);
+    if (!comment) {
+        comments = Array.from(group.querySelectorAll(commentSelector));
+        comment = ownerForControl(node, comments);
+    }
 
     const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+    const postHref = group.querySelector(
+        '[class*="editor--comments-page__postContainer-"] a[href]'
+    )?.getAttribute('href') || '';
+    const groupIndex = Array.from(document.querySelectorAll(groupSelector))
+        .indexOf(group);
+    const threadIndex = thread
+        ? Array.from(group.querySelectorAll(threadSelector)).indexOf(thread)
+        : -1;
+    const fallbackKey = () => {
+        const groupControls = Array.from(
+            group.querySelectorAll(openMoreSelector)
+        );
+        const controlIndex = groupControls.indexOf(node);
+        if (controlIndex < 0) return null;
+        const controlClass = String(node.className || '').trim()
+            .replace(/\\s+/g, ' ');
+        return `fallback:${JSON.stringify([
+            postHref, groupIndex, threadIndex, controlClass,
+            normalize(node.innerText), controlIndex,
+        ])}`;
+    };
+    if (!comment) return fallbackKey();
+
     const signature = (candidate) => JSON.stringify([
         candidate.querySelector('[class*="editor--comment__nameLink-"]')
             ?.getAttribute('href') || '',
@@ -123,19 +149,10 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         occurrence++;
     }
     const controlsForComment = Array.from(
-        scope.querySelectorAll(openMoreSelector)
-    ).filter((control) => ownerForControl(control) === comment);
+        group.querySelectorAll(openMoreSelector)
+    ).filter((control) => ownerForControl(control, comments) === comment);
     const controlOccurrence = controlsForComment.indexOf(node);
-    if (controlOccurrence < 0) return null;
-
-    const postHref = group.querySelector(
-        '[class*="editor--comments-page__postContainer-"] a[href]'
-    )?.getAttribute('href') || '';
-    const groupIndex = Array.from(document.querySelectorAll(groupSelector))
-        .indexOf(group);
-    const threadIndex = thread
-        ? Array.from(group.querySelectorAll(threadSelector)).indexOf(thread)
-        : -1;
+    if (controlOccurrence < 0) return fallbackKey();
     return JSON.stringify([
         postHref, groupIndex, threadIndex, ownSignature, occurrence,
         controlOccurrence,
@@ -820,7 +837,7 @@ class DzenStudioPage:
             pending_controls = [
                 (button, button_key)
                 for button, button_key in controls
-                if button_key not in clicked_keys
+                if (button_key.startswith("fallback:") or button_key not in clicked_keys)
                 and attempt_counts.get(button_key, 0) < _REPLY_EXPANSION_MAX_ATTEMPTS
             ]
             if not pending_controls:
@@ -924,7 +941,8 @@ class DzenStudioPage:
                 )
             controls = read_controls()
             if next_button_key not in {key for _, key in controls}:
-                clicked_keys.add(next_button_key)
+                if not next_button_key.startswith("fallback:"):
+                    clicked_keys.add(next_button_key)
             elif attempt_counts[next_button_key] >= _REPLY_EXPANSION_MAX_ATTEMPTS:
                 self._log_reply_expansion_incomplete(
                     failure_reason="retry_limit_reached",
