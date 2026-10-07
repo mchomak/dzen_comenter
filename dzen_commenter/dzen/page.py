@@ -320,6 +320,16 @@ def _post_href(group) -> str:
     return fallback_href if _post_url(fallback_href) is not None else ""
 
 
+def _post_href_from_locator(group) -> str:
+    for selector in (selectors.POST_LINK, selectors.POST_LINK_FALLBACK):
+        links = group.locator(selector)
+        for index in range(links.count()):
+            href = links.nth(index).get_attribute("href") or ""
+            if _post_url(href) is not None:
+                return href
+    return ""
+
+
 def parse_relative_time(text: str | None, now: datetime) -> datetime | None:
     if not text:
         return None
@@ -513,18 +523,37 @@ class DzenStudioPage:
                     reply_expansion_deadline = (
                         monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
                     )
-                for group in groups:
-                    initial_controls = group.query_selector_all(
-                        selectors.COMMENT_OPEN_MORE
-                    )
-                    if not initial_controls:
+                for group_index, group in enumerate(groups):
+                    expected_post_href = _post_href(group)
+                    page_locator = getattr(self._page, "locator", None)
+                    if callable(page_locator):
+                        scope = page_locator(selectors.POST_GROUP).nth(group_index)
+                        if (
+                            expected_post_href
+                            and _post_href_from_locator(scope) != expected_post_href
+                        ):
+                            raise RuntimeError(
+                                "Studio publication order changed during reply expansion"
+                            )
+                        initial_controls = None
+                        has_controls = (
+                            scope.locator(selectors.COMMENT_OPEN_MORE).count() > 0
+                        )
+                    else:
+                        scope = group
+                        initial_controls = group.query_selector_all(
+                            selectors.COMMENT_OPEN_MORE
+                        )
+                        has_controls = bool(initial_controls)
+                    if not has_controls:
                         continue
                     self._expand_hidden_replies(
-                        scope=group,
+                        scope=scope,
                         initial_controls=initial_controls,
                         clicked_keys=reply_expansion_keys,
                         attempt_counts=reply_expansion_attempts,
                         deadline=reply_expansion_deadline,
+                        expected_post_href=expected_post_href or None,
                     )
                 groups, current_counts = self._studio_feed_snapshot()
                 if current_counts == previous_counts:
@@ -659,6 +688,7 @@ class DzenStudioPage:
         clicked_keys: set[Any] | None = None,
         attempt_counts: dict[Any, int] | None = None,
         deadline: float | None = None,
+        expected_post_href: str | None = None,
     ) -> int:
         if clicked_keys is None:
             clicked_keys = set()
@@ -666,6 +696,7 @@ class DzenStudioPage:
             attempt_counts = {}
         clicked_count = 0
         first_controls = initial_controls
+        unresolved_click_keys: set[str] = set()
 
         def read_controls() -> list[tuple[Any, str]]:
             nonlocal first_controls
@@ -674,9 +705,26 @@ class DzenStudioPage:
                 first_controls = None
             else:
                 control_scope = scope if scope is not None else self._page
-                buttons = control_scope.query_selector_all(
-                    selectors.COMMENT_OPEN_MORE
-                )
+                locator = getattr(control_scope, "locator", None)
+                if callable(locator):
+                    if (
+                        scope is not None
+                        and expected_post_href
+                        and _post_href_from_locator(control_scope)
+                        != expected_post_href
+                    ):
+                        raise RuntimeError(
+                            "Studio publication changed during reply expansion"
+                        )
+                    button_locator = locator(selectors.COMMENT_OPEN_MORE)
+                    buttons = [
+                        button_locator.nth(index)
+                        for index in range(button_locator.count())
+                    ]
+                else:
+                    buttons = control_scope.query_selector_all(
+                        selectors.COMMENT_OPEN_MORE
+                    )
             visible_buttons: list[Any] = []
             for button in buttons:
                 is_visible = getattr(button, "is_visible", None)
@@ -722,6 +770,16 @@ class DzenStudioPage:
                 and attempt_counts.get(button_key, 0) < _REPLY_EXPANSION_MAX_ATTEMPTS
             ]
             if not pending_controls:
+                if unresolved_click_keys:
+                    self._log_reply_expansion_incomplete(
+                        failure_reason="click_target_not_visible_after_retry",
+                        clicked_count=clicked_count,
+                        visible_button_count=len(controls),
+                    )
+                    raise RuntimeError(
+                        "reply expansion could not reacquire a control after a "
+                        "not-visible click failure"
+                    )
                 return clicked_count
 
             # Expand newly revealed nested controls before spending another
@@ -768,6 +826,31 @@ class DzenStudioPage:
             try:
                 next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
+                is_not_visible = "not visible" in str(exc).casefold()
+                if (
+                    is_not_visible
+                    and attempt_counts[next_button_key]
+                    < _REPLY_EXPANSION_MAX_ATTEMPTS
+                ):
+                    unresolved_click_keys.add(next_button_key)
+                    logger.info(
+                        "Dzen reply control will be reacquired after a visibility race",
+                        extra={
+                            "event": "studio_reply_expansion_click_deferred",
+                            "failure_stage": "studio_reply_expansion",
+                            "failure_reason": "control_not_visible",
+                            "click_attempt": attempt_counts[next_button_key],
+                            "clicked_count": clicked_count,
+                            "visible_button_count": len(controls),
+                        },
+                    )
+                    remaining_ms = int((deadline - monotonic()) * 1_000)
+                    if remaining_ms > 0:
+                        self._page.wait_for_timeout(
+                            min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
+                        )
+                    controls = read_controls()
+                    continue
                 self._log_reply_expansion_incomplete(
                     failure_reason=(
                         "click_timeout"
@@ -778,6 +861,7 @@ class DzenStudioPage:
                     visible_button_count=len(controls),
                 )
                 raise
+            unresolved_click_keys.discard(next_button_key)
             clicked_count += 1
             remaining_ms = int((deadline - monotonic()) * 1_000)
             if remaining_ms > 0:

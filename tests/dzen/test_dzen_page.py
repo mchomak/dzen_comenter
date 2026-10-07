@@ -895,9 +895,89 @@ def test_hidden_root_reply_control_is_deferred_until_its_thread_is_mounted(
             monkeypatch.setattr(
                 dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
             )
-            group = page.query_selector('[data-testid="comment"]')
+            group = page.locator('[data-testid="comment"]')
 
             expanded = DzenStudioPage(page)._expand_hidden_replies(scope=group)
+
+            assert expanded == 2
+            assert page.evaluate("window.replyClicks") == ["parent", "child"]
+        finally:
+            browser.close()
+
+
+def test_hidden_reply_expansion_reacquires_controls_after_group_rerender(
+    monkeypatch,
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div class="editor--comments-page__groupByPost-3D" data-testid="comment">
+      <div class="editor--comments-page__postContainer-xf">
+        <a href="/a/test-post"></a>
+      </div>
+      <div class="editor--comments-page__commentsContainer-12">
+        <div class="editor--comments-page__commentNode-2f">
+          <div class="editor--comment__block-parent">
+            <a class="editor--comment__nameLink-author" href="/user/parent"></a>
+            <p class="editor--comment__text-text">parent text</p>
+          </div>
+          <button
+            class="editor--root-comment__openMoreButton-parent"
+            onclick="window.replyClicks.push('parent'); window.replaceGroup()"
+          >Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.replyClicks = [];
+      window.replaceGroup = () => {
+        const group = document.querySelector('[data-testid="comment"]');
+        const replacement = document.createElement('div');
+        replacement.className = 'editor--comments-page__groupByPost-3D';
+        replacement.setAttribute('data-testid', 'comment');
+        replacement.innerHTML = `
+          <div class="editor--comments-page__postContainer-xf">
+            <a href="/a/test-post"></a>
+          </div>
+          <div class="editor--comments-page__commentsContainer-12">
+            <div class="editor--comments-page__commentNode-2f">
+              <div class="editor--comment__block-parent">
+                <a class="editor--comment__nameLink-author" href="/user/parent"></a>
+                <p class="editor--comment__text-text">parent text</p>
+              </div>
+              <div class="editor--root-comment__commentNode-14">
+                <div class="editor--comment__block-child">
+                  <a class="editor--comment__nameLink-author" href="/user/child"></a>
+                  <p class="editor--comment__text-text">child text</p>
+                </div>
+                <button
+                  class="editor--root-comment__openMoreButton-child"
+                  onclick="window.replyClicks.push('child'); this.remove()"
+                >Показать 2 ответа</button>
+              </div>
+            </div>
+          </div>`;
+        group.replaceWith(replacement);
+      };
+    </script>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+            group = page.locator('[data-testid="comment"]')
+
+            expanded = DzenStudioPage(page)._expand_hidden_replies(
+                scope=group, expected_post_href="/a/test-post"
+            )
 
             assert expanded == 2
             assert page.evaluate("window.replyClicks") == ["parent", "child"]
@@ -1014,6 +1094,48 @@ def test_hidden_reply_expansion_caps_playwright_click_timeout():
     assert button.clicks == 0
     assert button.click_forces == [True]
     assert button.click_timeouts == [dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS]
+
+
+def test_hidden_reply_expansion_retries_transient_not_visible_click_with_fresh_control(
+    monkeypatch,
+):
+    successful_clicks = 0
+    attempts = 0
+    controls = []
+
+    class ReplacedControl:
+        def evaluate(self, script: str) -> int | str:
+            if "editor--comment__block-" in script:
+                return "stable-control-identity"
+            return id(self)
+
+        def is_visible(self) -> bool:
+            return successful_clicks == 0
+
+        def click(self, *, timeout: int | None = None, force: bool = False) -> None:
+            nonlocal attempts, successful_clicks
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("Element is not visible")
+            successful_clicks += 1
+
+    def query_controls(selector: str):
+        assert selector == selectors.COMMENT_OPEN_MORE
+        if successful_clicks:
+            return []
+        control = ReplacedControl()
+        controls.append(control)
+        return [control]
+
+    fake = FakePage([])
+    fake.query_selector_all = query_controls
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    expanded = DzenStudioPage(fake)._expand_hidden_replies()
+
+    assert expanded == 1
+    assert attempts == 2
+    assert len(controls) >= 2
 
 
 def test_hidden_reply_expansion_reports_click_safety_limit(monkeypatch):
