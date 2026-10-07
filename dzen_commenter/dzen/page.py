@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -588,6 +589,7 @@ class DzenStudioPage:
                         attempt_counts=reply_expansion_attempts,
                         deadline=reply_expansion_deadline,
                         expected_post_href=expected_post_href or None,
+                        scope_index=group_index,
                     )
                 groups, current_counts = self._studio_feed_snapshot()
                 if current_counts == previous_counts:
@@ -761,6 +763,7 @@ class DzenStudioPage:
         attempt_counts: dict[Any, int] | None = None,
         deadline: float | None = None,
         expected_post_href: str | None = None,
+        scope_index: int | None = None,
     ) -> int:
         if clicked_keys is None:
             clicked_keys = set()
@@ -818,17 +821,23 @@ class DzenStudioPage:
                     ) from exc
 
             controls: list[tuple[Any, str]] = []
-            for button in visible_buttons:
+            for button_index, button in enumerate(visible_buttons):
                 button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
                 if not isinstance(button_key, str) or not button_key:
-                    self._log_reply_expansion_incomplete(
-                        failure_reason="reply_control_identity_unavailable",
-                        clicked_count=clicked_count,
-                        visible_button_count=len(visible_buttons),
+                    try:
+                        control_class = button.get_attribute("class") or ""
+                        control_text = button.inner_text().strip()
+                    except Exception:
+                        control_class = ""
+                        control_text = ""
+                    scope_key = expected_post_href or (
+                        f"group:{scope_index}"
+                        if scope_index is not None
+                        else "page"
                     )
-                    raise RuntimeError(
-                        "reply expansion stopped because a visible control had "
-                        "no stable comment or group identity"
+                    button_key = "fallback:" + json.dumps(
+                        [scope_key, button_index, control_class, control_text],
+                        ensure_ascii=False,
                     )
                 controls.append((button, button_key))
             return controls

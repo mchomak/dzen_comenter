@@ -1024,6 +1024,9 @@ def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missin
 
     html = """
     <div class="editor--comments-page__groupByPost-3D" data-testid="comment">
+      <div class="editor--comments-page__postContainer-xf">
+        <a href="/a/test-post"></a>
+      </div>
       <button class="editor--root-comment__openMoreButton-first"
         onclick="window.replyClicks.push('first'); this.remove()">Показать 1 ответ</button>
       <button class="editor--root-comment__openMoreButton-second"
@@ -1047,11 +1050,14 @@ def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missin
             monkeypatch.setattr(
                 dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
             )
+            monkeypatch.setattr(dzen_page, "_REPLY_BUTTON_KEY_SCRIPT", "() => null")
             clicked_keys = set()
 
             expanded = DzenStudioPage(page)._expand_hidden_replies(
                 scope=page.locator('[data-testid="comment"]'),
                 clicked_keys=clicked_keys,
+                expected_post_href="/a/test-post",
+                scope_index=2,
             )
 
             assert expanded == 4
