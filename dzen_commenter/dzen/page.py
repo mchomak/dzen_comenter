@@ -58,16 +58,22 @@ _STUDIO_FEED_STABLE_PASSES = 3
 _REPLY_BUTTON_KEY_SCRIPT = """
 (node) => {
     const commentSelector = '[class*="editor--comment__block-"]';
-    const threadSelector = '[class*="editor--comments-page__commentNode-"]';
-    const groupSelector = '[data-testid="comment"]';
+    const pageThreadSelector = '[class*="editor--comments-page__commentNode-"]';
+    const rootThreadSelector = '[class*="editor--root-comment__commentNode-"]';
+    const threadSelector = `${pageThreadSelector}, ${rootThreadSelector}`;
+    const groupSelector = '[data-testid="comment"], '
+        + '[class*="editor--comments-page__groupByPost-"]';
     const openMoreSelector = 'button[class*="editor--root-comment__openMoreButton-"]';
     const directComment = node.closest(commentSelector);
     const thread = node.closest(threadSelector)
         || directComment?.closest(threadSelector);
-    const group = thread?.closest(groupSelector);
-    if (!thread || !group) return null;
+    const group = thread?.closest(groupSelector)
+        || node.closest(groupSelector)
+        || directComment?.closest(groupSelector);
+    const scope = thread || group;
+    if (!scope || !group) return null;
 
-    const comments = Array.from(thread.querySelectorAll(commentSelector));
+    const comments = Array.from(scope.querySelectorAll(commentSelector));
     const ownerForControl = (control) => {
         const directOwner = control.closest(commentSelector);
         if (directOwner) return directOwner;
@@ -92,13 +98,13 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     ]);
     const ownSignature = signature(comment);
     let occurrence = 0;
-    for (const candidate of thread.querySelectorAll(commentSelector)) {
+    for (const candidate of comments) {
         if (signature(candidate) !== ownSignature) continue;
         if (candidate === comment) break;
         occurrence++;
     }
     const controlsForComment = Array.from(
-        thread.querySelectorAll(openMoreSelector)
+        scope.querySelectorAll(openMoreSelector)
     ).filter((control) => ownerForControl(control) === comment);
     const controlOccurrence = controlsForComment.indexOf(node);
     if (controlOccurrence < 0) return null;
@@ -108,8 +114,9 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     )?.getAttribute('href') || '';
     const groupIndex = Array.from(document.querySelectorAll(groupSelector))
         .indexOf(group);
-    const threadIndex = Array.from(group.querySelectorAll(threadSelector))
-        .indexOf(thread);
+    const threadIndex = thread
+        ? Array.from(group.querySelectorAll(threadSelector)).indexOf(thread)
+        : -1;
     return JSON.stringify([
         postHref, groupIndex, threadIndex, ownSignature, occurrence,
         controlOccurrence,
@@ -648,17 +655,38 @@ class DzenStudioPage:
 
         def read_controls() -> list[tuple[Any, str]]:
             buttons = self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
-            controls: list[tuple[Any, str]] = []
+            visible_buttons: list[Any] = []
             for button in buttons:
+                is_visible = getattr(button, "is_visible", None)
+                if not callable(is_visible):
+                    visible_buttons.append(button)
+                    continue
+                try:
+                    if is_visible():
+                        visible_buttons.append(button)
+                except Exception as exc:
+                    self._log_reply_expansion_incomplete(
+                        failure_reason="reply_control_visibility_unavailable",
+                        clicked_count=clicked_count,
+                        visible_button_count=len(visible_buttons),
+                    )
+                    raise RuntimeError(
+                        "reply expansion stopped because a control's visibility "
+                        "could not be determined"
+                    ) from exc
+
+            controls: list[tuple[Any, str]] = []
+            for button in visible_buttons:
                 button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
                 if not isinstance(button_key, str) or not button_key:
                     self._log_reply_expansion_incomplete(
                         failure_reason="reply_control_identity_unavailable",
                         clicked_count=clicked_count,
-                        visible_button_count=len(buttons),
+                        visible_button_count=len(visible_buttons),
                     )
                     raise RuntimeError(
-                        "reply expansion stopped because a control had no stable identity"
+                        "reply expansion stopped because a visible control had "
+                        "no stable comment or group identity"
                     )
                 controls.append((button, button_key))
             return controls
