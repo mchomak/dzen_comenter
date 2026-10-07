@@ -60,10 +60,28 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     const commentSelector = '[class*="editor--comment__block-"]';
     const threadSelector = '[class*="editor--comments-page__commentNode-"]';
     const groupSelector = '[data-testid="comment"]';
-    const comment = node.closest(commentSelector);
-    const thread = comment?.closest(threadSelector);
+    const openMoreSelector = 'button[class*="editor--root-comment__openMoreButton-"]';
+    const directComment = node.closest(commentSelector);
+    const thread = node.closest(threadSelector)
+        || directComment?.closest(threadSelector);
     const group = thread?.closest(groupSelector);
-    if (!comment || !thread || !group) return null;
+    if (!thread || !group) return null;
+
+    const comments = Array.from(thread.querySelectorAll(commentSelector));
+    const ownerForControl = (control) => {
+        const directOwner = control.closest(commentSelector);
+        if (directOwner) return directOwner;
+        let precedingOwner = null;
+        for (const candidate of comments) {
+            if (candidate.compareDocumentPosition(control)
+                & Node.DOCUMENT_POSITION_FOLLOWING) {
+                precedingOwner = candidate;
+            }
+        }
+        return precedingOwner;
+    };
+    const comment = directComment || ownerForControl(node);
+    if (!comment) return null;
 
     const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
     const signature = (candidate) => JSON.stringify([
@@ -79,6 +97,11 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         if (candidate === comment) break;
         occurrence++;
     }
+    const controlsForComment = Array.from(
+        thread.querySelectorAll(openMoreSelector)
+    ).filter((control) => ownerForControl(control) === comment);
+    const controlOccurrence = controlsForComment.indexOf(node);
+    if (controlOccurrence < 0) return null;
 
     const postHref = group.querySelector(
         '[class*="editor--comments-page__postContainer-"] a[href]'
@@ -89,6 +112,7 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         .indexOf(thread);
     return JSON.stringify([
         postHref, groupIndex, threadIndex, ownSignature, occurrence,
+        controlOccurrence,
     ]);
 }
 """

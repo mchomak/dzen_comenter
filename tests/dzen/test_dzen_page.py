@@ -721,6 +721,80 @@ def test_fetch_comments_fails_when_clicked_reply_control_stays_visible(caplog):
     )
 
 
+def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
+    caplog, monkeypatch
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-first">
+          <a class="editor--comment__nameLink-author" href="/user/same"></a>
+          <p class="editor--comment__text-text">duplicate text</p>
+        </div>
+        <button class="editor--root-comment__openMoreButton-first">
+          Показать ответы
+        </button>
+        <div class="editor--comment__block-second">
+          <a class="editor--comment__nameLink-author" href="/user/same"></a>
+          <p class="editor--comment__text-text">duplicate text</p>
+        </div>
+        <button class="editor--root-comment__openMoreButton-second">
+          Показать ответы
+        </button>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            buttons = page.query_selector_all(selectors.COMMENT_OPEN_MORE)
+            keys = [
+                button.evaluate(dzen_page._REPLY_BUTTON_KEY_SCRIPT)
+                for button in buttons
+            ]
+
+            assert len(keys) == 2
+            assert all(isinstance(key, str) and key for key in keys)
+            assert keys[0] != keys[1]
+
+            page.set_content(html)
+            rerendered_keys = [
+                button.evaluate(dzen_page._REPLY_BUTTON_KEY_SCRIPT)
+                for button in page.query_selector_all(selectors.COMMENT_OPEN_MORE)
+            ]
+            assert rerendered_keys == keys
+
+            monkeypatch.setattr(dzen_page, "_REPLY_SEARCH_WAIT_MS", 0)
+            with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+                with pytest.raises(RuntimeError, match="reply expansion.*visible"):
+                    DzenStudioPage(page).fetch_comments()
+
+            incomplete = next(
+                record for record in caplog.records
+                if getattr(record, "event", None)
+                == "studio_reply_expansion_incomplete"
+            )
+            assert incomplete.failure_reason == "retry_limit_reached"
+            assert incomplete.clicked_count == 4
+            assert not any(
+                getattr(record, "event", None) == "studio_comments_read_completed"
+                for record in caplog.records
+            )
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_does_not_click_the_same_button_twice_in_one_pass():
     button = FakeButton(hide_on_click=True)
     fake = FakePage([])
