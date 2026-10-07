@@ -197,6 +197,16 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         }
 
         const buttons = Array.from(group.querySelectorAll(selectors.more));
+        const visibleCommentCount = Array.from(
+            group.querySelectorAll(selectors.comment)
+        ).filter((comment) => {
+            const rect = comment.getBoundingClientRect();
+            const style = getComputedStyle(comment);
+            return rect.width > 0
+                && rect.height > 0
+                && style.display !== "none"
+                && style.visibility !== "hidden";
+        }).length;
         buttons.forEach((button, buttonIndex) => {
             const rect = button.getBoundingClientRect();
             const style = getComputedStyle(button);
@@ -209,6 +219,7 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
                     && rect.height > 0
                     && style.display !== "none"
                     && style.visibility !== "hidden",
+                group_comment_count: visibleCommentCount,
                 class_name: String(button.className || "").trim()
                     .replace(/\\s+/g, " "),
                 text: String(button.innerText || "").trim(),
@@ -853,6 +864,7 @@ class DzenStudioPage:
         clicked_count = 0
         first_controls = initial_controls
         unresolved_click_keys: set[str] = set()
+        control_info_by_key: dict[str, dict[str, Any]] = {}
 
         def read_controls_once() -> tuple[list[tuple[Any, str]], set[str]]:
             nonlocal first_controls
@@ -876,6 +888,7 @@ class DzenStudioPage:
                         {
                             "group": selectors.POST_GROUP,
                             "more": selectors.COMMENT_OPEN_MORE,
+                            "comment": selectors.COMMENT_NODE,
                             "postLink": selectors.POST_LINK,
                             "postLinkFallback": selectors.POST_LINK_FALLBACK,
                             "scopeIndex": scope_index,
@@ -1018,6 +1031,7 @@ class DzenStudioPage:
                         ensure_ascii=False,
                     )
                 present_keys.add(button_key)
+                control_info_by_key[button_key] = metadata or {}
                 if is_visible:
                     controls.append((button, button_key))
             return controls, present_keys
@@ -1136,6 +1150,7 @@ class DzenStudioPage:
             ) + 1
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             previous_control_count = len(present_keys)
+            previous_control_info = control_info_by_key.get(next_button_key, {})
             try:
                 self._reply_expansion_phase = "control_click"
                 next_button.click(force=True, timeout=click_timeout_ms)
@@ -1185,6 +1200,18 @@ class DzenStudioPage:
                         else:
                             clicked_keys.add(next_button_key)
                         clicked_count += 1
+                    elif self._reply_control_revealed_comments(
+                        previous_control_info,
+                        control_info_by_key.get(next_button_key, {}),
+                    ):
+                        unresolved_click_keys.discard(next_button_key)
+                        if next_button_key.startswith("fallback:"):
+                            attempt_counts[next_button_key] = (
+                                _REPLY_EXPANSION_MAX_ATTEMPTS
+                            )
+                        else:
+                            clicked_keys.add(next_button_key)
+                        clicked_count += 1
                     continue
                 self._log_reply_expansion_incomplete(
                     failure_reason=(
@@ -1210,6 +1237,14 @@ class DzenStudioPage:
                     attempt_counts.pop(next_button_key, None)
                 else:
                     clicked_keys.add(next_button_key)
+            elif self._reply_control_revealed_comments(
+                previous_control_info,
+                control_info_by_key.get(next_button_key, {}),
+            ):
+                if next_button_key.startswith("fallback:"):
+                    attempt_counts[next_button_key] = _REPLY_EXPANSION_MAX_ATTEMPTS
+                else:
+                    clicked_keys.add(next_button_key)
             elif (
                 next_button_key.startswith("fallback:")
                 and len(present_keys) < previous_control_count
@@ -1218,10 +1253,27 @@ class DzenStudioPage:
                 # ownerless control disappears; begin its new occupant fresh.
                 attempt_counts.pop(next_button_key, None)
             elif attempt_counts[next_button_key] >= _REPLY_EXPANSION_MAX_ATTEMPTS:
+                current_control_info = control_info_by_key.get(
+                    next_button_key, {}
+                )
+                self._reply_expansion_phase = (
+                    "control_still_present_after_successful_click"
+                )
                 self._log_reply_expansion_incomplete(
                     failure_reason="retry_limit_reached",
                     clicked_count=clicked_count,
                     visible_button_count=len(controls),
+                    click_attempt=attempt_counts[next_button_key],
+                    control_group_index=current_control_info.get("group_index"),
+                    control_button_index=current_control_info.get("button_index"),
+                    control_class=current_control_info.get("class_name"),
+                    control_label=current_control_info.get("text"),
+                    visible_comment_count_before=(
+                        previous_control_info.get("group_comment_count")
+                    ),
+                    visible_comment_count_after=(
+                        current_control_info.get("group_comment_count")
+                    ),
                 )
                 raise RuntimeError(
                     "reply expansion failed because a control remained visible "
@@ -1229,18 +1281,60 @@ class DzenStudioPage:
                 )
 
     @staticmethod
+    def _reply_control_revealed_comments(
+        before: dict[str, Any], after: dict[str, Any]
+    ) -> bool:
+        before_count = before.get("group_comment_count")
+        after_count = after.get("group_comment_count")
+        if (
+            not isinstance(before_count, int)
+            or not isinstance(after_count, int)
+            or after_count <= before_count
+        ):
+            return False
+
+        label = " ".join(str(after.get("text", "")).replace("\u00a0", " ").split())
+        if not label.casefold().startswith("показать"):
+            return True
+        match = re.match(r"показать\s+(\d+)\b", label, flags=re.IGNORECASE)
+        return bool(match and after_count - before_count >= int(match.group(1)))
+
+    @staticmethod
     def _log_reply_expansion_incomplete(
-        *, failure_reason: str, clicked_count: int, visible_button_count: int
+        *,
+        failure_reason: str,
+        clicked_count: int,
+        visible_button_count: int,
+        click_attempt: int | None = None,
+        control_group_index: int | None = None,
+        control_button_index: int | None = None,
+        control_class: str | None = None,
+        control_label: str | None = None,
+        visible_comment_count_before: int | None = None,
+        visible_comment_count_after: int | None = None,
     ) -> None:
+        extra = {
+            "event": "studio_reply_expansion_incomplete",
+            "failure_stage": "studio_reply_expansion",
+            "failure_reason": failure_reason,
+            "clicked_count": clicked_count,
+            "visible_button_count": visible_button_count,
+        }
+        optional_fields = {
+            "click_attempt": click_attempt,
+            "control_group_index": control_group_index,
+            "control_button_index": control_button_index,
+            "control_class": control_class,
+            "control_label": control_label,
+            "visible_comment_count_before": visible_comment_count_before,
+            "visible_comment_count_after": visible_comment_count_after,
+        }
+        extra.update(
+            {key: value for key, value in optional_fields.items() if value is not None}
+        )
         logger.info(
             "Dzen hidden reply expansion stopped before all controls were expanded",
-            extra={
-                "event": "studio_reply_expansion_incomplete",
-                "failure_stage": "studio_reply_expansion",
-                "failure_reason": failure_reason,
-                "clicked_count": clicked_count,
-                "visible_button_count": visible_button_count,
-            },
+            extra=extra,
         )
 
     @staticmethod

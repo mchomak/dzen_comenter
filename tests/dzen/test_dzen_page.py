@@ -931,6 +931,55 @@ def test_hidden_reply_expansion_reads_controls_in_one_dom_snapshot(monkeypatch):
             browser.close()
 
 
+def test_hidden_reply_expansion_accepts_button_that_remains_after_replies_load(
+    monkeypatch,
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-first">
+        <div class="editor--comment__block-first">
+          <a class="editor--comment__nameLink-author" href="/user/1"></a>
+          <p class="editor--comment__text-text">first comment</p>
+        </div>
+        <button id="show-replies"
+          class="editor--root-comment__openMoreButton-first"
+          onclick="this.parentElement.insertAdjacentHTML('beforeend', '<div class=editor--comment__block-reply>reply</div>')">
+          Показать 1 ответ
+        </button>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+
+            expanded = DzenStudioPage(page)._expand_hidden_replies(
+                scope=page.locator(selectors.POST_GROUP).nth(0),
+                expected_post_href="/a/post1",
+                scope_index=0,
+            )
+
+            assert expanded == 1
+            assert page.locator(selectors.COMMENT_NODE).count() == 2
+            assert page.locator("#show-replies").count() == 1
+        finally:
+            browser.close()
+
+
 def test_reply_button_key_uses_group_scope_when_no_thread_wrapper_exists():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
