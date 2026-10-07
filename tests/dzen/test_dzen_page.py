@@ -1081,6 +1081,75 @@ def test_hidden_reply_expansion_handles_many_distinct_buttons():
     assert sum(button.clicks for button in buttons) == len(buttons)
 
 
+def test_hidden_reply_expansion_allows_a_large_feed_more_than_three_minutes(
+    monkeypatch,
+):
+    buttons = [FakeButton(hide_on_click=True) for _ in range(250)]
+    fake = FakePage([])
+    elapsed_ms = 0
+
+    def wait_for_timeout(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        fake.waited_ms.append(timeout_ms)
+        elapsed_ms += timeout_ms
+
+    fake.query_selector_all = lambda selector: (
+        [button for button in buttons if button.is_visible()]
+        if selector == selectors.COMMENT_OPEN_MORE
+        else []
+    )
+    fake.wait_for_timeout = wait_for_timeout
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 500)
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+
+    page = DzenStudioPage(fake)
+
+    assert page._expand_hidden_replies() == len(buttons)
+    assert sum(button.clicks for button in buttons) == len(buttons)
+
+
+def test_hidden_reply_expansion_supports_more_than_200_controls_in_one_feed():
+    buttons = [FakeButton(hide_on_click=True) for _ in range(418)]
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button for button in buttons if button.is_visible()]
+        if selector == selectors.COMMENT_OPEN_MORE
+        else []
+    )
+
+    page = DzenStudioPage(fake)
+
+    assert page._expand_hidden_replies() == len(buttons)
+    assert sum(button.clicks for button in buttons) == len(buttons)
+
+
+def test_fetch_comments_expands_replies_across_a_large_feed_after_three_minutes(
+    monkeypatch,
+):
+    groups = []
+    for index in range(250):
+        parent = make_node(index)
+        parent.hidden_comment_children = [make_node(index + 250)]
+        groups.append(FakeGroup(f"/a/post{index}", [parent]))
+
+    fake = FakePage(groups)
+    elapsed_ms = 0
+
+    def wait_for_timeout(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        fake.waited_ms.append(timeout_ms)
+        elapsed_ms += timeout_ms
+
+    fake.wait_for_timeout = wait_for_timeout
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 500)
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+
+    comments = DzenStudioPage(fake).fetch_comments()
+
+    assert len(comments) == 500
+    assert elapsed_ms > 180_000
+
+
 def test_fetch_comments_waits_for_lazy_groups_until_three_stable_passes():
     first = FakeGroup("/a/post1", [make_node(0)])
     second = FakeGroup("/a/post2", [make_node(1)])
