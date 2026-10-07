@@ -214,6 +214,7 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
                 group_index: groupIndex,
                 button_index: buttonIndex,
                 global_index: allControls.indexOf(button),
+                post_href: postHref,
                 key: keyFor(button),
                 visible: rect.width > 0
                     && rect.height > 0
@@ -227,6 +228,40 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         });
     }
     return {identity_matches: true, post_href: "", controls};
+}
+""".replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
+_REPLY_CONTROL_CLICK_SCRIPT = """
+(selectors) => {
+    const groups = Array.from(document.querySelectorAll(selectors.group));
+    const group = groups[selectors.groupIndex];
+    if (!group) return false;
+    const postLink = group.querySelector(selectors.postLink)
+        || group.querySelector(selectors.postLinkFallback);
+    const postHref = postLink?.getAttribute("href") || "";
+    if (postHref !== selectors.expectedPostHref) return false;
+
+    const button = group.querySelectorAll(selectors.more)[selectors.buttonIndex];
+    if (!button) return false;
+    const keyFor = REPLY_BUTTON_KEY_FUNCTION;
+    if (selectors.expectedKey && keyFor(button) !== selectors.expectedKey) {
+        return false;
+    }
+    const buttonClass = String(button.className || "").trim()
+        .replace(/\\s+/g, " ");
+    if (buttonClass !== selectors.expectedClass) {
+        return false;
+    }
+    if (String(button.innerText || "").trim() !== selectors.expectedText) {
+        return false;
+    }
+    const rect = button.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    if (rect.width <= 0 || rect.height <= 0
+        || style.display === "none" || style.visibility === "hidden") {
+        return false;
+    }
+    button.click();
+    return true;
 }
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
@@ -1153,7 +1188,31 @@ class DzenStudioPage:
             previous_control_info = control_info_by_key.get(next_button_key, {})
             try:
                 self._reply_expansion_phase = "control_click"
-                next_button.click(force=True, timeout=click_timeout_ms)
+                if (
+                    previous_control_info
+                    and callable(getattr(self._page, "evaluate", None))
+                ):
+                    clicked = self._page.evaluate(
+                        _REPLY_CONTROL_CLICK_SCRIPT,
+                        {
+                            "group": selectors.POST_GROUP,
+                            "more": selectors.COMMENT_OPEN_MORE,
+                            "postLink": selectors.POST_LINK,
+                            "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                            "groupIndex": previous_control_info["group_index"],
+                            "buttonIndex": previous_control_info["button_index"],
+                            "expectedPostHref": previous_control_info["post_href"],
+                            "expectedKey": previous_control_info.get("key"),
+                            "expectedClass": previous_control_info["class_name"],
+                            "expectedText": previous_control_info["text"],
+                        },
+                    )
+                    if clicked is not True:
+                        raise TimeoutError(
+                            "reply control changed before it could be clicked"
+                        )
+                else:
+                    next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
                 exception_name = type(exc).__name__.casefold()
                 exception_message = str(exc).casefold()
