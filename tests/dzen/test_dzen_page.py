@@ -1252,6 +1252,30 @@ def test_hidden_reply_expansion_retries_transient_click_timeout(
     assert attempts == 2
 
 
+def test_hidden_reply_expansion_reconciles_timeout_after_control_disappears():
+    button = FakeButton()
+    attempts = 0
+
+    def click_then_timeout(*, timeout=None, force=False):
+        nonlocal attempts
+        attempts += 1
+        button.visible = False
+        raise TimeoutError("Timeout after click dispatch")
+
+    button.click = click_then_timeout
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button]
+        if selector == selectors.COMMENT_OPEN_MORE and button.is_visible()
+        else []
+    )
+
+    expanded = DzenStudioPage(fake)._expand_hidden_replies()
+
+    assert expanded == 1
+    assert attempts == 1
+
+
 def test_hidden_reply_expansion_reports_click_safety_limit(monkeypatch):
     monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 2, raising=False)
     clicks = 0

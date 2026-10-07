@@ -773,7 +773,7 @@ class DzenStudioPage:
         first_controls = initial_controls
         unresolved_click_keys: set[str] = set()
 
-        def read_controls() -> list[tuple[Any, str]]:
+        def read_controls() -> tuple[list[tuple[Any, str]], set[str]]:
             nonlocal first_controls
             if first_controls is not None:
                 buttons = first_controls
@@ -800,20 +800,19 @@ class DzenStudioPage:
                     buttons = control_scope.query_selector_all(
                         selectors.COMMENT_OPEN_MORE
                     )
-            visible_buttons: list[Any] = []
+            visibility: list[bool] = []
             for button in buttons:
                 is_visible = getattr(button, "is_visible", None)
                 if not callable(is_visible):
-                    visible_buttons.append(button)
+                    visibility.append(True)
                     continue
                 try:
-                    if is_visible():
-                        visible_buttons.append(button)
+                    visibility.append(bool(is_visible()))
                 except Exception as exc:
                     self._log_reply_expansion_incomplete(
                         failure_reason="reply_control_visibility_unavailable",
                         clicked_count=clicked_count,
-                        visible_button_count=len(visible_buttons),
+                        visible_button_count=sum(visibility),
                     )
                     raise RuntimeError(
                         "reply expansion stopped because a control's visibility "
@@ -821,7 +820,10 @@ class DzenStudioPage:
                     ) from exc
 
             controls: list[tuple[Any, str]] = []
-            for button_index, button in enumerate(visible_buttons):
+            present_keys: set[str] = set()
+            for button_index, (button, is_visible) in enumerate(
+                zip(buttons, visibility, strict=True)
+            ):
                 button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
                 if not isinstance(button_key, str) or not button_key:
                     try:
@@ -839,10 +841,12 @@ class DzenStudioPage:
                         [scope_key, button_index, control_class, control_text],
                         ensure_ascii=False,
                     )
-                controls.append((button, button_key))
-            return controls
+                present_keys.add(button_key)
+                if is_visible:
+                    controls.append((button, button_key))
+            return controls, present_keys
 
-        controls = read_controls()
+        controls, present_keys = read_controls()
         while True:
             pending_controls = [
                 (button, button_key)
@@ -851,6 +855,23 @@ class DzenStudioPage:
                 and attempt_counts.get(button_key, 0) < _REPLY_EXPANSION_MAX_ATTEMPTS
             ]
             if not pending_controls:
+                visible_keys = {key for _, key in controls}
+                hidden_pending_keys = {
+                    key
+                    for key in present_keys.difference(visible_keys)
+                    if (key.startswith("fallback:") or key not in clicked_keys)
+                    and attempt_counts.get(key, 0) < _REPLY_EXPANSION_MAX_ATTEMPTS
+                }
+                if hidden_pending_keys:
+                    self._log_reply_expansion_incomplete(
+                        failure_reason="reply_control_not_visible",
+                        clicked_count=clicked_count,
+                        visible_button_count=len(controls),
+                    )
+                    raise RuntimeError(
+                        "reply expansion stopped with controls hidden inside "
+                        "a collapsed thread"
+                    )
                 if unresolved_click_keys:
                     self._log_reply_expansion_incomplete(
                         failure_reason="click_target_not_visible_after_retry",
@@ -907,7 +928,7 @@ class DzenStudioPage:
                 next_button_key, 0
             ) + 1
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
-            previous_visible_button_count = len(controls)
+            previous_control_count = len(present_keys)
             try:
                 next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
@@ -941,7 +962,20 @@ class DzenStudioPage:
                         self._page.wait_for_timeout(
                             min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
                         )
-                    controls = read_controls()
+                    controls, present_keys = read_controls()
+                    if (
+                        next_button_key not in present_keys
+                        or (
+                            next_button_key.startswith("fallback:")
+                            and len(present_keys) < previous_control_count
+                        )
+                    ):
+                        unresolved_click_keys.discard(next_button_key)
+                        if next_button_key.startswith("fallback:"):
+                            attempt_counts.pop(next_button_key, None)
+                        else:
+                            clicked_keys.add(next_button_key)
+                        clicked_count += 1
                     continue
                 self._log_reply_expansion_incomplete(
                     failure_reason=(
@@ -960,15 +994,15 @@ class DzenStudioPage:
                 self._page.wait_for_timeout(
                     min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
                 )
-            controls = read_controls()
-            if next_button_key not in {key for _, key in controls}:
+            controls, present_keys = read_controls()
+            if next_button_key not in present_keys:
                 if next_button_key.startswith("fallback:"):
                     attempt_counts.pop(next_button_key, None)
                 else:
                     clicked_keys.add(next_button_key)
             elif (
                 next_button_key.startswith("fallback:")
-                and len(controls) < previous_visible_button_count
+                and len(present_keys) < previous_control_count
             ):
                 # A positional fallback key can shift when a preceding
                 # ownerless control disappears; begin its new occupant fresh.
