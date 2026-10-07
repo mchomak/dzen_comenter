@@ -1176,8 +1176,10 @@ def test_hidden_reply_expansion_caps_playwright_click_timeout():
         page._expand_hidden_replies()
 
     assert button.clicks == 0
-    assert button.click_forces == [True]
-    assert button.click_timeouts == [dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS]
+    assert button.click_forces == [True] * dzen_page._REPLY_EXPANSION_MAX_ATTEMPTS
+    assert button.click_timeouts == [
+        dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS
+    ] * dzen_page._REPLY_EXPANSION_MAX_ATTEMPTS
 
 
 def test_hidden_reply_expansion_retries_transient_not_visible_click_with_fresh_control(
@@ -1220,6 +1222,34 @@ def test_hidden_reply_expansion_retries_transient_not_visible_click_with_fresh_c
     assert expanded == 1
     assert attempts == 2
     assert len(controls) >= 2
+
+
+def test_hidden_reply_expansion_retries_transient_click_timeout(
+    monkeypatch,
+):
+    button = FakeButton(hide_on_click=True)
+    attempts = 0
+
+    def timeout_once(*, timeout=None, force=False):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise TimeoutError("Timeout 5000ms exceeded")
+        button.visible = False
+
+    button.click = timeout_once
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [button]
+        if selector == selectors.COMMENT_OPEN_MORE and button.is_visible()
+        else []
+    )
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    expanded = DzenStudioPage(fake)._expand_hidden_replies()
+
+    assert expanded == 1
+    assert attempts == 2
 
 
 def test_hidden_reply_expansion_reports_click_safety_limit(monkeypatch):

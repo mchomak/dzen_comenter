@@ -911,9 +911,12 @@ class DzenStudioPage:
             try:
                 next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
-                is_not_visible = "not visible" in str(exc).casefold()
+                exception_name = type(exc).__name__.casefold()
+                exception_message = str(exc).casefold()
+                is_not_visible = "not visible" in exception_message
+                is_timeout = "timeout" in exception_name or "timeout" in exception_message
                 if (
-                    is_not_visible
+                    (is_not_visible or is_timeout)
                     and attempt_counts[next_button_key]
                     < _REPLY_EXPANSION_MAX_ATTEMPTS
                 ):
@@ -923,7 +926,11 @@ class DzenStudioPage:
                         extra={
                             "event": "studio_reply_expansion_click_deferred",
                             "failure_stage": "studio_reply_expansion",
-                            "failure_reason": "control_not_visible",
+                            "failure_reason": (
+                                "control_not_visible"
+                                if is_not_visible
+                                else "control_click_timeout"
+                            ),
                             "click_attempt": attempt_counts[next_button_key],
                             "clicked_count": clicked_count,
                             "visible_button_count": len(controls),
