@@ -98,6 +98,7 @@ _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 180_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
 _REPLY_EXPANSION_MAX_CLICKS = 200
+_REPLY_EXPANSION_MAX_ATTEMPTS = 3
 _PUBLIC_COMMENT_WAIT_MS = 750
 _PUBLIC_COMMENT_POLL_LIMIT = 40
 _PUBLIC_PREFLIGHT_POLL_LIMIT = _PUBLIC_COMMENT_POLL_LIMIT
@@ -461,6 +462,7 @@ class DzenStudioPage:
         stable_pass_count = 0
         scan_complete = False
         reply_expansion_keys: set[Any] = set()
+        reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
         try:
             groups, previous_counts = self._studio_feed_snapshot()
@@ -475,6 +477,7 @@ class DzenStudioPage:
                     )
                 self._expand_hidden_replies(
                     clicked_keys=reply_expansion_keys,
+                    attempt_counts=reply_expansion_attempts,
                     deadline=reply_expansion_deadline,
                 )
                 groups, current_counts = self._studio_feed_snapshot()
@@ -602,14 +605,18 @@ class DzenStudioPage:
         self,
         *,
         clicked_keys: set[Any] | None = None,
+        attempt_counts: dict[Any, int] | None = None,
         deadline: float | None = None,
     ) -> int:
         if clicked_keys is None:
             clicked_keys = set()
+        if attempt_counts is None:
+            attempt_counts = {}
         clicked_count = 0
-        while True:
+
+        def read_controls() -> list[tuple[Any, str]]:
             buttons = self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
-            next_button = None
+            controls: list[tuple[Any, str]] = []
             for button in buttons:
                 button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
                 if not isinstance(button_key, str) or not button_key:
@@ -621,18 +628,39 @@ class DzenStudioPage:
                     raise RuntimeError(
                         "reply expansion stopped because a control had no stable identity"
                     )
-                if button_key not in clicked_keys:
-                    next_button = button
-                    next_button_key = button_key
-                    break
-            if next_button is None:
+                controls.append((button, button_key))
+            return controls
+
+        controls = read_controls()
+        while True:
+            pending_controls = [
+                (button, button_key)
+                for button, button_key in controls
+                if button_key not in clicked_keys
+                and attempt_counts.get(button_key, 0) < _REPLY_EXPANSION_MAX_ATTEMPTS
+            ]
+            if not pending_controls:
                 return clicked_count
 
-            if len(clicked_keys) >= _REPLY_EXPANSION_MAX_CLICKS:
+            # Expand newly revealed nested controls before spending another
+            # attempt on a control that remained visible after its click.
+            next_button, next_button_key = next(
+                (
+                    control
+                    for control in pending_controls
+                    if attempt_counts.get(control[1], 0) == 0
+                ),
+                pending_controls[0],
+            )
+
+            total_click_attempts = sum(attempt_counts.values()) + len(
+                clicked_keys.difference(attempt_counts)
+            )
+            if total_click_attempts >= _REPLY_EXPANSION_MAX_CLICKS:
                 self._log_reply_expansion_incomplete(
                     failure_reason="click_limit_reached",
                     clicked_count=clicked_count,
-                    visible_button_count=len(buttons),
+                    visible_button_count=len(controls),
                 )
                 raise RuntimeError(
                     "reply expansion reached its click limit before all controls expanded"
@@ -645,13 +673,15 @@ class DzenStudioPage:
                 self._log_reply_expansion_incomplete(
                     failure_reason="time_limit_reached",
                     clicked_count=clicked_count,
-                    visible_button_count=len(buttons),
+                    visible_button_count=len(controls),
                 )
                 raise RuntimeError(
                     "reply expansion reached its time limit before all controls expanded"
                 )
 
-            clicked_keys.add(next_button_key)
+            attempt_counts[next_button_key] = (
+                attempt_counts.get(next_button_key, 0) + 1
+            )
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             try:
                 next_button.click(timeout=click_timeout_ms)
@@ -663,13 +693,26 @@ class DzenStudioPage:
                         else "click_failed"
                     ),
                     clicked_count=clicked_count,
-                    visible_button_count=len(buttons),
+                    visible_button_count=len(controls),
                 )
                 raise
             clicked_count += 1
             remaining_ms = int((deadline - monotonic()) * 1_000)
             if remaining_ms > 0:
                 self._page.wait_for_timeout(min(_REPLY_SEARCH_WAIT_MS, remaining_ms))
+            controls = read_controls()
+            if next_button_key not in {key for _, key in controls}:
+                clicked_keys.add(next_button_key)
+            elif attempt_counts[next_button_key] >= _REPLY_EXPANSION_MAX_ATTEMPTS:
+                self._log_reply_expansion_incomplete(
+                    failure_reason="retry_limit_reached",
+                    clicked_count=clicked_count,
+                    visible_button_count=len(controls),
+                )
+                raise RuntimeError(
+                    "reply expansion failed because a control remained visible "
+                    "after repeated clicks"
+                )
 
     @staticmethod
     def _log_reply_expansion_incomplete(
@@ -1688,6 +1731,7 @@ class DzenStudioPage:
     ):
         candidates_checked = 0
         reply_expansion_keys: set[Any] = set()
+        reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
         try:
             node, pass_candidate_count = self._find_comment_node(comment_id)
@@ -1734,6 +1778,7 @@ class DzenStudioPage:
                     )
                 self._expand_hidden_replies(
                     clicked_keys=reply_expansion_keys,
+                    attempt_counts=reply_expansion_attempts,
                     deadline=reply_expansion_deadline,
                 )
                 phase = "lookup"

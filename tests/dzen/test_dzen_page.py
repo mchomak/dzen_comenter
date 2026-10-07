@@ -699,11 +699,35 @@ def test_fetch_comments_expands_nested_reply_buttons_once_each():
     assert child.reply_more_button.clicks == 1
 
 
+def test_fetch_comments_fails_when_clicked_reply_control_stays_visible(caplog):
+    parent = make_node(0)
+    parent.hidden_comment_children = [make_node(1)]
+    parent.reply_more_button.on_click = lambda: None
+    page = DzenStudioPage(FakePage([FakeGroup("/a/post1", [parent])]))
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="reply expansion.*visible"):
+            page.fetch_comments()
+
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert incomplete.failure_reason == "retry_limit_reached"
+    assert parent.reply_more_button.clicks == dzen_page._REPLY_EXPANSION_MAX_ATTEMPTS
+    assert not any(
+        getattr(record, "event", None) == "studio_comments_read_completed"
+        for record in caplog.records
+    )
+
+
 def test_hidden_reply_expansion_does_not_click_the_same_button_twice_in_one_pass():
-    button = FakeButton()
+    button = FakeButton(hide_on_click=True)
     fake = FakePage([])
     fake.query_selector_all = lambda selector: (
-        [button] if selector == selectors.COMMENT_OPEN_MORE else []
+        [button]
+        if selector == selectors.COMMENT_OPEN_MORE and button.is_visible()
+        else []
     )
     page = DzenStudioPage(fake)
 
@@ -715,6 +739,7 @@ def test_hidden_reply_expansion_does_not_repeat_a_recreated_logical_button():
     clicks = 0
     queries = 0
     button_handles = []
+    button_visible = True
 
     class RecreatedButton:
         def evaluate(self, script: str) -> int | str:
@@ -723,15 +748,18 @@ def test_hidden_reply_expansion_does_not_repeat_a_recreated_logical_button():
             return id(self)
 
         def click(self, *, timeout: int | None = None) -> None:
-            nonlocal clicks
+            nonlocal button_visible, clicks
             clicks += 1
+            button_visible = False
 
     def query_buttons(selector: str):
-        nonlocal queries
+        nonlocal button_visible, queries
         assert selector == selectors.COMMENT_OPEN_MORE
         queries += 1
         if queries > 5:
             raise AssertionError("reply expansion kept querying a recreated button")
+        if not button_visible:
+            return []
         button = RecreatedButton()
         button_handles.append(button)
         return [button]
@@ -742,8 +770,46 @@ def test_hidden_reply_expansion_does_not_repeat_a_recreated_logical_button():
     clicked_keys = set()
 
     assert page._expand_hidden_replies(clicked_keys=clicked_keys) == 1
+    button_visible = True
     assert page._expand_hidden_replies(clicked_keys=clicked_keys) == 0
     assert clicks == 1
+
+
+def test_hidden_reply_expansion_prioritizes_new_controls_before_retries():
+    actions = []
+    child_visible = False
+
+    class Control:
+        def __init__(self, key: str) -> None:
+            self.key = key
+
+        def evaluate(self, script: str) -> int | str:
+            if "editor--comment__block-" in script:
+                return self.key
+            return id(self)
+
+        def click(self, *, timeout: int | None = None) -> None:
+            nonlocal child_visible
+            actions.append(self.key)
+            if self.key == "parent":
+                child_visible = True
+            else:
+                child_visible = False
+
+    parent = Control("parent")
+    child = Control("child")
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [parent, *([child] if child_visible else [])]
+        if selector == selectors.COMMENT_OPEN_MORE
+        else []
+    )
+    page = DzenStudioPage(fake)
+
+    with pytest.raises(RuntimeError, match="reply expansion.*visible"):
+        page._expand_hidden_replies()
+
+    assert actions == ["parent", "child", "parent", "parent"]
 
 
 def test_hidden_reply_expansion_caps_playwright_click_timeout():
