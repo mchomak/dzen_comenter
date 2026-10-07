@@ -169,6 +169,7 @@ _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
 _REPLY_EXPANSION_POST_CLICK_WAIT_MS = 250
 _REPLY_EXPANSION_MAX_CLICKS = 1_000
 _REPLY_EXPANSION_MAX_ATTEMPTS = 3
+_REPLY_TOTAL_CLICK_ATTEMPTS_KEY = object()
 _PUBLIC_COMMENT_WAIT_MS = 750
 _PUBLIC_COMMENT_POLL_LIMIT = 40
 _PUBLIC_PREFLIGHT_POLL_LIMIT = _PUBLIC_COMMENT_POLL_LIMIT
@@ -864,8 +865,8 @@ class DzenStudioPage:
                 pending_controls[0],
             )
 
-            total_click_attempts = sum(attempt_counts.values()) + len(
-                clicked_keys.difference(attempt_counts)
+            total_click_attempts = attempt_counts.get(
+                _REPLY_TOTAL_CLICK_ATTEMPTS_KEY, 0
             )
             if total_click_attempts >= _REPLY_EXPANSION_MAX_CLICKS:
                 self._log_reply_expansion_incomplete(
@@ -890,10 +891,14 @@ class DzenStudioPage:
                     "reply expansion reached its time limit before all controls expanded"
                 )
 
-            attempt_counts[next_button_key] = (
-                attempt_counts.get(next_button_key, 0) + 1
+            attempt_counts[_REPLY_TOTAL_CLICK_ATTEMPTS_KEY] = (
+                total_click_attempts + 1
             )
+            attempt_counts[next_button_key] = attempt_counts.get(
+                next_button_key, 0
+            ) + 1
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
+            previous_visible_button_count = len(controls)
             try:
                 next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
@@ -941,8 +946,17 @@ class DzenStudioPage:
                 )
             controls = read_controls()
             if next_button_key not in {key for _, key in controls}:
-                if not next_button_key.startswith("fallback:"):
+                if next_button_key.startswith("fallback:"):
+                    attempt_counts.pop(next_button_key, None)
+                else:
                     clicked_keys.add(next_button_key)
+            elif (
+                next_button_key.startswith("fallback:")
+                and len(controls) < previous_visible_button_count
+            ):
+                # A positional fallback key can shift when a preceding
+                # ownerless control disappears; begin its new occupant fresh.
+                attempt_counts.pop(next_button_key, None)
             elif attempt_counts[next_button_key] >= _REPLY_EXPANSION_MAX_ATTEMPTS:
                 self._log_reply_expansion_incomplete(
                     failure_reason="retry_limit_reached",

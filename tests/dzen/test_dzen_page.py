@@ -1028,6 +1028,10 @@ def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missin
         onclick="window.replyClicks.push('first'); this.remove()">Показать 1 ответ</button>
       <button class="editor--root-comment__openMoreButton-second"
         onclick="window.replyClicks.push('second'); this.remove()">Показать 2 ответа</button>
+      <button class="editor--root-comment__openMoreButton-third"
+        onclick="window.replyClicks.push('third'); this.remove()">Показать 3 ответа</button>
+      <button class="editor--root-comment__openMoreButton-fourth"
+        onclick="window.replyClicks.push('fourth'); this.remove()">Показать 4 ответа</button>
     </div>
     <script>window.replyClicks = [];</script>
     """
@@ -1050,8 +1054,10 @@ def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missin
                 clicked_keys=clicked_keys,
             )
 
-            assert expanded == 2
-            assert page.evaluate("window.replyClicks") == ["first", "second"]
+            assert expanded == 4
+            assert page.evaluate("window.replyClicks") == [
+                "first", "second", "third", "fourth"
+            ]
             assert clicked_keys == set()
         finally:
             browser.close()
