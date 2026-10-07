@@ -880,6 +880,57 @@ def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
             browser.close()
 
 
+def test_hidden_reply_expansion_reads_controls_in_one_dom_snapshot(monkeypatch):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-first">
+        <div class="editor--comment__block-first">
+          <a class="editor--comment__nameLink-author" href="/user/1"></a>
+          <p class="editor--comment__text-text">first comment</p>
+        </div>
+        <button class="editor--root-comment__openMoreButton-first"
+          onclick="this.remove()">Показать 1 ответ</button>
+      </div>
+      <div class="editor--comments-page__commentNode-second">
+        <div class="editor--comment__block-second">
+          <a class="editor--comment__nameLink-author" href="/user/2"></a>
+          <p class="editor--comment__text-text">second comment</p>
+        </div>
+        <button class="editor--root-comment__openMoreButton-second"
+          onclick="this.remove()">Показать 3 ответа</button>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+
+            expanded = DzenStudioPage(page)._expand_hidden_replies(
+                scope=page.locator(selectors.POST_GROUP).nth(0),
+                expected_post_href="/a/post1",
+                scope_index=0,
+            )
+
+            assert expanded == 2
+            assert page.query_selector_all(selectors.COMMENT_OPEN_MORE) == []
+        finally:
+            browser.close()
+
+
 def test_reply_button_key_uses_group_scope_when_no_thread_wrapper_exists():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
@@ -1140,7 +1191,7 @@ def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missin
                 scope=page.locator('[data-testid="comment"]'),
                 clicked_keys=clicked_keys,
                 expected_post_href="/a/test-post",
-                scope_index=2,
+                scope_index=0,
             )
 
             assert expanded == 4

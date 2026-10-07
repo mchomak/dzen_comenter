@@ -174,6 +174,50 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     ]);
 }
 """
+_REPLY_CONTROL_SNAPSHOT_SCRIPT = """
+(selectors) => {
+    const keyFor = REPLY_BUTTON_KEY_FUNCTION;
+    const groups = Array.from(document.querySelectorAll(selectors.group));
+    const allControls = Array.from(document.querySelectorAll(selectors.more));
+    const groupIndexes = selectors.scopeIndex === null
+        ? groups.map((_group, index) => index)
+        : [selectors.scopeIndex];
+    const controls = [];
+
+    for (const groupIndex of groupIndexes) {
+        const group = groups[groupIndex];
+        if (!group) {
+            return {identity_matches: false, post_href: "", controls: []};
+        }
+        const postLink = group.querySelector(selectors.postLink)
+            || group.querySelector(selectors.postLinkFallback);
+        const postHref = postLink?.getAttribute("href") || "";
+        if (selectors.expectedPostHref && postHref !== selectors.expectedPostHref) {
+            return {identity_matches: false, post_href: postHref, controls: []};
+        }
+
+        const buttons = Array.from(group.querySelectorAll(selectors.more));
+        buttons.forEach((button, buttonIndex) => {
+            const rect = button.getBoundingClientRect();
+            const style = getComputedStyle(button);
+            controls.push({
+                group_index: groupIndex,
+                button_index: buttonIndex,
+                global_index: allControls.indexOf(button),
+                key: keyFor(button),
+                visible: rect.width > 0
+                    && rect.height > 0
+                    && style.display !== "none"
+                    && style.visibility !== "hidden",
+                class_name: String(button.className || "").trim()
+                    .replace(/\\s+/g, " "),
+                text: String(button.innerText || "").trim(),
+            });
+        });
+    }
+    return {identity_matches: true, post_href: "", controls};
+}
+""".replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
@@ -593,13 +637,6 @@ class DzenStudioPage:
                     page_locator = getattr(self._page, "locator", None)
                     if callable(page_locator):
                         scope = page_locator(selectors.POST_GROUP).nth(group_index)
-                        if (
-                            expected_post_href
-                            and _post_href_from_locator(scope) != expected_post_href
-                        ):
-                            raise RuntimeError(
-                                "Studio publication order changed during reply expansion"
-                            )
                         initial_controls = None
                     else:
                         scope = group
@@ -819,54 +856,108 @@ class DzenStudioPage:
 
         def read_controls_once() -> tuple[list[tuple[Any, str]], set[str]]:
             nonlocal first_controls
+            control_metadata: list[dict[str, Any]] | None = None
             self._reply_expansion_phase = "control_query"
             if first_controls is not None:
                 buttons = first_controls
                 first_controls = None
             else:
-                control_scope = scope if scope is not None else self._page
-                locator = getattr(control_scope, "locator", None)
-                if callable(locator):
-                    if (
-                        scope is not None
-                        and expected_post_href
-                        and _post_href_from_locator(
-                            control_scope,
-                            timeout_ms=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
-                        )
-                        != expected_post_href
+                page_locator = getattr(self._page, "locator", None)
+                page_evaluate = getattr(self._page, "evaluate", None)
+                can_read_dom_snapshot = (
+                    callable(page_locator)
+                    and callable(page_evaluate)
+                    and (scope_index is not None or scope is None)
+                )
+                if can_read_dom_snapshot:
+                    self._reply_expansion_phase = "control_dom_snapshot"
+                    snapshot = page_evaluate(
+                        _REPLY_CONTROL_SNAPSHOT_SCRIPT,
+                        {
+                            "group": selectors.POST_GROUP,
+                            "more": selectors.COMMENT_OPEN_MORE,
+                            "postLink": selectors.POST_LINK,
+                            "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                            "scopeIndex": scope_index,
+                            "expectedPostHref": expected_post_href,
+                        },
+                    )
+                    if not isinstance(snapshot, dict) or not isinstance(
+                        snapshot.get("controls"), list
                     ):
+                        raise RuntimeError(
+                            "reply expansion could not read a control snapshot"
+                        )
+                    if snapshot.get("identity_matches") is not True:
                         raise RuntimeError(
                             "Studio publication changed during reply expansion"
                         )
-                    button_locator = locator(selectors.COMMENT_OPEN_MORE)
-                    buttons = [
-                        button_locator.nth(index)
-                        for index in range(button_locator.count())
-                    ]
+                    control_metadata = snapshot["controls"]
+                    if scope_index is not None:
+                        button_locator = page_locator(selectors.POST_GROUP).nth(
+                            scope_index
+                        ).locator(selectors.COMMENT_OPEN_MORE)
+                        buttons = [
+                            button_locator.nth(item["button_index"])
+                            for item in control_metadata
+                        ]
+                    else:
+                        button_locator = page_locator(selectors.COMMENT_OPEN_MORE)
+                        if any(item["global_index"] < 0 for item in control_metadata):
+                            raise RuntimeError(
+                                "reply expansion found a control outside its comment group"
+                            )
+                        buttons = [
+                            button_locator.nth(item["global_index"])
+                            for item in control_metadata
+                        ]
                 else:
-                    buttons = control_scope.query_selector_all(
-                        selectors.COMMENT_OPEN_MORE
-                    )
-            visibility: list[bool] = []
-            self._reply_expansion_phase = "control_visibility"
-            for button in buttons:
-                is_visible = getattr(button, "is_visible", None)
-                if not callable(is_visible):
-                    visibility.append(True)
-                    continue
-                try:
-                    visibility.append(bool(is_visible()))
-                except Exception as exc:
-                    self._log_reply_expansion_incomplete(
-                        failure_reason="reply_control_visibility_unavailable",
-                        clicked_count=clicked_count,
-                        visible_button_count=sum(visibility),
-                    )
-                    raise RuntimeError(
-                        "reply expansion stopped because a control's visibility "
-                        "could not be determined"
-                    ) from exc
+                    control_scope = scope if scope is not None else self._page
+                    locator = getattr(control_scope, "locator", None)
+                    if callable(locator):
+                        if (
+                            scope is not None
+                            and expected_post_href
+                            and _post_href_from_locator(
+                                control_scope,
+                                timeout_ms=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
+                            )
+                            != expected_post_href
+                        ):
+                            raise RuntimeError(
+                                "Studio publication changed during reply expansion"
+                            )
+                        button_locator = locator(selectors.COMMENT_OPEN_MORE)
+                        buttons = [
+                            button_locator.nth(index)
+                            for index in range(button_locator.count())
+                        ]
+                    else:
+                        buttons = control_scope.query_selector_all(
+                            selectors.COMMENT_OPEN_MORE
+                        )
+            if control_metadata is not None:
+                visibility = [bool(item["visible"]) for item in control_metadata]
+            else:
+                visibility = []
+                self._reply_expansion_phase = "control_visibility"
+                for button in buttons:
+                    is_visible = getattr(button, "is_visible", None)
+                    if not callable(is_visible):
+                        visibility.append(True)
+                        continue
+                    try:
+                        visibility.append(bool(is_visible()))
+                    except Exception as exc:
+                        self._log_reply_expansion_incomplete(
+                            failure_reason="reply_control_visibility_unavailable",
+                            clicked_count=clicked_count,
+                            visible_button_count=sum(visibility),
+                        )
+                        raise RuntimeError(
+                            "reply expansion stopped because a control's visibility "
+                            "could not be determined"
+                        ) from exc
 
             controls: list[tuple[Any, str]] = []
             present_keys: set[str] = set()
@@ -874,7 +965,14 @@ class DzenStudioPage:
             for button_index, (button, is_visible) in enumerate(
                 zip(buttons, visibility, strict=True)
             ):
-                if callable(getattr(button, "count", None)):
+                metadata = (
+                    control_metadata[button_index]
+                    if control_metadata is not None
+                    else None
+                )
+                if metadata is not None:
+                    button_key = metadata.get("key")
+                elif callable(getattr(button, "count", None)):
                     button_key = button.evaluate(
                         _REPLY_BUTTON_KEY_SCRIPT,
                         timeout=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
@@ -883,7 +981,10 @@ class DzenStudioPage:
                     button_key = button.evaluate(_REPLY_BUTTON_KEY_SCRIPT)
                 if not isinstance(button_key, str) or not button_key:
                     try:
-                        if callable(getattr(button, "count", None)):
+                        if metadata is not None:
+                            control_class = metadata.get("class_name", "")
+                            control_text = metadata.get("text", "")
+                        elif callable(getattr(button, "count", None)):
                             control_class = (
                                 button.get_attribute(
                                     "class",
@@ -897,13 +998,23 @@ class DzenStudioPage:
                     except Exception:
                         control_class = ""
                         control_text = ""
-                    scope_key = expected_post_href or (
-                        f"group:{scope_index}"
-                        if scope_index is not None
-                        else "page"
-                    )
+                    if expected_post_href:
+                        scope_key = expected_post_href
+                    elif metadata is not None:
+                        scope_key = f"group:{metadata['group_index']}"
+                    elif scope_index is not None:
+                        scope_key = f"group:{scope_index}"
+                    else:
+                        scope_key = "page"
                     button_key = "fallback:" + json.dumps(
-                        [scope_key, button_index, control_class, control_text],
+                        [
+                            scope_key,
+                            metadata.get("button_index", button_index)
+                            if metadata is not None
+                            else button_index,
+                            control_class,
+                            control_text,
+                        ],
                         ensure_ascii=False,
                     )
                 present_keys.add(button_key)
