@@ -723,6 +723,89 @@ def test_fetch_comments_fails_when_clicked_reply_control_stays_visible(caplog):
     )
 
 
+def test_studio_feed_scroll_avoids_waiting_for_an_unstable_comment_element():
+    class UnstableComment(FakeCommentNode):
+        def scroll_into_view_if_needed(self) -> None:
+            raise TimeoutError("comment never became stable")
+
+    comment = UnstableComment(
+        author_href="/user/unstable",
+        author="author",
+        text="text",
+        date=None,
+    )
+    group = FakeGroup("/a/post1", [comment])
+    fake = FakePage([group])
+    evaluate_calls = []
+    fake.locator = lambda _selector: object()
+    fake.evaluate = lambda script, arg: evaluate_calls.append((script, arg))
+
+    DzenStudioPage(fake)._scroll_to_last_loaded_item([group])
+
+    assert evaluate_calls == [
+        (
+            dzen_page._STUDIO_FEED_SCROLL_SCRIPT,
+            {"group": selectors.POST_GROUP, "comment": selectors.COMMENT_NODE},
+        )
+    ]
+    assert fake.mouse.wheel_calls == [(0, dzen_page._REPLY_SEARCH_SCROLL_DELTA_Y)]
+
+
+def test_studio_feed_scroll_script_reaches_last_comment_in_scroll_container():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    comments = "".join(
+        '<div class="editor--comment__block-comment" style="height:100px">'
+        f"comment {index}</div>"
+        for index in range(6)
+    )
+    html = (
+        '<div id="feed" style="height:100px; overflow:auto">'
+        '<div data-testid="comment">'
+        f"{comments}"
+        "</div></div>"
+    )
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+
+            page.evaluate(
+                dzen_page._STUDIO_FEED_SCROLL_SCRIPT,
+                {"group": selectors.POST_GROUP, "comment": selectors.COMMENT_NODE},
+            )
+
+            assert page.locator("#feed").evaluate("element => element.scrollTop") > 0
+        finally:
+            browser.close()
+
+
+def test_fetch_comments_logs_the_phase_of_a_feed_read_timeout(caplog):
+    fake = FakePage([FakeGroup("/a/post1", [make_node(0)])])
+
+    def fail_scroll(_delta_x, _delta_y):
+        raise TimeoutError("feed scroll timed out")
+
+    fake.mouse.wheel = fail_scroll
+    page = DzenStudioPage(fake)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(TimeoutError, match="feed scroll timed out"):
+            page.fetch_comments()
+
+    failed = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "studio_comments_read_failed"
+    )
+    assert failed.failure_phase == "scroll_to_last_loaded_item"
+
+
 def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
     caplog, monkeypatch
 ):

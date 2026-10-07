@@ -69,6 +69,20 @@ _STUDIO_FEED_COUNTS_SCRIPT = """
     };
 }
 """
+_STUDIO_FEED_SCROLL_SCRIPT = """
+(selectors) => {
+    const groups = Array.from(document.querySelectorAll(selectors.group));
+    let lastItem = groups[groups.length - 1] || null;
+    for (let index = groups.length - 1; index >= 0; index -= 1) {
+        const comments = groups[index].querySelectorAll(selectors.comment);
+        if (comments.length) {
+            lastItem = comments[comments.length - 1];
+            break;
+        }
+    }
+    lastItem?.scrollIntoView({ block: "end", behavior: "instant" });
+}
+"""
 _STUDIO_REPLY_GROUP_INDICES_SCRIPT = """
 (selectors) => Array.from(document.querySelectorAll(selectors.group))
     .flatMap((group, index) =>
@@ -550,10 +564,13 @@ class DzenStudioPage:
         reply_expansion_keys: set[Any] = set()
         reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
+        failure_phase = "initial_feed_snapshot"
         try:
             groups, previous_counts = self._studio_feed_snapshot()
             for scan_pass_count in range(1, _STUDIO_FEED_MAX_SCAN_PASSES + 1):
+                failure_phase = "scroll_to_last_loaded_item"
                 self._scroll_to_last_loaded_item(groups)
+                failure_phase = "reply_control_detection"
                 if (
                     reply_expansion_deadline is None
                     and self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
@@ -561,7 +578,9 @@ class DzenStudioPage:
                     reply_expansion_deadline = (
                         monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
                     )
+                failure_phase = "reply_control_group_detection"
                 for group_index in self._groups_with_reply_controls(groups):
+                    failure_phase = "reply_group_identity"
                     group = groups[group_index]
                     expected_post_href = _post_href(group)
                     page_locator = getattr(self._page, "locator", None)
@@ -582,6 +601,7 @@ class DzenStudioPage:
                         )
                         if not initial_controls:
                             continue
+                    failure_phase = "reply_expansion"
                     self._expand_hidden_replies(
                         scope=scope,
                         initial_controls=initial_controls,
@@ -591,6 +611,7 @@ class DzenStudioPage:
                         expected_post_href=expected_post_href or None,
                         scope_index=group_index,
                     )
+                failure_phase = "feed_snapshot"
                 groups, current_counts = self._studio_feed_snapshot()
                 if current_counts == previous_counts:
                     stable_pass_count += 1
@@ -601,6 +622,7 @@ class DzenStudioPage:
                     scan_complete = True
                     break
 
+            failure_phase = "comment_extraction"
             for card_index, group in enumerate(groups, start=1):
                 post_href = _post_href(group)
                 if not post_href:
@@ -656,6 +678,7 @@ class DzenStudioPage:
                     "event": "studio_comments_read_failed",
                     "failure_stage": "studio_feed_read",
                     "failure_reason": "page_read_failed",
+                    "failure_phase": failure_phase,
                     **_safe_exception_fields(exc),
                     "publication_card_count": len(groups) if "groups" in locals() else 0,
                     "comments_extracted": len(comments),
@@ -743,6 +766,16 @@ class DzenStudioPage:
         ]
 
     def _scroll_to_last_loaded_item(self, groups) -> None:
+        evaluate = getattr(self._page, "evaluate", None)
+        if callable(getattr(self._page, "locator", None)) and callable(evaluate):
+            evaluate(
+                _STUDIO_FEED_SCROLL_SCRIPT,
+                {"group": selectors.POST_GROUP, "comment": selectors.COMMENT_NODE},
+            )
+            self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
+            self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+            return
+
         last_item = groups[-1] if groups else None
         for group in reversed(groups):
             comments = group.query_selector_all(selectors.COMMENT_NODE)
