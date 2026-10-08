@@ -1758,6 +1758,195 @@ def test_hidden_reply_expansion_retries_transient_not_visible_click_with_fresh_c
     assert len(controls) >= 2
 
 
+def _make_target_validation_page(mode: str):
+    state = {
+        "visible": True,
+        "group_comment_count": 1,
+        "resolution_calls": 0,
+        "locator_target_evaluations": 0,
+        "handle_target_evaluations": 0,
+        "handle_disposals": 0,
+        "mouse_clicks": [],
+    }
+
+    class Handle:
+        def evaluate(self, script: str, arg=None):
+            assert script == dzen_page._REPLY_CONTROL_CLICK_SCRIPT
+            state["handle_target_evaluations"] += 1
+            if mode == "target_changed" and state["handle_target_evaluations"] == 1:
+                return False
+            return {"x": 12, "y": 24}
+
+        def dispose(self):
+            state["handle_disposals"] += 1
+
+    class TargetLocator:
+        def nth(self, index: int):
+            assert index == 0
+            return self
+
+        def element_handle(self, *, timeout: int | None = None):
+            state["resolution_calls"] += 1
+            assert timeout == dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS
+            if mode == "resolution_timeout" and state["resolution_calls"] == 1:
+                raise TimeoutError("waiting for locator reply control")
+            return Handle()
+
+        def evaluate(self, script: str, arg=None, *, timeout: int | None = None):
+            if script == dzen_page._REPLY_BUTTON_KEY_SCRIPT:
+                return "stable-control-key"
+            assert script == dzen_page._REPLY_CONTROL_CLICK_SCRIPT
+            state["locator_target_evaluations"] += 1
+            if mode == "resolution_timeout" and state["locator_target_evaluations"] == 1:
+                raise TimeoutError("waiting for locator reply control")
+            if mode == "target_changed" and state["locator_target_evaluations"] == 1:
+                return False
+            return {"x": 12, "y": 24}
+
+    locator = TargetLocator()
+    page = FakePage([])
+    metadata = {
+        "group_index": 0,
+        "button_index": 0,
+        "global_index": 0,
+        "post_href": "/a/post1",
+        "key": "stable-control-key",
+        "visible": True,
+        "group_comment_count": 1,
+        "class_name": "editor--root-comment__openMoreButton-more",
+        "text": "Показать 1 ответ",
+    }
+
+    def read_snapshot(_script: str, _arg=None):
+        return {
+            "identity_matches": True,
+            "post_href": "/a/post1",
+            "controls": [
+                {**metadata, "group_comment_count": state["group_comment_count"]}
+            ]
+            if state["visible"]
+            else [],
+        }
+
+    page.evaluate = read_snapshot
+    page.locator = lambda selector: (
+        locator if selector == selectors.COMMENT_OPEN_MORE else None
+    )
+
+    def mouse_click(x: float, y: float):
+        state["mouse_clicks"].append((x, y))
+        state["visible"] = False
+
+    page.mouse.click = mouse_click
+    return page, state
+
+
+def test_hidden_reply_expansion_reports_resolution_timeout_and_reacquires(
+    caplog, monkeypatch
+):
+    page, state = _make_target_validation_page("resolution_timeout")
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        expanded = DzenStudioPage(page)._expand_hidden_replies()
+
+    deferred = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_click_deferred"
+    )
+    assert expanded == 1
+    assert deferred.failure_phase == "control_target_resolution"
+    assert deferred.failure_reason == "control_target_resolution_timeout"
+    assert state["resolution_calls"] == 2
+    assert state["handle_target_evaluations"] == 1
+    assert state["locator_target_evaluations"] == 0
+    assert state["handle_disposals"] == 1
+    assert state["mouse_clicks"] == [(12, 24)]
+
+
+def test_hidden_reply_expansion_retries_target_validation_rejection(
+    caplog, monkeypatch
+):
+    page, state = _make_target_validation_page("target_changed")
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        expanded = DzenStudioPage(page)._expand_hidden_replies()
+
+    deferred = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_click_deferred"
+    )
+    assert expanded == 1
+    assert deferred.failure_phase == "control_target_evaluation"
+    assert deferred.failure_reason == "control_target_changed"
+    assert state["resolution_calls"] == 2
+    assert state["handle_target_evaluations"] == 2
+    assert state["locator_target_evaluations"] == 0
+    assert state["handle_disposals"] == 2
+    assert state["mouse_clicks"] == [(12, 24)]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_phase", "expected_reason"),
+    [
+        (
+            "resolution_timeout",
+            "control_target_resolution",
+            "control_target_resolution_timeout",
+        ),
+        (
+            "target_changed",
+            "control_target_evaluation",
+            "control_target_changed",
+        ),
+    ],
+)
+def test_hidden_reply_expansion_does_not_count_disappeared_preclick_target(
+    mode, expected_phase, expected_reason, caplog, monkeypatch
+):
+    page, state = _make_target_validation_page(mode)
+    page.on_wait_timeout = lambda _timeout: state.update(visible=False)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="reply control disappeared before"):
+            DzenStudioPage(page)._expand_hidden_replies()
+
+    deferred = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_click_deferred"
+    )
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert deferred.failure_phase == expected_phase
+    assert deferred.failure_reason == expected_reason
+    assert incomplete.failure_reason == "control_disappeared_before_click"
+    assert incomplete.clicked_count == 0
+    assert state["mouse_clicks"] == []
+
+
+def test_hidden_reply_expansion_accepts_reply_count_increase_without_click(
+    caplog, monkeypatch
+):
+    page, state = _make_target_validation_page("target_changed")
+    page.on_wait_timeout = lambda _timeout: state.update(group_comment_count=2)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        expanded = DzenStudioPage(page)._expand_hidden_replies()
+
+    assert expanded == 1
+    assert state["handle_target_evaluations"] == 1
+    assert state["mouse_clicks"] == []
+    assert not any(
+        getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+        for record in caplog.records
+    )
+
+
 def test_hidden_reply_expansion_retries_transient_click_timeout(
     monkeypatch,
 ):
@@ -3311,7 +3500,7 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
     assert "deadbeef-not-on-page" not in serialized
 
 
-def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
+def test_initial_reply_expansion_exception_logs_safely_and_propagates(caplog):
     fake = FakePage([])
 
     def fail_lookup(_selector):
@@ -3344,7 +3533,8 @@ def test_source_comment_lookup_exception_logs_safely_and_propagates(caplog):
         if getattr(record, "event", None) == "publication_source_comment_search_failed"
     )
     assert record.failure_stage == "studio_source_comment_search"
-    assert record.failure_reason == "lookup_exception"
+    assert record.failure_phase == "initial_reply_expansion"
+    assert record.failure_reason == "reply_expansion_exception"
     assert record.failure_type == "RuntimeError"
     assert record.failure_description == "locator lookup failed"
     assert record.reply_id == 73
@@ -3472,6 +3662,60 @@ def test_find_target_child_after_scroll_and_hidden_reply_expansion():
         dzen_page._REPLY_EXPANSION_POST_CLICK_WAIT_MS,
     ]
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+
+
+def test_find_target_child_loaded_initially_expands_before_first_lookup(monkeypatch):
+    target_node = make_node(1)
+    parent_node = make_node(0)
+    parent_node.hidden_comment_children = [target_node]
+    fake = FakePage([FakeGroup("/a/post1", [parent_node])])
+    page = DzenStudioPage(fake)
+    operation_order = []
+    original_expand = page._expand_hidden_replies
+    original_lookup = page._find_comment_node
+
+    def record_expand(**kwargs):
+        operation_order.append("expand")
+        return original_expand(**kwargs)
+
+    def record_lookup(comment_id: str):
+        operation_order.append("lookup")
+        return original_lookup(comment_id)
+
+    monkeypatch.setattr(page, "_expand_hidden_replies", record_expand)
+    monkeypatch.setattr(page, "_find_comment_node", record_lookup)
+
+    found = page._find_comment_node_with_scroll(
+        synthetic_id("/a/post1", "/user/u1", "text1")
+    )
+
+    assert found is target_node
+    assert operation_order == ["expand", "lookup"]
+    assert parent_node.reply_more_button.clicks == 1
+    assert fake.mouse.wheel_calls == []
+    assert fake.waited_ms == [dzen_page._REPLY_EXPANSION_POST_CLICK_WAIT_MS]
+
+
+def test_initial_reply_expansion_failure_logs_its_phase_and_reason(caplog, monkeypatch):
+    fake = FakePage([FakeGroup("/a/post1", [make_node(0)])])
+    page = DzenStudioPage(fake)
+
+    def fail_expansion(**_kwargs):
+        raise RuntimeError("initial reply expansion failed")
+
+    monkeypatch.setattr(page, "_expand_hidden_replies", fail_expansion)
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="initial reply expansion failed"):
+            page._find_comment_node_with_scroll("missing")
+
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_source_comment_search_failed"
+    )
+    assert record.failure_phase == "initial_reply_expansion"
+    assert record.failure_reason == "reply_expansion_exception"
+    assert record.scroll_attempt_count == 0
+    assert record.candidates_checked == 0
 
 
 def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():

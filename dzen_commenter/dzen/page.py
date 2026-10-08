@@ -313,6 +313,12 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
     };
 }
 """
+
+
+class _ReplyControlTargetChangedError(RuntimeError):
+    """The selected reply control no longer matches its snapshot identity."""
+
+
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
@@ -950,6 +956,7 @@ class DzenStudioPage:
         clicked_count = 0
         first_controls = initial_controls
         unresolved_click_keys: set[str] = set()
+        unresolved_click_reasons: dict[str, str] = {}
         control_info_by_key: dict[str, dict[str, Any]] = {}
 
         def read_controls_once() -> tuple[list[tuple[Any, str]], set[str]]:
@@ -1220,14 +1227,25 @@ class DzenStudioPage:
                         "a collapsed thread"
                     )
                 if unresolved_click_keys:
+                    unresolved_reasons = set(unresolved_click_reasons.values())
+                    if "control_target_changed" in unresolved_reasons:
+                        failure_reason = "click_target_changed_after_retry"
+                    elif (
+                        "control_target_resolution_timeout" in unresolved_reasons
+                    ):
+                        failure_reason = (
+                            "click_target_resolution_timeout_after_retry"
+                        )
+                    else:
+                        failure_reason = "click_target_not_visible_after_retry"
                     self._log_reply_expansion_incomplete(
-                        failure_reason="click_target_not_visible_after_retry",
+                        failure_reason=failure_reason,
                         clicked_count=clicked_count,
                         visible_button_count=len(controls),
                     )
                     raise RuntimeError(
-                        "reply expansion could not reacquire a control after a "
-                        "not-visible click failure"
+                        "reply expansion could not reacquire or revalidate a "
+                        "control after a click race"
                     )
                 return clicked_count
 
@@ -1279,64 +1297,102 @@ class DzenStudioPage:
             previous_control_info = control_info_by_key.get(next_button_key, {})
             page_mouse = getattr(self._page, "mouse", None)
             mouse_click = getattr(page_mouse, "click", None)
-            locator_evaluate = getattr(next_button, "evaluate", None)
+            resolve_element_handle = getattr(next_button, "element_handle", None)
+            click_may_have_been_dispatched = False
             try:
                 self._reply_expansion_phase = "control_click"
                 if (
                     previous_control_info
-                    and callable(locator_evaluate)
+                    and callable(resolve_element_handle)
                     and callable(mouse_click)
                 ):
-                    self._reply_expansion_phase = "control_target_evaluation"
-                    click_target = locator_evaluate(
-                        _REPLY_CONTROL_CLICK_SCRIPT,
-                        {
-                            "group": selectors.POST_GROUP,
-                            "more": selectors.COMMENT_OPEN_MORE,
-                            "postLink": selectors.POST_LINK,
-                            "postLinkFallback": selectors.POST_LINK_FALLBACK,
-                            "buttonIndex": previous_control_info["button_index"],
-                            "expectedPostHref": previous_control_info["post_href"],
-                            "expectedKey": previous_control_info.get("key"),
-                            "expectedClass": previous_control_info["class_name"],
-                            "expectedText": previous_control_info["text"],
-                        },
-                        timeout=click_timeout_ms,
-                    )
+                    self._reply_expansion_phase = "control_target_resolution"
+                    target_handle = resolve_element_handle(timeout=click_timeout_ms)
+                    if target_handle is None:
+                        raise _ReplyControlTargetChangedError(
+                            "reply control target changed before evaluation"
+                        )
+                    try:
+                        self._reply_expansion_phase = "control_target_evaluation"
+                        click_target = target_handle.evaluate(
+                            _REPLY_CONTROL_CLICK_SCRIPT,
+                            {
+                                "group": selectors.POST_GROUP,
+                                "more": selectors.COMMENT_OPEN_MORE,
+                                "postLink": selectors.POST_LINK,
+                                "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                                "buttonIndex": previous_control_info[
+                                    "button_index"
+                                ],
+                                "expectedPostHref": previous_control_info[
+                                    "post_href"
+                                ],
+                                "expectedKey": previous_control_info.get("key"),
+                                "expectedClass": previous_control_info[
+                                    "class_name"
+                                ],
+                                "expectedText": previous_control_info["text"],
+                            },
+                        )
+                    finally:
+                        dispose_handle = getattr(target_handle, "dispose", None)
+                        if callable(dispose_handle):
+                            dispose_handle()
                     if (
                         not isinstance(click_target, dict)
                         or not isinstance(click_target.get("x"), (int, float))
                         or not isinstance(click_target.get("y"), (int, float))
                     ):
-                        raise TimeoutError(
-                            "reply control changed before it could be clicked"
+                        raise _ReplyControlTargetChangedError(
+                            "reply control target changed before it could be clicked"
                         )
                     self._reply_expansion_phase = "control_mouse_click"
+                    click_may_have_been_dispatched = True
                     mouse_click(click_target["x"], click_target["y"])
                 else:
                     self._reply_expansion_phase = "control_locator_click"
+                    click_may_have_been_dispatched = True
                     next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
                 exception_name = type(exc).__name__.casefold()
                 exception_message = str(exc).casefold()
                 is_not_visible = "not visible" in exception_message
-                is_timeout = "timeout" in exception_name or "timeout" in exception_message
+                is_timeout = (
+                    "timeout" in exception_name
+                    or "timeout" in exception_message
+                )
+                is_target_changed = isinstance(exc, _ReplyControlTargetChangedError)
+                if is_not_visible:
+                    click_failure_reason = "control_not_visible"
+                elif is_target_changed:
+                    click_failure_reason = "control_target_changed"
+                elif (
+                    is_timeout
+                    and self._reply_expansion_phase == "control_target_resolution"
+                ):
+                    click_failure_reason = "control_target_resolution_timeout"
+                elif (
+                    is_timeout
+                    and self._reply_expansion_phase == "control_target_evaluation"
+                ):
+                    click_failure_reason = "control_target_evaluation_timeout"
+                elif is_timeout:
+                    click_failure_reason = "control_click_timeout"
+                else:
+                    click_failure_reason = "control_click_failed"
                 if (
-                    (is_not_visible or is_timeout)
+                    (is_not_visible or is_timeout or is_target_changed)
                     and attempt_counts[next_button_key]
                     < _REPLY_EXPANSION_MAX_ATTEMPTS
                 ):
                     unresolved_click_keys.add(next_button_key)
+                    unresolved_click_reasons[next_button_key] = click_failure_reason
                     logger.info(
-                        "Dzen reply control will be reacquired after a visibility race",
+                        "Dzen reply control will be reacquired after a target race",
                         extra={
                             "event": "studio_reply_expansion_click_deferred",
                             "failure_stage": "studio_reply_expansion",
-                            "failure_reason": (
-                                "control_not_visible"
-                                if is_not_visible
-                                else "control_click_timeout"
-                            ),
+                            "failure_reason": click_failure_reason,
                             "click_attempt": attempt_counts[next_button_key],
                             "clicked_count": clicked_count,
                             "visible_button_count": len(controls),
@@ -1355,24 +1411,41 @@ class DzenStudioPage:
                         previous_control_info,
                         previous_control_count,
                     )
-                    if (
+                    control_disappeared = (
                         next_button_key not in present_keys
                         or (
                             next_button_key.startswith("fallback:")
                             and len(present_keys) < previous_control_count
                         )
+                    )
+                    branch_revealed = self._reply_control_revealed_comments(
+                        previous_control_info,
+                        control_info_by_key.get(next_button_key, {}),
+                    )
+                    if (
+                        control_disappeared
+                        and not click_may_have_been_dispatched
+                        and not branch_revealed
                     ):
+                        self._log_reply_expansion_incomplete(
+                            failure_reason="control_disappeared_before_click",
+                            clicked_count=clicked_count,
+                            visible_button_count=len(controls),
+                        )
+                        raise RuntimeError(
+                            "reply control disappeared before a click could be dispatched"
+                        )
+                    if control_disappeared:
                         unresolved_click_keys.discard(next_button_key)
+                        unresolved_click_reasons.pop(next_button_key, None)
                         if next_button_key.startswith("fallback:"):
                             attempt_counts.pop(next_button_key, None)
                         else:
                             clicked_keys.add(next_button_key)
                         clicked_count += 1
-                    elif self._reply_control_revealed_comments(
-                        previous_control_info,
-                        control_info_by_key.get(next_button_key, {}),
-                    ):
+                    elif branch_revealed:
                         unresolved_click_keys.discard(next_button_key)
+                        unresolved_click_reasons.pop(next_button_key, None)
                         if next_button_key.startswith("fallback:"):
                             attempt_counts[next_button_key] = (
                                 _REPLY_EXPANSION_MAX_ATTEMPTS
@@ -1382,16 +1455,13 @@ class DzenStudioPage:
                         clicked_count += 1
                     continue
                 self._log_reply_expansion_incomplete(
-                    failure_reason=(
-                        "click_timeout"
-                        if "timeout" in type(exc).__name__.casefold()
-                        else "click_failed"
-                    ),
+                    failure_reason=click_failure_reason,
                     clicked_count=clicked_count,
                     visible_button_count=len(controls),
                 )
                 raise
             unresolved_click_keys.discard(next_button_key)
+            unresolved_click_reasons.pop(next_button_key, None)
             clicked_count += 1
             controls, present_keys = wait_for_click_result(
                 next_button_key,
@@ -2507,42 +2577,40 @@ class DzenStudioPage:
         reply_expansion_keys: set[Any] = set()
         reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
-        try:
-            node, pass_candidate_count = self._find_comment_node(comment_id)
-        except Exception as exc:
-            logger.info(
-                "Dzen source comment lookup failed",
-                extra={
-                    "event": "publication_source_comment_search_failed",
-                    "reply_id": reply_id,
-                    "failure_stage": "studio_source_comment_search",
-                    "failure_reason": "lookup_exception",
-                    **_safe_lookup_exception_fields(exc),
-                    "scroll_attempt_count": 0,
-                    "candidates_checked": candidates_checked,
-                },
-            )
-            raise
-        candidates_checked = pass_candidate_count
         scroll_attempt_count = 0
-        if node is not None:
-            logger.info(
-                "Dzen source comment search completed",
-                extra={
-                    "event": "publication_source_comment_search_completed",
-                    "reply_id": reply_id,
-                    "result": "found",
-                    "scroll_attempt_count": scroll_attempt_count,
-                    "candidates_checked": candidates_checked,
-                },
-            )
-            return node
-
-        phase = "scroll"
+        phase = "initial_reply_expansion"
         try:
+            if self._page.query_selector_all(selectors.COMMENT_OPEN_MORE):
+                reply_expansion_deadline = (
+                    monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                )
+            self._expand_hidden_replies(
+                clicked_keys=reply_expansion_keys,
+                attempt_counts=reply_expansion_attempts,
+                deadline=reply_expansion_deadline,
+            )
+
+            phase = "initial_lookup"
+            node, pass_candidate_count = self._find_comment_node(comment_id)
+            candidates_checked += pass_candidate_count
+            if node is not None:
+                logger.info(
+                    "Dzen source comment search completed",
+                    extra={
+                        "event": "publication_source_comment_search_completed",
+                        "reply_id": reply_id,
+                        "result": "found",
+                        "scroll_attempt_count": scroll_attempt_count,
+                        "candidates_checked": candidates_checked,
+                    },
+                )
+                return node
+
             for scroll_attempt_count in range(1, _REPLY_SEARCH_MAX_SCROLLS + 1):
+                phase = "scroll"
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
+                phase = "reply_expansion"
                 if (
                     reply_expansion_deadline is None
                     and self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
@@ -2593,7 +2661,14 @@ class DzenStudioPage:
                     "event": "publication_source_comment_search_failed",
                     "reply_id": reply_id,
                     "failure_stage": "studio_source_comment_search",
-                    "failure_reason": "scroll_exception" if phase == "scroll" else "lookup_exception",
+                    "failure_phase": phase,
+                    "failure_reason": (
+                        "scroll_exception"
+                        if phase == "scroll"
+                        else "reply_expansion_exception"
+                        if phase in {"initial_reply_expansion", "reply_expansion"}
+                        else "lookup_exception"
+                    ),
                     **_safe_lookup_exception_fields(exc),
                     "scroll_attempt_count": scroll_attempt_count,
                     "candidates_checked": candidates_checked,
