@@ -880,6 +880,62 @@ def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
             browser.close()
 
 
+def test_hidden_reply_expansion_waits_for_delayed_reply_render():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <a class="editor--comment__nameLink-author" href="/user/parent"></a>
+          <p class="editor--comment__text-text">parent comment</p>
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="window.replyExpansionClicks++; var button = this;
+              setTimeout(function() {
+                var reply = document.createElement('div');
+                reply.className = 'editor--comment__block-reply';
+                reply.style.minHeight = '40px';
+                var author = document.createElement('a');
+                author.className = 'editor--comment__nameLink-author';
+                author.href = '/user/reply';
+                var text = document.createElement('p');
+                text.className = 'editor--comment__text-text';
+                text.textContent = 'delayed reply';
+                reply.append(author, text);
+                button.parentElement.append(reply);
+                button.remove();
+              }, 900)">Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate("window.replyExpansionClicks = 0")
+
+            clicked_count = DzenStudioPage(page)._expand_hidden_replies(
+                expected_post_href="/a/post1",
+                scope_index=0,
+            )
+
+            assert clicked_count == 1
+            assert page.evaluate("window.replyExpansionClicks") == 1
+            assert page.locator(selectors.COMMENT_NODE).count() == 2
+            assert page.get_by_text("delayed reply").count() == 1
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_reads_controls_in_one_dom_snapshot(monkeypatch):
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 

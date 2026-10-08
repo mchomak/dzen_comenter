@@ -269,6 +269,8 @@ _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 10 * 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
+_REPLY_EXPANSION_RENDER_TIMEOUT_MS = 2_000
+_REPLY_EXPANSION_RENDER_POLL_MS = 250
 _REPLY_CONTROL_INSPECTION_TIMEOUT_MS = 1_000
 _REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS = 3
 # Replies are already present in Studio's DOM; use a short post-click settle
@@ -1102,6 +1104,45 @@ class DzenStudioPage:
                         _REPLY_EXPANSION_POST_CLICK_WAIT_MS
                     )
 
+        def wait_for_click_result(
+            button_key: str,
+            before: dict[str, Any],
+            previous_control_count: int,
+        ) -> tuple[list[tuple[Any, str]], set[str]]:
+            operation_deadline = deadline or (
+                monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+            )
+            render_deadline = min(
+                operation_deadline,
+                monotonic() + _REPLY_EXPANSION_RENDER_TIMEOUT_MS / 1_000,
+            )
+            while True:
+                remaining_ms = int((render_deadline - monotonic()) * 1_000)
+                if remaining_ms <= 0:
+                    return read_controls()
+                self._reply_expansion_phase = "post_click_settle"
+                self._page.wait_for_timeout(
+                    min(
+                        max(
+                            _REPLY_EXPANSION_POST_CLICK_WAIT_MS,
+                            _REPLY_EXPANSION_RENDER_POLL_MS,
+                        ),
+                        remaining_ms,
+                    )
+                )
+                current_controls, current_keys = read_controls()
+                if button_key not in current_keys:
+                    return current_controls, current_keys
+                if (
+                    button_key.startswith("fallback:")
+                    and len(current_keys) < previous_control_count
+                ):
+                    return current_controls, current_keys
+                if self._reply_control_revealed_comments(
+                    before, control_info_by_key.get(button_key, {})
+                ):
+                    return current_controls, current_keys
+
         controls, present_keys = read_controls()
         while True:
             pending_controls = [
@@ -1245,7 +1286,11 @@ class DzenStudioPage:
                         self._page.wait_for_timeout(
                             min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
                         )
-                    controls, present_keys = read_controls()
+                    controls, present_keys = wait_for_click_result(
+                        next_button_key,
+                        previous_control_info,
+                        previous_control_count,
+                    )
                     if (
                         next_button_key not in present_keys
                         or (
@@ -1284,13 +1329,11 @@ class DzenStudioPage:
                 raise
             unresolved_click_keys.discard(next_button_key)
             clicked_count += 1
-            remaining_ms = int((deadline - monotonic()) * 1_000)
-            if remaining_ms > 0:
-                self._reply_expansion_phase = "post_click_settle"
-                self._page.wait_for_timeout(
-                    min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
-                )
-            controls, present_keys = read_controls()
+            controls, present_keys = wait_for_click_result(
+                next_button_key,
+                previous_control_info,
+                previous_control_count,
+            )
             if next_button_key not in present_keys:
                 if next_button_key.startswith("fallback:"):
                     attempt_counts.pop(next_button_key, None)
