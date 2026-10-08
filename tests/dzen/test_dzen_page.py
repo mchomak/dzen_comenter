@@ -880,6 +880,59 @@ def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
             browser.close()
 
 
+def test_reply_control_click_is_dispatched_after_dom_validation():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="window.replyExpansionClicks++">Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate("window.replyExpansionClicks = 0")
+            button = page.locator(selectors.COMMENT_OPEN_MORE)
+            click_result = page.evaluate(
+                dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "groupIndex": 0,
+                    "buttonIndex": 0,
+                    "expectedPostHref": "/a/post1",
+                    "expectedKey": button.evaluate(
+                        dzen_page._REPLY_BUTTON_KEY_SCRIPT
+                    ),
+                    "expectedClass": button.get_attribute("class"),
+                    "expectedText": button.inner_text(),
+                },
+            )
+
+            assert click_result is True
+            assert page.evaluate("window.replyExpansionClicks") == 0
+            page.wait_for_timeout(50)
+            assert page.evaluate("window.replyExpansionClicks") == 1
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_waits_for_delayed_reply_render():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 

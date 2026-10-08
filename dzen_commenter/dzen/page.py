@@ -260,7 +260,30 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
         || style.display === "none" || style.visibility === "hidden") {
         return false;
     }
-    button.click();
+    window.setTimeout(() => {
+        if (!group.isConnected || !button.isConnected) return;
+        const currentPostLink = group.querySelector(selectors.postLink)
+            || group.querySelector(selectors.postLinkFallback);
+        const currentPostHref = currentPostLink?.getAttribute("href") || "";
+        const currentButton = group.querySelectorAll(selectors.more)[
+            selectors.buttonIndex
+        ];
+        if (currentPostHref !== selectors.expectedPostHref
+            || currentButton !== button
+            || String(button.className || "").trim().replace(/\\s+/g, " ")
+                !== selectors.expectedClass
+            || String(button.innerText || "").trim() !== selectors.expectedText) {
+            return;
+        }
+        const currentRect = button.getBoundingClientRect();
+        const currentStyle = getComputedStyle(button);
+        if (currentRect.width <= 0 || currentRect.height <= 0
+            || currentStyle.display === "none"
+            || currentStyle.visibility === "hidden") {
+            return;
+        }
+        button.click();
+    }, 25);
     return true;
 }
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
@@ -270,11 +293,11 @@ _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 10 * 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
 _REPLY_EXPANSION_RENDER_TIMEOUT_MS = 2_000
-_REPLY_EXPANSION_RENDER_POLL_MS = 250
+_REPLY_EXPANSION_RENDER_POLL_MS = 1_000
 _REPLY_CONTROL_INSPECTION_TIMEOUT_MS = 1_000
 _REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS = 3
-# Replies are already present in Studio's DOM; use a short post-click settle
-# while the feed's regular 750 ms passes allow newly rendered nested replies.
+# Read the DOM quickly after a click, then use bounded, lower-frequency polls
+# if Studio renders the replies asynchronously.
 _REPLY_EXPANSION_POST_CLICK_WAIT_MS = 250
 _REPLY_EXPANSION_MAX_CLICKS = 1_000
 _REPLY_EXPANSION_MAX_ATTEMPTS = 3
@@ -1116,6 +1139,7 @@ class DzenStudioPage:
                 operation_deadline,
                 monotonic() + _REPLY_EXPANSION_RENDER_TIMEOUT_MS / 1_000,
             )
+            first_poll = True
             while True:
                 remaining_ms = int((render_deadline - monotonic()) * 1_000)
                 if remaining_ms <= 0:
@@ -1123,13 +1147,13 @@ class DzenStudioPage:
                 self._reply_expansion_phase = "post_click_settle"
                 self._page.wait_for_timeout(
                     min(
-                        max(
-                            _REPLY_EXPANSION_POST_CLICK_WAIT_MS,
-                            _REPLY_EXPANSION_RENDER_POLL_MS,
-                        ),
+                        _REPLY_EXPANSION_POST_CLICK_WAIT_MS
+                        if first_poll
+                        else _REPLY_EXPANSION_RENDER_POLL_MS,
                         remaining_ms,
                     )
                 )
+                first_poll = False
                 current_controls, current_keys = read_controls()
                 if button_key not in current_keys:
                     return current_controls, current_keys
