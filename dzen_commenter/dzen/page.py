@@ -270,31 +270,38 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
         || style.display === "none" || style.visibility === "hidden") {
         return false;
     }
-    window.setTimeout(() => {
-        if (!group.isConnected || !button.isConnected) return;
-        const currentPostLink = group.querySelector(selectors.postLink)
-            || group.querySelector(selectors.postLinkFallback);
-        const currentPostHref = currentPostLink?.getAttribute("href") || "";
-        const currentButton = group.querySelectorAll(selectors.more)[
-            selectors.buttonIndex
-        ];
-        if (currentPostHref !== selectors.expectedPostHref
-            || currentButton !== button
-            || String(button.className || "").trim().replace(/\\s+/g, " ")
-                !== selectors.expectedClass
-            || String(button.innerText || "").trim() !== selectors.expectedText) {
-            return;
-        }
-        const currentRect = button.getBoundingClientRect();
-        const currentStyle = getComputedStyle(button);
-        if (currentRect.width <= 0 || currentRect.height <= 0
-            || currentStyle.display === "none"
-            || currentStyle.visibility === "hidden") {
-            return;
-        }
-        button.click();
-    }, 25);
-    return true;
+    button.scrollIntoView({block: "center", behavior: "instant"});
+    if (!group.isConnected || !button.isConnected) return false;
+    const currentPostLink = group.querySelector(selectors.postLink)
+        || group.querySelector(selectors.postLinkFallback);
+    const currentPostHref = currentPostLink?.getAttribute("href") || "";
+    const currentButton = group.querySelectorAll(selectors.more)[
+        selectors.buttonIndex
+    ];
+    if (currentPostHref !== selectors.expectedPostHref
+        || currentButton !== button
+        || String(button.className || "").trim().replace(/\\s+/g, " ")
+            !== selectors.expectedClass
+        || String(button.innerText || "").trim() !== selectors.expectedText) {
+        return false;
+    }
+    const currentKeys = window.__dzenReplyControlKeys;
+    if (selectors.expectedKey
+        && !selectors.expectedKey.startsWith("fallback:")
+        && currentKeys?.get(button) !== selectors.expectedKey) {
+        return false;
+    }
+    const currentRect = button.getBoundingClientRect();
+    const currentStyle = getComputedStyle(button);
+    if (currentRect.width <= 0 || currentRect.height <= 0
+        || currentStyle.display === "none"
+        || currentStyle.visibility === "hidden") {
+        return false;
+    }
+    return {
+        x: currentRect.left + currentRect.width / 2,
+        y: currentRect.top + currentRect.height / 2,
+    };
 }
 """
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
@@ -1261,13 +1268,16 @@ class DzenStudioPage:
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             previous_control_count = len(present_keys)
             previous_control_info = control_info_by_key.get(next_button_key, {})
+            page_mouse = getattr(self._page, "mouse", None)
+            mouse_click = getattr(page_mouse, "click", None)
             try:
                 self._reply_expansion_phase = "control_click"
                 if (
                     previous_control_info
                     and callable(getattr(self._page, "evaluate", None))
+                    and callable(mouse_click)
                 ):
-                    clicked = self._page.evaluate(
+                    click_target = self._page.evaluate(
                         _REPLY_CONTROL_CLICK_SCRIPT,
                         {
                             "group": selectors.POST_GROUP,
@@ -1282,10 +1292,15 @@ class DzenStudioPage:
                             "expectedText": previous_control_info["text"],
                         },
                     )
-                    if clicked is not True:
+                    if (
+                        not isinstance(click_target, dict)
+                        or not isinstance(click_target.get("x"), (int, float))
+                        or not isinstance(click_target.get("y"), (int, float))
+                    ):
                         raise TimeoutError(
                             "reply control changed before it could be clicked"
                         )
+                    mouse_click(click_target["x"], click_target["y"])
                 else:
                     next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:

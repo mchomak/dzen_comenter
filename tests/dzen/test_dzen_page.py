@@ -880,7 +880,7 @@ def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
             browser.close()
 
 
-def test_reply_control_click_is_dispatched_after_dom_validation():
+def test_reply_control_click_returns_verified_coordinates_for_mouse_input():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
     html = """
@@ -906,6 +906,7 @@ def test_reply_control_click_is_dispatched_after_dom_validation():
             page = browser.new_page()
             page.set_content(html)
             page.evaluate("window.replyExpansionClicks = 0")
+            button = page.locator(selectors.COMMENT_OPEN_MORE)
             snapshot = page.evaluate(
                 dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT,
                 {
@@ -919,7 +920,7 @@ def test_reply_control_click_is_dispatched_after_dom_validation():
                 },
             )
             control = snapshot["controls"][0]
-            click_result = page.evaluate(
+            click_target = page.evaluate(
                 dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
                 {
                     "group": selectors.POST_GROUP,
@@ -934,10 +935,14 @@ def test_reply_control_click_is_dispatched_after_dom_validation():
                     "expectedText": control["text"],
                 },
             )
+            bounds = button.bounding_box()
 
-            assert click_result is True
+            assert isinstance(click_target, dict)
+            assert bounds is not None
+            assert bounds["x"] <= click_target["x"] <= bounds["x"] + bounds["width"]
+            assert bounds["y"] <= click_target["y"] <= bounds["y"] + bounds["height"]
             assert page.evaluate("window.replyExpansionClicks") == 0
-            page.wait_for_timeout(50)
+            page.mouse.click(click_target["x"], click_target["y"])
             assert page.evaluate("window.replyExpansionClicks") == 1
         finally:
             browser.close()
