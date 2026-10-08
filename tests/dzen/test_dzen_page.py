@@ -1267,6 +1267,90 @@ def test_reply_control_snapshots_reuse_comment_signatures_for_same_dom():
             browser.close()
 
 
+def test_scoped_reply_control_snapshot_counts_only_selected_group():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    def group_html(post_href: str, group_index: int, comment_count: int) -> str:
+        comments = "".join(
+            f"""
+            <div class="editor--comment__block-{group_index}-{comment_index}"
+              style="min-height: 40px">
+              <a class="editor--comment__nameLink-author"
+                href="/user/{group_index}-{comment_index}"></a>
+              <p class="editor--comment__text-text">comment</p>
+              <button class="editor--root-comment__openMoreButton-more">
+                Показать 1 ответ
+              </button>
+            </div>
+            """
+            for comment_index in range(comment_count)
+        )
+        return f"""
+        <div data-testid="comment">
+          <div class="editor--comments-page__postContainer-post">
+            <a href="{post_href}"></a>
+          </div>
+          <div class="editor--comments-page__commentNode-thread">{comments}</div>
+        </div>
+        """
+
+    html = group_html("/a/post1", 0, 3) + group_html("/a/post2", 1, 2)
+    selectors_arg = {
+        "group": selectors.POST_GROUP,
+        "more": selectors.COMMENT_OPEN_MORE,
+        "comment": selectors.COMMENT_NODE,
+        "postLink": selectors.POST_LINK,
+        "postLinkFallback": selectors.POST_LINK_FALLBACK,
+        "scopeIndex": 1,
+        "expectedPostHref": "/a/post2",
+    }
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate(
+                """({groupSelector, commentSelector}) => {
+                    window.countedReplyGroups = [];
+                    const originalQuerySelectorAll = Element.prototype.querySelectorAll;
+                    Element.prototype.querySelectorAll = function(selector) {
+                        if (selector === commentSelector
+                            && this.matches(groupSelector)) {
+                            const postHref = this.querySelector('a[href]')
+                                ?.getAttribute('href');
+                            window.countedReplyGroups.push(postHref);
+                        }
+                        return originalQuerySelectorAll.call(this, selector);
+                    };
+                }""",
+                {
+                    "groupSelector": selectors.POST_GROUP,
+                    "commentSelector": selectors.COMMENT_NODE,
+                },
+            )
+
+            snapshot = page.evaluate(
+                dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT, selectors_arg
+            )
+            counted_groups = page.evaluate("window.countedReplyGroups")
+
+            assert snapshot["identity_matches"] is True
+            assert snapshot["group_comment_counts"] == [
+                {"group_index": 1, "visible_comment_count": 2}
+            ]
+            assert counted_groups == ["/a/post2"]
+            assert [control["group_comment_count"] for control in snapshot["controls"]] == [
+                2,
+                2,
+            ]
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_waits_for_delayed_reply_render():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 

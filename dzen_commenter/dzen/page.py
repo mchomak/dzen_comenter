@@ -195,19 +195,7 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         ? groups.map((_group, index) => index)
         : [selectors.scopeIndex];
     const controls = [];
-    const groupCommentCounts = groups.map((group, index) => {
-        const visibleCommentCount = Array.from(
-            group.querySelectorAll(selectors.comment)
-        ).filter((comment) => {
-            const rect = comment.getBoundingClientRect();
-            const style = getComputedStyle(comment);
-            return rect.width > 0
-                && rect.height > 0
-                && style.display !== "none"
-                && style.visibility !== "hidden";
-        }).length;
-        return {group_index: index, visible_comment_count: visibleCommentCount};
-    });
+    const groupCommentCounts = [];
 
     for (const groupIndex of groupIndexes) {
         const group = groups[groupIndex];
@@ -222,8 +210,20 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         }
 
         const buttons = Array.from(group.querySelectorAll(selectors.more));
-        const visibleCommentCount = groupCommentCounts[groupIndex]
-            ?.visible_comment_count || 0;
+        const visibleCommentCount = Array.from(
+            group.querySelectorAll(selectors.comment)
+        ).filter((comment) => {
+            const rect = comment.getBoundingClientRect();
+            const style = getComputedStyle(comment);
+            return rect.width > 0
+                && rect.height > 0
+                && style.display !== "none"
+                && style.visibility !== "hidden";
+        }).length;
+        groupCommentCounts.push({
+            group_index: groupIndex,
+            visible_comment_count: visibleCommentCount,
+        });
         buttons.forEach((button, buttonIndex) => {
             const key = keyFor(button);
             if (typeof key === "string" && key) {
