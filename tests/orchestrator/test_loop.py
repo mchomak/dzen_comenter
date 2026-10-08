@@ -85,7 +85,70 @@ def test_run_cycle_generates_and_publishes_one_cleaned_reply_with_article_contex
     assert reply.article_context_status == "article_text_used"
     assert harness.repository.generation_queue[1]["state"] == "completed"
     assert harness.repository.publication_queue[1]["state"] == "completed"
+    assert len(harness.ai_provider.calls) == 1
+    assert "не более 990 символов" in harness.ai_provider.calls[0][0]
     assert harness.prompt_builder.contexts[0].article_text == "Очищенный текст статьи"
+
+
+def test_overlong_reply_is_regenerated_once_with_limit_in_regular_prompt(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    comment.author = "Анна"
+    harness = loop_factory(
+        comments=[comment],
+        ai_responses=["Слишком длинный ответ", "Хорошо"],
+        settings_overrides={"MAX_REPLY_LENGTH": 12},
+    )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 2
+    assert all("не более 6 символов" in call[0] for call in harness.ai_provider.calls)
+    assert "Сформулируй короче" in harness.ai_provider.calls[1][0]
+    assert harness.repository.replies[1].generated_text == "Анна, хорошо"
+    assert harness.repository.generation_queue[1]["state"] == "completed"
+    assert harness.repository.enqueue_publication_calls == [1]
+
+
+def test_reply_still_fails_safely_if_shortening_retry_is_over_limit(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    comment.author = "Анна"
+    harness = loop_factory(
+        comments=[comment],
+        ai_responses=["Слишком длинный первый вариант", "Слишком длинный второй вариант"],
+        settings_overrides={"MAX_REPLY_LENGTH": 12},
+    )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 2
+    assert harness.repository.comments[1].status is CommentStatus.GENERATION_RETRY
+    assert harness.repository.replies[1].status is ReplyStatus.ERROR
+    assert "after one shortening retry" in harness.repository.replies[1].error_reason
+    assert harness.repository.publication_queue == {}
+    assert harness.repository.enqueue_publication_calls == []
+
+
+def test_cta_reply_prompt_includes_the_dynamic_length_limit_once(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    comment.publication_title = "Ремонт кухни"
+    harness = loop_factory(
+        comments=[comment],
+        ai_responses=["Понял"],
+        settings_overrides={"MAX_REPLY_LENGTH": 40, "CTA_EVERY_N_COMMENTS": 1},
+    )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    prompt = harness.ai_provider.calls[0][0]
+    assert "Текст CTA для этого ответа" in prompt
+    assert "Ограничение длины: текст ответа без обращения к автору — не более 30 символов." in prompt
 
 
 def test_run_cycle_persists_eligible_comments_through_atomic_generation_seam(

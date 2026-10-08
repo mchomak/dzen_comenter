@@ -423,6 +423,10 @@ class OrchestratorLoop:
         author_prefix = f"{comment.author.strip()}, " if comment.author.strip() else ""
         model_reply_length = max_reply_length - len(author_prefix)
         try:
+            if model_reply_length <= 0:
+                raise ValueError(
+                    "Configured reply length leaves no room for a reply after the author prefix"
+                )
             classifier_text = "\n".join(
                 part for part in (comment.thread_text, comment.text) if part
             )
@@ -442,7 +446,10 @@ class OrchestratorLoop:
             )
             if cta_instruction:
                 prompt += f"\n\n{cta_instruction}"
-                prompt += f"\n\nДлина ответа: не более {model_reply_length} символов."
+            prompt += (
+                "\n\nОграничение длины: текст ответа без обращения к автору — "
+                f"не более {model_reply_length} символов."
+            )
             text = self._extract_reply_text(
                 self.ai_provider.generate(
                     prompt,
@@ -462,7 +469,36 @@ class OrchestratorLoop:
                 raise ValueError("Model reply is empty or protocol-only")
             text = self._format_reply_text(text, author_prefix)
             if len(text) > max_reply_length:
-                raise ValueError("Model reply exceeds the configured length")
+                retry_prompt = (
+                    f"{prompt}\n\n"
+                    "Предыдущий вариант превысил ограничение длины. Сформулируй короче, "
+                    f"не более {model_reply_length} символов до добавления обращения к автору. "
+                    "Сохрани смысл и соблюдай все ограничения выше. Верни только готовый "
+                    "текст ответа или ровно SKIP."
+                )
+                text = self._extract_reply_text(
+                    self.ai_provider.generate(
+                        retry_prompt,
+                        temperature=self.settings.AI_TEMPERATURE,
+                        max_tokens=self.settings.AI_MAX_TOKENS,
+                    )
+                )
+                if text is None:
+                    self._skip_generation(
+                        comment_id,
+                        claim_token=claim_token,
+                        reason="Model returned SKIP",
+                        article_context_status=article_context_status,
+                    )
+                    return
+                if not text:
+                    raise ValueError("Model reply is empty or protocol-only")
+                text = self._format_reply_text(text, author_prefix)
+                if len(text) > max_reply_length:
+                    raise ValueError(
+                        "Model reply still exceeds the configured length after one "
+                        f"shortening retry ({len(text)} > {max_reply_length} characters)"
+                    )
             self.repository.complete_generation(
                 comment_id,
                 claim_token=claim_token,
