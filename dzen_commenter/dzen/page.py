@@ -179,6 +179,8 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     const keyFor = REPLY_BUTTON_KEY_FUNCTION;
     const groups = Array.from(document.querySelectorAll(selectors.group));
     const allControls = Array.from(document.querySelectorAll(selectors.more));
+    const controlKeys = window.__dzenReplyControlKeys || new WeakMap();
+    window.__dzenReplyControlKeys = controlKeys;
     const groupIndexes = selectors.scopeIndex === null
         ? groups.map((_group, index) => index)
         : [selectors.scopeIndex];
@@ -208,6 +210,12 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
                 && style.visibility !== "hidden";
         }).length;
         buttons.forEach((button, buttonIndex) => {
+            const key = keyFor(button);
+            if (typeof key === "string" && key) {
+                controlKeys.set(button, key);
+            } else {
+                controlKeys.delete(button);
+            }
             const rect = button.getBoundingClientRect();
             const style = getComputedStyle(button);
             controls.push({
@@ -215,7 +223,7 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
                 button_index: buttonIndex,
                 global_index: allControls.indexOf(button),
                 post_href: postHref,
-                key: keyFor(button),
+                key,
                 visible: rect.width > 0
                     && rect.height > 0
                     && style.display !== "none"
@@ -242,8 +250,10 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
 
     const button = group.querySelectorAll(selectors.more)[selectors.buttonIndex];
     if (!button) return false;
-    const keyFor = REPLY_BUTTON_KEY_FUNCTION;
-    if (selectors.expectedKey && keyFor(button) !== selectors.expectedKey) {
+    const controlKeys = window.__dzenReplyControlKeys;
+    if (selectors.expectedKey
+        && !selectors.expectedKey.startsWith("fallback:")
+        && controlKeys?.get(button) !== selectors.expectedKey) {
         return false;
     }
     const buttonClass = String(button.className || "").trim()
@@ -286,7 +296,7 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
     }, 25);
     return true;
 }
-""".replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
+"""
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000

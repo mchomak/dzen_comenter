@@ -906,7 +906,19 @@ def test_reply_control_click_is_dispatched_after_dom_validation():
             page = browser.new_page()
             page.set_content(html)
             page.evaluate("window.replyExpansionClicks = 0")
-            button = page.locator(selectors.COMMENT_OPEN_MORE)
+            snapshot = page.evaluate(
+                dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "comment": selectors.COMMENT_NODE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "scopeIndex": 0,
+                    "expectedPostHref": "/a/post1",
+                },
+            )
+            control = snapshot["controls"][0]
             click_result = page.evaluate(
                 dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
                 {
@@ -917,11 +929,9 @@ def test_reply_control_click_is_dispatched_after_dom_validation():
                     "groupIndex": 0,
                     "buttonIndex": 0,
                     "expectedPostHref": "/a/post1",
-                    "expectedKey": button.evaluate(
-                        dzen_page._REPLY_BUTTON_KEY_SCRIPT
-                    ),
-                    "expectedClass": button.get_attribute("class"),
-                    "expectedText": button.inner_text(),
+                    "expectedKey": control["key"],
+                    "expectedClass": control["class_name"],
+                    "expectedText": control["text"],
                 },
             )
 
