@@ -195,6 +195,19 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         ? groups.map((_group, index) => index)
         : [selectors.scopeIndex];
     const controls = [];
+    const groupCommentCounts = groups.map((group, index) => {
+        const visibleCommentCount = Array.from(
+            group.querySelectorAll(selectors.comment)
+        ).filter((comment) => {
+            const rect = comment.getBoundingClientRect();
+            const style = getComputedStyle(comment);
+            return rect.width > 0
+                && rect.height > 0
+                && style.display !== "none"
+                && style.visibility !== "hidden";
+        }).length;
+        return {group_index: index, visible_comment_count: visibleCommentCount};
+    });
 
     for (const groupIndex of groupIndexes) {
         const group = groups[groupIndex];
@@ -209,16 +222,8 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         }
 
         const buttons = Array.from(group.querySelectorAll(selectors.more));
-        const visibleCommentCount = Array.from(
-            group.querySelectorAll(selectors.comment)
-        ).filter((comment) => {
-            const rect = comment.getBoundingClientRect();
-            const style = getComputedStyle(comment);
-            return rect.width > 0
-                && rect.height > 0
-                && style.display !== "none"
-                && style.visibility !== "hidden";
-        }).length;
+        const visibleCommentCount = groupCommentCounts[groupIndex]
+            ?.visible_comment_count || 0;
         buttons.forEach((button, buttonIndex) => {
             const key = keyFor(button);
             if (typeof key === "string" && key) {
@@ -245,7 +250,12 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
             });
         });
     }
-    return {identity_matches: true, post_href: "", controls};
+    return {
+        identity_matches: true,
+        post_href: "",
+        group_comment_counts: groupCommentCounts,
+        controls,
+    };
 }
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
 _REPLY_CONTROL_CLICK_SCRIPT = """
@@ -1010,6 +1020,8 @@ class DzenStudioPage:
         unresolved_click_keys: set[str] = set()
         unresolved_click_reasons: dict[str, str] = {}
         control_info_by_key: dict[str, dict[str, Any]] = {}
+        control_ids_by_key: dict[str, str] = {}
+        group_comment_counts_by_index: dict[int, int] = {}
 
         def read_controls_once() -> tuple[list[tuple[Any, str]], set[str]]:
             nonlocal first_controls
@@ -1050,6 +1062,18 @@ class DzenStudioPage:
                         raise RuntimeError(
                             "Studio publication changed during reply expansion"
                         )
+                    group_comment_counts_by_index.clear()
+                    for item in snapshot.get("group_comment_counts", []):
+                        if not isinstance(item, dict):
+                            continue
+                        group_index = item.get("group_index")
+                        comment_count = item.get("visible_comment_count")
+                        if isinstance(group_index, int) and isinstance(
+                            comment_count, int
+                        ):
+                            group_comment_counts_by_index[group_index] = (
+                                comment_count
+                            )
                     control_metadata = snapshot["controls"]
                     if scope_index is not None:
                         button_locator = page_locator(selectors.POST_GROUP).nth(
@@ -1344,12 +1368,41 @@ class DzenStudioPage:
             attempt_counts[next_button_key] = attempt_counts.get(
                 next_button_key, 0
             ) + 1
+            control_id = control_ids_by_key.setdefault(
+                next_button_key, f"c{len(control_ids_by_key) + 1}"
+            )
+            click_attempt = attempt_counts[next_button_key]
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             previous_control_count = len(present_keys)
             previous_control_info = control_info_by_key.get(next_button_key, {})
+            previous_group_index = previous_control_info.get("group_index")
+            visible_comment_count_before = previous_control_info.get(
+                "group_comment_count"
+            )
             resolve_element_handle = getattr(next_button, "element_handle", None)
             click_may_have_been_dispatched = False
             click_call_in_progress = False
+            click_call_returned = False
+            click_call_ambiguous = False
+            attempt_failure_phase: str | None = None
+            key_present_after: bool | None = None
+            branch_revealed_after: bool | None = None
+            visible_comment_count_after: int | None = None
+            attempt_fields: dict[str, Any] = {
+                "control_id": control_id,
+                "click_attempt": click_attempt,
+                "control_group_index": previous_group_index,
+                "control_button_index": previous_control_info.get(
+                    "button_index"
+                ),
+                "visible_comment_count_before": visible_comment_count_before,
+                "visible_comment_count_after": visible_comment_count_after,
+                "click_call_returned": click_call_returned,
+                "click_call_ambiguous": click_call_ambiguous,
+                "key_present_after": key_present_after,
+                "branch_revealed": branch_revealed_after,
+                "failure_phase": attempt_failure_phase,
+            }
             try:
                 self._reply_expansion_phase = "control_click"
                 if (
@@ -1405,6 +1458,7 @@ class DzenStudioPage:
                             timeout=click_timeout_ms,
                         )
                         click_call_in_progress = False
+                        click_call_returned = True
                         click_may_have_been_dispatched = True
                     finally:
                         dispose_handle = getattr(target_handle, "dispose", None)
@@ -1415,8 +1469,10 @@ class DzenStudioPage:
                     click_call_in_progress = True
                     next_button.click(force=True, timeout=click_timeout_ms)
                     click_call_in_progress = False
+                    click_call_returned = True
                     click_may_have_been_dispatched = True
             except Exception as exc:
+                attempt_failure_phase = self._reply_expansion_phase
                 exception_name = type(exc).__name__.casefold()
                 exception_message = str(exc).casefold()
                 is_not_visible = "not visible" in exception_message
@@ -1430,6 +1486,12 @@ class DzenStudioPage:
                 )
                 ambiguous_click_call = (
                     click_call_in_progress and not pre_dispatch_not_visible
+                )
+                click_call_ambiguous = ambiguous_click_call
+                attempt_fields.update(
+                    click_call_returned=click_call_returned,
+                    click_call_ambiguous=click_call_ambiguous,
+                    failure_phase=attempt_failure_phase,
                 )
                 if ambiguous_click_call:
                     click_failure_reason = "click_dispatch_ambiguous"
@@ -1456,28 +1518,37 @@ class DzenStudioPage:
                     and attempt_counts[next_button_key]
                     < _REPLY_EXPANSION_MAX_ATTEMPTS
                 )
+
+                def log_deferred_click(
+                    *,
+                    visible_button_count: int,
+                    failure_reason: str = click_failure_reason,
+                    error: Exception = exc,
+                    click_count: int = clicked_count,
+                    diagnostics: dict[str, Any] = attempt_fields,
+                ) -> None:
+                    logger.info(
+                        "Dzen reply control click needs reconciliation",
+                        extra={
+                            "event": "studio_reply_expansion_click_deferred",
+                            "failure_stage": "studio_reply_expansion",
+                            "failure_reason": failure_reason,
+                            "clicked_count": click_count,
+                            "visible_button_count": visible_button_count,
+                            "target_validation_reason": getattr(
+                                error, "reason_code", None
+                            ),
+                            **diagnostics,
+                            **_safe_exception_fields(error),
+                        },
+                    )
+
                 if should_reconcile:
                     if not ambiguous_click_call:
                         unresolved_click_keys.add(next_button_key)
                         unresolved_click_reasons[next_button_key] = (
                             click_failure_reason
                         )
-                    logger.info(
-                        "Dzen reply control click needs reconciliation",
-                        extra={
-                            "event": "studio_reply_expansion_click_deferred",
-                            "failure_stage": "studio_reply_expansion",
-                            "failure_reason": click_failure_reason,
-                            "click_attempt": attempt_counts[next_button_key],
-                            "clicked_count": clicked_count,
-                            "visible_button_count": len(controls),
-                            "failure_phase": self._reply_expansion_phase,
-                            "target_validation_reason": getattr(
-                                exc, "reason_code", None
-                            ),
-                            **_safe_exception_fields(exc),
-                        },
-                    )
                     try:
                         remaining_ms = int((deadline - monotonic()) * 1_000)
                         if remaining_ms > 0:
@@ -1494,11 +1565,15 @@ class DzenStudioPage:
                             previous_control_count,
                         )
                     except Exception:
+                        log_deferred_click(
+                            visible_button_count=len(controls)
+                        )
                         if ambiguous_click_call:
                             self._log_reply_expansion_incomplete(
                                 failure_reason="click_dispatch_ambiguous",
                                 clicked_count=clicked_count,
                                 visible_button_count=len(controls),
+                                attempt_diagnostics=attempt_fields.copy(),
                             )
                         raise
                     control_disappeared = (
@@ -1512,11 +1587,44 @@ class DzenStudioPage:
                         previous_control_info,
                         control_info_by_key.get(next_button_key, {}),
                     )
+                    current_control_info = control_info_by_key.get(
+                        next_button_key, {}
+                    )
+                    if isinstance(previous_group_index, int):
+                        visible_comment_count_after = (
+                            group_comment_counts_by_index.get(previous_group_index)
+                        )
+                    if visible_comment_count_after is None:
+                        visible_comment_count_after = current_control_info.get(
+                            "group_comment_count"
+                        )
+                    key_present_after = next_button_key in present_keys
+                    branch_revealed_after = branch_revealed
+                    if (
+                        not branch_revealed_after
+                        and isinstance(visible_comment_count_after, int)
+                    ):
+                        after_info = {
+                            **previous_control_info,
+                            "group_comment_count": visible_comment_count_after,
+                        }
+                        branch_revealed_after = (
+                            self._reply_control_revealed_comments(
+                                previous_control_info, after_info
+                            )
+                        )
+                    attempt_fields.update(
+                        visible_comment_count_after=visible_comment_count_after,
+                        key_present_after=key_present_after,
+                        branch_revealed=branch_revealed_after,
+                    )
+                    log_deferred_click(visible_button_count=len(controls))
                     if ambiguous_click_call and not branch_revealed:
                         self._log_reply_expansion_incomplete(
                             failure_reason="click_dispatch_ambiguous",
                             clicked_count=clicked_count,
                             visible_button_count=len(controls),
+                            attempt_diagnostics=attempt_fields.copy(),
                         )
                         raise RuntimeError(
                             "reply control click outcome could not be confirmed"
@@ -1530,6 +1638,7 @@ class DzenStudioPage:
                             failure_reason="control_disappeared_before_click",
                             clicked_count=clicked_count,
                             visible_button_count=len(controls),
+                            attempt_diagnostics=attempt_fields.copy(),
                         )
                         raise RuntimeError(
                             "reply control disappeared before a click could be dispatched"
@@ -1557,25 +1666,57 @@ class DzenStudioPage:
                     failure_reason=click_failure_reason,
                     clicked_count=clicked_count,
                     visible_button_count=len(controls),
+                    attempt_diagnostics=attempt_fields.copy(),
                 )
                 raise
             unresolved_click_keys.discard(next_button_key)
             unresolved_click_reasons.pop(next_button_key, None)
             clicked_count += 1
+            attempt_failure_phase = self._reply_expansion_phase
+            attempt_fields["failure_phase"] = attempt_failure_phase
             controls, present_keys = wait_for_click_result(
                 next_button_key,
                 previous_control_info,
                 previous_control_count,
+            )
+            current_control_info = control_info_by_key.get(next_button_key, {})
+            key_present_after = next_button_key in present_keys
+            if isinstance(previous_group_index, int):
+                visible_comment_count_after = group_comment_counts_by_index.get(
+                    previous_group_index
+                )
+            if visible_comment_count_after is None:
+                visible_comment_count_after = current_control_info.get(
+                    "group_comment_count"
+                )
+            branch_revealed_after = self._reply_control_revealed_comments(
+                previous_control_info,
+                current_control_info,
+            )
+            if (
+                not branch_revealed_after
+                and isinstance(visible_comment_count_after, int)
+            ):
+                after_info = {
+                    **previous_control_info,
+                    "group_comment_count": visible_comment_count_after,
+                }
+                branch_revealed_after = self._reply_control_revealed_comments(
+                    previous_control_info, after_info
+                )
+            attempt_fields.update(
+                visible_comment_count_after=visible_comment_count_after,
+                click_call_returned=click_call_returned,
+                click_call_ambiguous=click_call_ambiguous,
+                key_present_after=key_present_after,
+                branch_revealed=branch_revealed_after,
             )
             if next_button_key not in present_keys:
                 if next_button_key.startswith("fallback:"):
                     attempt_counts.pop(next_button_key, None)
                 else:
                     clicked_keys.add(next_button_key)
-            elif self._reply_control_revealed_comments(
-                previous_control_info,
-                control_info_by_key.get(next_button_key, {}),
-            ):
+            elif branch_revealed_after:
                 if next_button_key.startswith("fallback:"):
                     attempt_counts[next_button_key] = _REPLY_EXPANSION_MAX_ATTEMPTS
                 else:
@@ -1598,17 +1739,7 @@ class DzenStudioPage:
                     failure_reason="retry_limit_reached",
                     clicked_count=clicked_count,
                     visible_button_count=len(controls),
-                    click_attempt=attempt_counts[next_button_key],
-                    control_group_index=current_control_info.get("group_index"),
-                    control_button_index=current_control_info.get("button_index"),
-                    control_class=current_control_info.get("class_name"),
-                    control_label=current_control_info.get("text"),
-                    visible_comment_count_before=(
-                        previous_control_info.get("group_comment_count")
-                    ),
-                    visible_comment_count_after=(
-                        current_control_info.get("group_comment_count")
-                    ),
+                    attempt_diagnostics=attempt_fields.copy(),
                 )
                 raise RuntimeError(
                     "reply expansion failed because a control remained visible "
@@ -1640,13 +1771,7 @@ class DzenStudioPage:
         failure_reason: str,
         clicked_count: int,
         visible_button_count: int,
-        click_attempt: int | None = None,
-        control_group_index: int | None = None,
-        control_button_index: int | None = None,
-        control_class: str | None = None,
-        control_label: str | None = None,
-        visible_comment_count_before: int | None = None,
-        visible_comment_count_after: int | None = None,
+        attempt_diagnostics: dict[str, Any] | None = None,
     ) -> None:
         extra = {
             "event": "studio_reply_expansion_incomplete",
@@ -1655,18 +1780,8 @@ class DzenStudioPage:
             "clicked_count": clicked_count,
             "visible_button_count": visible_button_count,
         }
-        optional_fields = {
-            "click_attempt": click_attempt,
-            "control_group_index": control_group_index,
-            "control_button_index": control_button_index,
-            "control_class": control_class,
-            "control_label": control_label,
-            "visible_comment_count_before": visible_comment_count_before,
-            "visible_comment_count_after": visible_comment_count_after,
-        }
-        extra.update(
-            {key: value for key, value in optional_fields.items() if value is not None}
-        )
+        if attempt_diagnostics is not None:
+            extra.update(attempt_diagnostics)
         logger.info(
             "Dzen hidden reply expansion stopped before all controls were expanded",
             extra=extra,

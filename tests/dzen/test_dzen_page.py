@@ -1929,7 +1929,7 @@ def _make_target_validation_page(mode: str):
         "group_index": 0,
         "button_index": 0,
         "global_index": 0,
-        "post_href": "/a/post1",
+        "post_href": "https://dzen.ru/a/post1?token=private-token",
         "key": "stable-control-key",
         "visible": True,
         "group_comment_count": 1,
@@ -1940,7 +1940,13 @@ def _make_target_validation_page(mode: str):
     def read_snapshot(_script: str, _arg=None):
         return {
             "identity_matches": True,
-            "post_href": "/a/post1",
+            "post_href": "https://dzen.ru/a/post1?token=private-token",
+            "group_comment_counts": [
+                {
+                    "group_index": 0,
+                    "visible_comment_count": state["group_comment_count"],
+                }
+            ],
             "controls": [
                 {**metadata, "group_comment_count": state["group_comment_count"]}
             ]
@@ -2052,10 +2058,95 @@ def test_hidden_reply_expansion_does_not_count_disappeared_preclick_target(
     )
     assert deferred.failure_phase == expected_phase
     assert deferred.failure_reason == expected_reason
+    assert deferred.control_id == incomplete.control_id == "c1"
+    assert deferred.click_attempt == incomplete.click_attempt == 1
+    assert deferred.control_group_index == incomplete.control_group_index == 0
+    assert deferred.control_button_index == incomplete.control_button_index == 0
+    assert deferred.visible_comment_count_before == 1
+    assert incomplete.visible_comment_count_before == 1
+    assert deferred.visible_comment_count_after == 1
+    assert incomplete.visible_comment_count_after == 1
+    assert deferred.click_call_returned is False
+    assert incomplete.click_call_returned is False
+    assert deferred.click_call_ambiguous is False
+    assert incomplete.click_call_ambiguous is False
+    assert deferred.key_present_after is False
+    assert incomplete.key_present_after is False
+    assert deferred.branch_revealed is False
+    assert incomplete.branch_revealed is False
     assert incomplete.failure_reason == "control_disappeared_before_click"
+    assert incomplete.failure_phase == expected_phase
     assert incomplete.clicked_count == 0
     assert state["mouse_clicks"] == []
     assert state["handle_clicks"] == []
+    serialized = "\n".join(
+        StructuredFormatter().format(record)
+        for record in caplog.records
+        if record.name == "dzen_commenter.dzen.page"
+    )
+    for secret in (
+        "stable-control-key",
+        "private-token",
+        "https://dzen.ru/",
+        "Показать 1 ответ",
+    ):
+        assert secret not in serialized
+
+
+def test_hidden_reply_expansion_logs_fallback_key_membership_separately(
+    caplog, monkeypatch
+):
+    class FallbackButton:
+        def __init__(self, label: str) -> None:
+            self.label = label
+            self.visible = True
+
+        def evaluate(self, script: str):
+            if script == dzen_page._REPLY_BUTTON_KEY_SCRIPT:
+                return None
+            raise AssertionError("unexpected script")
+
+        def is_visible(self) -> bool:
+            return self.visible
+
+        def get_attribute(self, name: str):
+            return "editor--root-comment__openMoreButton-more" if name == "class" else None
+
+        def inner_text(self) -> str:
+            return self.label
+
+        def click(self, *, timeout: int | None = None, force: bool = False) -> None:
+            raise RuntimeError("Element is not visible")
+
+    target = FallbackButton("Показать 1 ответ")
+    neighbor = FallbackButton("Показать 2 ответа")
+    fake = FakePage([])
+    fake.query_selector_all = lambda selector: (
+        [target, neighbor]
+        if selector == selectors.COMMENT_OPEN_MORE and neighbor.visible
+        else [target]
+        if selector == selectors.COMMENT_OPEN_MORE
+        else []
+    )
+    fake.on_wait_timeout = lambda _timeout: setattr(neighbor, "visible", False)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="reply control disappeared before"):
+            DzenStudioPage(fake)._expand_hidden_replies()
+
+    deferred = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_click_deferred"
+    )
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert deferred.key_present_after is True
+    assert incomplete.key_present_after is True
+    assert deferred.failure_reason == "control_not_visible"
+    assert incomplete.failure_reason == "control_disappeared_before_click"
 
 
 def test_hidden_reply_expansion_accepts_reply_count_increase_without_click(
