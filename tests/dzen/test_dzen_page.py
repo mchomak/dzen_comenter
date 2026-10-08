@@ -1458,6 +1458,61 @@ def test_hidden_reply_expansion_reads_controls_in_one_dom_snapshot(monkeypatch):
             browser.close()
 
 
+def test_hidden_reply_expansion_resolves_control_in_deep_feed_without_locator_wait(
+    monkeypatch,
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    target_group_index = 672
+    groups = []
+    for index in range(target_group_index + 1):
+        button = (
+            '<button class="editor--root-comment__openMoreButton-more" '
+            'onclick="this.remove()">Показать 1 ответ</button>'
+            if index == target_group_index
+            else ""
+        )
+        groups.append(
+            f"""
+            <div data-testid="comment">
+              <div class="editor--comments-page__postContainer-post">
+                <a href="/a/post{index}"></a>
+              </div>
+              <div class="editor--comments-page__commentNode-thread">
+                <div class="editor--comment__block-root">
+                  <a class="editor--comment__nameLink-author" href="/user/{index}"></a>
+                  <p class="editor--comment__text-text">comment {index}</p>
+                  {button}
+                </div>
+              </div>
+            </div>
+            """
+        )
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content("".join(groups))
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+
+            expanded = DzenStudioPage(page)._expand_hidden_replies(
+                scope=page.locator(selectors.POST_GROUP).nth(target_group_index),
+                expected_post_href=f"/a/post{target_group_index}",
+                scope_index=target_group_index,
+            )
+
+            assert expanded == 1
+            assert page.locator(selectors.COMMENT_OPEN_MORE).count() == 0
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_accepts_button_that_remains_after_replies_load(
     monkeypatch,
 ):

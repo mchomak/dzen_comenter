@@ -188,7 +188,12 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
 (selectors) => {
     const keyFor = REPLY_BUTTON_KEY_FUNCTION;
     const groups = Array.from(document.querySelectorAll(selectors.group));
-    const allControls = Array.from(document.querySelectorAll(selectors.more));
+    const globalControlIndexes = selectors.scopeIndex === null
+        ? new Map(
+            Array.from(document.querySelectorAll(selectors.more),
+                (button, index) => [button, index])
+        )
+        : null;
     const controlKeys = new WeakMap();
     window.__dzenReplyControlKeys = controlKeys;
     const groupIndexes = selectors.scopeIndex === null
@@ -236,7 +241,7 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
             controls.push({
                 group_index: groupIndex,
                 button_index: buttonIndex,
-                global_index: allControls.indexOf(button),
+                global_index: globalControlIndexes?.get(button) ?? -1,
                 post_href: postHref,
                 key,
                 visible: rect.width > 0
@@ -258,6 +263,15 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     };
 }
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
+_REPLY_CONTROL_HANDLE_SCRIPT = """
+(selectors) => {
+    const groups = document.querySelectorAll(selectors.group);
+    const group = groups[selectors.groupIndex];
+    if (!group) return null;
+    const buttons = group.querySelectorAll(selectors.more);
+    return buttons[selectors.buttonIndex] || null;
+}
+"""
 _REPLY_CONTROL_CLICK_SCRIPT = """
 (button, selectors) => {
     const reject = (reason) => ({ok: false, reason});
@@ -1076,13 +1090,20 @@ class DzenStudioPage:
                             )
                     control_metadata = snapshot["controls"]
                     if scope_index is not None:
-                        button_locator = page_locator(selectors.POST_GROUP).nth(
-                            scope_index
-                        ).locator(selectors.COMMENT_OPEN_MORE)
-                        buttons = [
-                            button_locator.nth(item["button_index"])
-                            for item in control_metadata
-                        ]
+                        if callable(
+                            getattr(self._page, "evaluate_handle", None)
+                        ):
+                            buttons = [None] * len(control_metadata)
+                        else:
+                            button_locator = page_locator(
+                                selectors.POST_GROUP
+                            ).nth(scope_index).locator(
+                                selectors.COMMENT_OPEN_MORE
+                            )
+                            buttons = [
+                                button_locator.nth(item["button_index"])
+                                for item in control_metadata
+                            ]
                     else:
                         button_locator = page_locator(selectors.COMMENT_OPEN_MORE)
                         if any(item["global_index"] < 0 for item in control_metadata):
@@ -1405,7 +1426,79 @@ class DzenStudioPage:
             }
             try:
                 self._reply_expansion_phase = "control_click"
-                if (
+                evaluate_handle = getattr(self._page, "evaluate_handle", None)
+                if previous_control_info and callable(evaluate_handle):
+                    self._reply_expansion_phase = "control_target_resolution"
+                    javascript_handle = evaluate_handle(
+                        _REPLY_CONTROL_HANDLE_SCRIPT,
+                        {
+                            "group": selectors.POST_GROUP,
+                            "more": selectors.COMMENT_OPEN_MORE,
+                            "groupIndex": previous_control_info["group_index"],
+                            "buttonIndex": previous_control_info["button_index"],
+                        },
+                    )
+                    as_element = getattr(javascript_handle, "as_element", None)
+                    target_handle = as_element() if callable(as_element) else None
+                    if target_handle is None:
+                        dispose_handle = getattr(
+                            javascript_handle, "dispose", None
+                        )
+                        if callable(dispose_handle):
+                            dispose_handle()
+                        raise _ReplyControlTargetChangedError(
+                            "target_handle_missing"
+                        )
+                    try:
+                        self._reply_expansion_phase = "control_target_evaluation"
+                        click_target = target_handle.evaluate(
+                            _REPLY_CONTROL_CLICK_SCRIPT,
+                            {
+                                "group": selectors.POST_GROUP,
+                                "more": selectors.COMMENT_OPEN_MORE,
+                                "postLink": selectors.POST_LINK,
+                                "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                                "buttonIndex": previous_control_info[
+                                    "button_index"
+                                ],
+                                "expectedPostHref": previous_control_info[
+                                    "post_href"
+                                ],
+                                "expectedKey": previous_control_info.get("key"),
+                                "expectedClass": previous_control_info[
+                                    "class_name"
+                                ],
+                                "expectedText": previous_control_info["text"],
+                            },
+                        )
+                        if (
+                            not isinstance(click_target, dict)
+                            or click_target.get("ok") is not True
+                        ):
+                            validation_reason = (
+                                click_target.get("reason")
+                                if isinstance(click_target, dict)
+                                else None
+                            )
+                            if validation_reason not in _REPLY_CONTROL_VALIDATION_REASONS:
+                                validation_reason = "invalid_validation_result"
+                            raise _ReplyControlTargetChangedError(
+                                validation_reason
+                            )
+                        self._reply_expansion_phase = "control_target_click"
+                        click_call_in_progress = True
+                        target_handle.click(
+                            force=True,
+                            timeout=click_timeout_ms,
+                        )
+                        click_call_in_progress = False
+                        click_call_returned = True
+                        click_may_have_been_dispatched = True
+                    finally:
+                        dispose_handle = getattr(target_handle, "dispose", None)
+                        if callable(dispose_handle):
+                            dispose_handle()
+                elif (
                     previous_control_info
                     and callable(resolve_element_handle)
                 ):
