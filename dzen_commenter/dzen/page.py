@@ -250,73 +250,125 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
 _REPLY_CONTROL_CLICK_SCRIPT = """
 (button, selectors) => {
-    if (!button?.matches(selectors.more)) return false;
+    const reject = (reason) => ({ok: false, reason});
+    if (!button?.matches(selectors.more)) {
+        return reject("button_selector_mismatch");
+    }
     const group = button.closest(selectors.group);
-    if (!group) return false;
+    if (!group) return reject("owning_group_missing");
+    if (!button.isConnected || !group.isConnected) {
+        return reject("target_detached");
+    }
     const postLink = group.querySelector(selectors.postLink)
         || group.querySelector(selectors.postLinkFallback);
     const postHref = postLink?.getAttribute("href") || "";
-    if (postHref !== selectors.expectedPostHref) return false;
+    if (postHref !== selectors.expectedPostHref) {
+        return reject("owning_post_mismatch");
+    }
 
     const buttons = group.querySelectorAll(selectors.more);
-    if (buttons[selectors.buttonIndex] !== button) return false;
+    if (buttons[selectors.buttonIndex] !== button) {
+        return reject("group_control_index_mismatch");
+    }
     const controlKeys = window.__dzenReplyControlKeys;
     if (selectors.expectedKey
         && !selectors.expectedKey.startsWith("fallback:")
         && controlKeys?.get(button) !== selectors.expectedKey) {
-        return false;
+        return reject("target_key_mismatch");
     }
     const buttonClass = String(button.className || "").trim()
         .replace(/\\s+/g, " ");
     if (buttonClass !== selectors.expectedClass) {
-        return false;
+        return reject("target_class_mismatch");
     }
     if (String(button.innerText || "").trim() !== selectors.expectedText) {
-        return false;
+        return reject("target_label_mismatch");
     }
     const rect = button.getBoundingClientRect();
     const style = getComputedStyle(button);
     if (rect.width <= 0 || rect.height <= 0
         || style.display === "none" || style.visibility === "hidden") {
-        return false;
+        return reject("target_not_visible");
     }
+
     button.scrollIntoView({block: "center", behavior: "instant"});
-    if (!group.isConnected || !button.isConnected) return false;
+    if (!button.isConnected || !group.isConnected) {
+        return reject("target_detached_after_scroll");
+    }
+    if (button.closest(selectors.group) !== group) {
+        return reject("owning_group_changed_after_scroll");
+    }
     const currentPostLink = group.querySelector(selectors.postLink)
         || group.querySelector(selectors.postLinkFallback);
     const currentPostHref = currentPostLink?.getAttribute("href") || "";
-    const currentButtons = group.querySelectorAll(selectors.more);
-    const currentButton = currentButtons[selectors.buttonIndex];
-    if (currentPostHref !== selectors.expectedPostHref
-        || currentButton !== button
-        || String(button.className || "").trim().replace(/\\s+/g, " ")
-            !== selectors.expectedClass
-        || String(button.innerText || "").trim() !== selectors.expectedText) {
-        return false;
+    if (currentPostHref !== selectors.expectedPostHref) {
+        return reject("owning_post_mismatch_after_scroll");
     }
-    const currentKeys = window.__dzenReplyControlKeys;
+    if (!button.matches(selectors.more)) {
+        return reject("button_selector_mismatch_after_scroll");
+    }
+    const currentButtons = group.querySelectorAll(selectors.more);
+    if (currentButtons[selectors.buttonIndex] !== button) {
+        return reject("group_control_index_changed_after_scroll");
+    }
+    const currentControlKeys = window.__dzenReplyControlKeys;
     if (selectors.expectedKey
         && !selectors.expectedKey.startsWith("fallback:")
-        && currentKeys?.get(button) !== selectors.expectedKey) {
-        return false;
+        && currentControlKeys?.get(button) !== selectors.expectedKey) {
+        return reject("target_key_changed_after_scroll");
+    }
+    const currentClass = String(button.className || "").trim()
+        .replace(/\\s+/g, " ");
+    if (currentClass !== selectors.expectedClass) {
+        return reject("target_class_changed_after_scroll");
+    }
+    if (String(button.innerText || "").trim() !== selectors.expectedText) {
+        return reject("target_label_changed_after_scroll");
     }
     const currentRect = button.getBoundingClientRect();
     const currentStyle = getComputedStyle(button);
     if (currentRect.width <= 0 || currentRect.height <= 0
         || currentStyle.display === "none"
         || currentStyle.visibility === "hidden") {
-        return false;
+        return reject("target_not_visible_after_scroll");
     }
-    return {
-        x: currentRect.left + currentRect.width / 2,
-        y: currentRect.top + currentRect.height / 2,
-    };
+    return {ok: true};
 }
 """
 
 
 class _ReplyControlTargetChangedError(RuntimeError):
     """The selected reply control no longer matches its snapshot identity."""
+
+    def __init__(self, reason_code: str) -> None:
+        super().__init__("reply control target changed before it could be clicked")
+        self.reason_code = reason_code
+
+
+_REPLY_CONTROL_VALIDATION_REASONS = frozenset(
+    {
+        "button_selector_mismatch",
+        "owning_group_missing",
+        "target_detached",
+        "owning_post_mismatch",
+        "group_control_index_mismatch",
+        "target_key_mismatch",
+        "target_class_mismatch",
+        "target_label_mismatch",
+        "target_not_visible",
+        "target_detached_after_scroll",
+        "owning_group_changed_after_scroll",
+        "owning_post_mismatch_after_scroll",
+        "button_selector_mismatch_after_scroll",
+        "group_control_index_changed_after_scroll",
+        "target_key_changed_after_scroll",
+        "target_class_changed_after_scroll",
+        "target_label_changed_after_scroll",
+        "target_not_visible_after_scroll",
+        "target_handle_missing",
+        "invalid_validation_result",
+    }
+)
 
 
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
@@ -1295,22 +1347,20 @@ class DzenStudioPage:
             click_timeout_ms = min(_REPLY_EXPANSION_CLICK_TIMEOUT_MS, remaining_ms)
             previous_control_count = len(present_keys)
             previous_control_info = control_info_by_key.get(next_button_key, {})
-            page_mouse = getattr(self._page, "mouse", None)
-            mouse_click = getattr(page_mouse, "click", None)
             resolve_element_handle = getattr(next_button, "element_handle", None)
             click_may_have_been_dispatched = False
+            click_call_in_progress = False
             try:
                 self._reply_expansion_phase = "control_click"
                 if (
                     previous_control_info
                     and callable(resolve_element_handle)
-                    and callable(mouse_click)
                 ):
                     self._reply_expansion_phase = "control_target_resolution"
                     target_handle = resolve_element_handle(timeout=click_timeout_ms)
                     if target_handle is None:
                         raise _ReplyControlTargetChangedError(
-                            "reply control target changed before evaluation"
+                            "target_handle_missing"
                         )
                     try:
                         self._reply_expansion_phase = "control_target_evaluation"
@@ -1334,25 +1384,38 @@ class DzenStudioPage:
                                 "expectedText": previous_control_info["text"],
                             },
                         )
+                        if (
+                            not isinstance(click_target, dict)
+                            or click_target.get("ok") is not True
+                        ):
+                            validation_reason = (
+                                click_target.get("reason")
+                                if isinstance(click_target, dict)
+                                else None
+                            )
+                            if validation_reason not in _REPLY_CONTROL_VALIDATION_REASONS:
+                                validation_reason = "invalid_validation_result"
+                            raise _ReplyControlTargetChangedError(
+                                validation_reason
+                            )
+                        self._reply_expansion_phase = "control_target_click"
+                        click_call_in_progress = True
+                        target_handle.click(
+                            force=True,
+                            timeout=click_timeout_ms,
+                        )
+                        click_call_in_progress = False
+                        click_may_have_been_dispatched = True
                     finally:
                         dispose_handle = getattr(target_handle, "dispose", None)
                         if callable(dispose_handle):
                             dispose_handle()
-                    if (
-                        not isinstance(click_target, dict)
-                        or not isinstance(click_target.get("x"), (int, float))
-                        or not isinstance(click_target.get("y"), (int, float))
-                    ):
-                        raise _ReplyControlTargetChangedError(
-                            "reply control target changed before it could be clicked"
-                        )
-                    self._reply_expansion_phase = "control_mouse_click"
-                    click_may_have_been_dispatched = True
-                    mouse_click(click_target["x"], click_target["y"])
                 else:
                     self._reply_expansion_phase = "control_locator_click"
-                    click_may_have_been_dispatched = True
+                    click_call_in_progress = True
                     next_button.click(force=True, timeout=click_timeout_ms)
+                    click_call_in_progress = False
+                    click_may_have_been_dispatched = True
             except Exception as exc:
                 exception_name = type(exc).__name__.casefold()
                 exception_message = str(exc).casefold()
@@ -1362,7 +1425,15 @@ class DzenStudioPage:
                     or "timeout" in exception_message
                 )
                 is_target_changed = isinstance(exc, _ReplyControlTargetChangedError)
-                if is_not_visible:
+                pre_dispatch_not_visible = (
+                    click_call_in_progress and is_not_visible
+                )
+                ambiguous_click_call = (
+                    click_call_in_progress and not pre_dispatch_not_visible
+                )
+                if ambiguous_click_call:
+                    click_failure_reason = "click_dispatch_ambiguous"
+                elif is_not_visible:
                     click_failure_reason = "control_not_visible"
                 elif is_target_changed:
                     click_failure_reason = "control_target_changed"
@@ -1380,15 +1451,19 @@ class DzenStudioPage:
                     click_failure_reason = "control_click_timeout"
                 else:
                     click_failure_reason = "control_click_failed"
-                if (
+                should_reconcile = ambiguous_click_call or (
                     (is_not_visible or is_timeout or is_target_changed)
                     and attempt_counts[next_button_key]
                     < _REPLY_EXPANSION_MAX_ATTEMPTS
-                ):
-                    unresolved_click_keys.add(next_button_key)
-                    unresolved_click_reasons[next_button_key] = click_failure_reason
+                )
+                if should_reconcile:
+                    if not ambiguous_click_call:
+                        unresolved_click_keys.add(next_button_key)
+                        unresolved_click_reasons[next_button_key] = (
+                            click_failure_reason
+                        )
                     logger.info(
-                        "Dzen reply control will be reacquired after a target race",
+                        "Dzen reply control click needs reconciliation",
                         extra={
                             "event": "studio_reply_expansion_click_deferred",
                             "failure_stage": "studio_reply_expansion",
@@ -1397,20 +1472,35 @@ class DzenStudioPage:
                             "clicked_count": clicked_count,
                             "visible_button_count": len(controls),
                             "failure_phase": self._reply_expansion_phase,
+                            "target_validation_reason": getattr(
+                                exc, "reason_code", None
+                            ),
                             **_safe_exception_fields(exc),
                         },
                     )
-                    remaining_ms = int((deadline - monotonic()) * 1_000)
-                    if remaining_ms > 0:
-                        self._reply_expansion_phase = "click_timeout_settle"
-                        self._page.wait_for_timeout(
-                            min(_REPLY_EXPANSION_POST_CLICK_WAIT_MS, remaining_ms)
+                    try:
+                        remaining_ms = int((deadline - monotonic()) * 1_000)
+                        if remaining_ms > 0:
+                            self._reply_expansion_phase = "click_timeout_settle"
+                            self._page.wait_for_timeout(
+                                min(
+                                    _REPLY_EXPANSION_POST_CLICK_WAIT_MS,
+                                    remaining_ms,
+                                )
+                            )
+                        controls, present_keys = wait_for_click_result(
+                            next_button_key,
+                            previous_control_info,
+                            previous_control_count,
                         )
-                    controls, present_keys = wait_for_click_result(
-                        next_button_key,
-                        previous_control_info,
-                        previous_control_count,
-                    )
+                    except Exception:
+                        if ambiguous_click_call:
+                            self._log_reply_expansion_incomplete(
+                                failure_reason="click_dispatch_ambiguous",
+                                clicked_count=clicked_count,
+                                visible_button_count=len(controls),
+                            )
+                        raise
                     control_disappeared = (
                         next_button_key not in present_keys
                         or (
@@ -1422,6 +1512,15 @@ class DzenStudioPage:
                         previous_control_info,
                         control_info_by_key.get(next_button_key, {}),
                     )
+                    if ambiguous_click_call and not branch_revealed:
+                        self._log_reply_expansion_incomplete(
+                            failure_reason="click_dispatch_ambiguous",
+                            clicked_count=clicked_count,
+                            visible_button_count=len(controls),
+                        )
+                        raise RuntimeError(
+                            "reply control click outcome could not be confirmed"
+                        )
                     if (
                         control_disappeared
                         and not click_may_have_been_dispatched

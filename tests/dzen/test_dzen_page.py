@@ -880,7 +880,7 @@ def test_sibling_reply_controls_keep_identity_and_noop_clicks_fail(
             browser.close()
 
 
-def test_reply_control_click_returns_verified_coordinates_for_mouse_input():
+def test_reply_control_click_validation_confirms_target_without_clicking():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
     html = """
@@ -935,15 +935,107 @@ def test_reply_control_click_returns_verified_coordinates_for_mouse_input():
                 },
                 timeout=5_000,
             )
+            rejected_target = button.evaluate(
+                dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "buttonIndex": 0,
+                    "expectedPostHref": "/a/post1",
+                    "expectedKey": control["key"],
+                    "expectedClass": control["class_name"],
+                    "expectedText": "changed label",
+                },
+            )
             bounds = button.bounding_box()
 
-            assert isinstance(click_target, dict)
+            assert click_target == {"ok": True}
+            assert rejected_target == {
+                "ok": False,
+                "reason": "target_label_mismatch",
+            }
             assert bounds is not None
-            assert bounds["x"] <= click_target["x"] <= bounds["x"] + bounds["width"]
-            assert bounds["y"] <= click_target["y"] <= bounds["y"] + bounds["height"]
             assert page.evaluate("window.replyExpansionClicks") == 0
-            page.mouse.click(click_target["x"], click_target["y"])
+            button.click(force=True)
             assert page.evaluate("window.replyExpansionClicks") == 1
+        finally:
+            browser.close()
+
+
+def test_reply_control_click_revalidates_identity_after_scroll():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="window.replyExpansionClicks++">Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate("window.replyExpansionClicks = 0")
+            button = page.locator(selectors.COMMENT_OPEN_MORE)
+            snapshot = page.evaluate(
+                dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "comment": selectors.COMMENT_NODE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "scopeIndex": 0,
+                    "expectedPostHref": "/a/post1",
+                },
+            )
+            control = snapshot["controls"][0]
+            page.evaluate(
+                """() => {
+                    const button = document.querySelector(
+                        'button[class*="editor--root-comment__openMoreButton-"]'
+                    );
+                    button.scrollIntoView = () => {
+                        button.innerText = 'Показать 2 ответа';
+                    };
+                }"""
+            )
+
+            result = button.evaluate(
+                dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "buttonIndex": control["button_index"],
+                    "expectedPostHref": control["post_href"],
+                    "expectedKey": control["key"],
+                    "expectedClass": control["class_name"],
+                    "expectedText": control["text"],
+                },
+                timeout=5_000,
+            )
+
+            assert result == {
+                "ok": False,
+                "reason": "target_label_changed_after_scroll",
+            }
+            assert page.evaluate("window.replyExpansionClicks") == 0
         finally:
             browser.close()
 
@@ -1017,10 +1109,10 @@ def test_reply_control_target_validation_stays_within_owning_group():
                 },
             )
 
-            assert isinstance(click_target, dict)
+            assert click_target == {"ok": True}
             assert page.evaluate("window.pageWideGroupQueries") == 0
             assert page.evaluate("window.replyExpansionClicks") == 0
-            page.mouse.click(click_target["x"], click_target["y"])
+            button.click(force=True)
             assert page.evaluate("window.replyExpansionClicks") == 1
         finally:
             browser.close()
@@ -1691,7 +1783,10 @@ def test_hidden_reply_expansion_prioritizes_new_controls_before_retries():
     assert actions == ["parent", "child", "parent", "parent"]
 
 
-def test_hidden_reply_expansion_caps_playwright_click_timeout():
+def test_hidden_reply_expansion_caps_ambiguous_playwright_click_timeout(
+    caplog,
+    monkeypatch,
+):
     button = FakeButton()
 
     def timeout_click(*, timeout=None, force=False):
@@ -1705,15 +1800,25 @@ def test_hidden_reply_expansion_caps_playwright_click_timeout():
         [button] if selector == selectors.COMMENT_OPEN_MORE else []
     )
     page = DzenStudioPage(fake)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_RENDER_TIMEOUT_MS", 0)
 
-    with pytest.raises(TimeoutError, match="reply click timed out"):
-        page._expand_hidden_replies()
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(
+            RuntimeError,
+            match="click outcome could not be confirmed",
+        ):
+            page._expand_hidden_replies()
 
     assert button.clicks == 0
-    assert button.click_forces == [True] * dzen_page._REPLY_EXPANSION_MAX_ATTEMPTS
-    assert button.click_timeouts == [
-        dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS
-    ] * dzen_page._REPLY_EXPANSION_MAX_ATTEMPTS
+    assert button.click_forces == [True]
+    assert button.click_timeouts == [dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS]
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert incomplete.failure_reason == "click_dispatch_ambiguous"
+    assert incomplete.clicked_count == 0
 
 
 def test_hidden_reply_expansion_retries_transient_not_visible_click_with_fresh_control(
@@ -1766,19 +1871,34 @@ def _make_target_validation_page(mode: str):
         "locator_target_evaluations": 0,
         "handle_target_evaluations": 0,
         "handle_disposals": 0,
+        "handle_clicks": [],
+        "click_order": [],
         "mouse_clicks": [],
     }
 
     class Handle:
+        def __init__(self, handle_index: int):
+            self.handle_index = handle_index
+
         def evaluate(self, script: str, arg=None):
             assert script == dzen_page._REPLY_CONTROL_CLICK_SCRIPT
             state["handle_target_evaluations"] += 1
             if mode == "target_changed" and state["handle_target_evaluations"] == 1:
-                return False
-            return {"x": 12, "y": 24}
+                return {"ok": False, "reason": "target_detached"}
+            return {"ok": True, "x": 12, "y": 24}
+
+        def click(self, *, force: bool = False, timeout: int | None = None):
+            assert force is True
+            assert timeout == dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS
+            state["handle_clicks"].append(self.handle_index)
+            state["click_order"].append(("click", self.handle_index))
+            if mode == "ambiguous_click_failure":
+                raise TimeoutError("click result is unknown")
+            state["visible"] = False
 
         def dispose(self):
             state["handle_disposals"] += 1
+            state["click_order"].append(("dispose", self.handle_index))
 
     class TargetLocator:
         def nth(self, index: int):
@@ -1790,7 +1910,7 @@ def _make_target_validation_page(mode: str):
             assert timeout == dzen_page._REPLY_EXPANSION_CLICK_TIMEOUT_MS
             if mode == "resolution_timeout" and state["resolution_calls"] == 1:
                 raise TimeoutError("waiting for locator reply control")
-            return Handle()
+            return Handle(state["resolution_calls"])
 
         def evaluate(self, script: str, arg=None, *, timeout: int | None = None):
             if script == dzen_page._REPLY_BUTTON_KEY_SCRIPT:
@@ -1861,7 +1981,9 @@ def test_hidden_reply_expansion_reports_resolution_timeout_and_reacquires(
     assert state["handle_target_evaluations"] == 1
     assert state["locator_target_evaluations"] == 0
     assert state["handle_disposals"] == 1
-    assert state["mouse_clicks"] == [(12, 24)]
+    assert state["handle_clicks"] == [2]
+    assert state["click_order"] == [("click", 2), ("dispose", 2)]
+    assert state["mouse_clicks"] == []
 
 
 def test_hidden_reply_expansion_retries_target_validation_rejection(
@@ -1884,7 +2006,14 @@ def test_hidden_reply_expansion_retries_target_validation_rejection(
     assert state["handle_target_evaluations"] == 2
     assert state["locator_target_evaluations"] == 0
     assert state["handle_disposals"] == 2
-    assert state["mouse_clicks"] == [(12, 24)]
+    assert state["handle_clicks"] == [2]
+    assert state["click_order"] == [
+        ("dispose", 1),
+        ("click", 2),
+        ("dispose", 2),
+    ]
+    assert state["mouse_clicks"] == []
+    assert deferred.target_validation_reason == "target_detached"
 
 
 @pytest.mark.parametrize(
@@ -1926,6 +2055,7 @@ def test_hidden_reply_expansion_does_not_count_disappeared_preclick_target(
     assert incomplete.failure_reason == "control_disappeared_before_click"
     assert incomplete.clicked_count == 0
     assert state["mouse_clicks"] == []
+    assert state["handle_clicks"] == []
 
 
 def test_hidden_reply_expansion_accepts_reply_count_increase_without_click(
@@ -1947,8 +2077,52 @@ def test_hidden_reply_expansion_accepts_reply_count_increase_without_click(
     )
 
 
-def test_hidden_reply_expansion_retries_transient_click_timeout(
+def test_hidden_reply_expansion_does_not_count_disappearance_after_ambiguous_click(
+    caplog, monkeypatch
+):
+    page, state = _make_target_validation_page("ambiguous_click_failure")
+    page.on_wait_timeout = lambda _timeout: state.update(visible=False)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="click outcome could not be confirmed"):
+            DzenStudioPage(page)._expand_hidden_replies()
+
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert incomplete.failure_reason == "click_dispatch_ambiguous"
+    assert incomplete.clicked_count == 0
+    assert state["handle_clicks"] == [1]
+    assert state["handle_disposals"] == 1
+    assert state["mouse_clicks"] == []
+
+
+def test_hidden_reply_expansion_does_not_retry_ambiguous_click_when_unchanged(
+    caplog, monkeypatch
+):
+    page, state = _make_target_validation_page("ambiguous_click_failure")
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="click outcome could not be confirmed"):
+            DzenStudioPage(page)._expand_hidden_replies()
+
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert incomplete.failure_reason == "click_dispatch_ambiguous"
+    assert incomplete.clicked_count == 0
+    assert state["handle_clicks"] == [1]
+    assert state["handle_disposals"] == 1
+    assert state["visible"] is True
+
+
+def test_hidden_reply_expansion_does_not_retry_after_ambiguous_locator_click(
     monkeypatch,
+    caplog,
 ):
     button = FakeButton(hide_on_click=True)
     attempts = 0
@@ -1969,13 +2143,23 @@ def test_hidden_reply_expansion_retries_transient_click_timeout(
     )
     monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
 
-    expanded = DzenStudioPage(fake)._expand_hidden_replies()
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="click outcome could not be confirmed"):
+            DzenStudioPage(fake)._expand_hidden_replies()
 
-    assert expanded == 1
-    assert attempts == 2
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert incomplete.failure_reason == "click_dispatch_ambiguous"
+    assert incomplete.clicked_count == 0
+    assert attempts == 1
 
 
-def test_hidden_reply_expansion_reconciles_timeout_after_control_disappears():
+def test_hidden_reply_expansion_fails_closed_after_timeout_and_disappearance(
+    caplog,
+    monkeypatch,
+):
     button = FakeButton()
     attempts = 0
 
@@ -1992,11 +2176,33 @@ def test_hidden_reply_expansion_reconciles_timeout_after_control_disappears():
         if selector == selectors.COMMENT_OPEN_MORE and button.is_visible()
         else []
     )
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
 
-    expanded = DzenStudioPage(fake)._expand_hidden_replies()
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="click outcome could not be confirmed"):
+            DzenStudioPage(fake)._expand_hidden_replies()
+
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert incomplete.failure_reason == "click_dispatch_ambiguous"
+    assert incomplete.clicked_count == 0
+    assert attempts == 1
+
+
+def test_hidden_reply_expansion_accepts_timeout_only_with_reply_count_evidence(
+    monkeypatch,
+):
+    page, state = _make_target_validation_page("ambiguous_click_failure")
+    page.on_wait_timeout = lambda _timeout: state.update(group_comment_count=2)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    expanded = DzenStudioPage(page)._expand_hidden_replies()
 
     assert expanded == 1
-    assert attempts == 1
+    assert state["handle_clicks"] == [1]
+    assert state["handle_disposals"] == 1
 
 
 def test_hidden_reply_expansion_retries_transient_control_snapshot_timeout():
