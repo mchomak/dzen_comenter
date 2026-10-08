@@ -190,7 +190,6 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     const groups = Array.from(document.querySelectorAll(selectors.group));
     const allControls = Array.from(document.querySelectorAll(selectors.more));
     const controlKeys = new WeakMap();
-    window.__dzenReplyCommentSignatures = new WeakMap();
     window.__dzenReplyControlKeys = controlKeys;
     const groupIndexes = selectors.scopeIndex === null
         ? groups.map((_group, index) => index)

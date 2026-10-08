@@ -1010,6 +1010,93 @@ def test_reply_control_keys_reuse_one_signature_pass_per_thread():
             browser.close()
 
 
+def test_reply_control_snapshots_reuse_comment_signatures_for_same_dom():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    comment_count = 11
+    comments = "".join(
+        f"""
+        <div class="editor--comment__block-{index}">
+          <a class="editor--comment__nameLink-author" href="/user/{index}"></a>
+          <p class="editor--comment__text-text">comment {index}</p>
+          <button class="editor--root-comment__openMoreButton-more">
+            Показать 1 ответ
+          </button>
+        </div>
+        """
+        for index in range(comment_count)
+    )
+    html = f"""
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">{comments}</div>
+    </div>
+    """
+    selectors_arg = {
+        "group": selectors.POST_GROUP,
+        "more": selectors.COMMENT_OPEN_MORE,
+        "comment": selectors.COMMENT_NODE,
+        "postLink": selectors.POST_LINK,
+        "postLinkFallback": selectors.POST_LINK_FALLBACK,
+        "scopeIndex": 0,
+        "expectedPostHref": "/a/post1",
+    }
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate(
+                """() => {
+                    window.signatureReadCount = 0;
+                    const originalQuerySelector = Element.prototype.querySelector;
+                    Element.prototype.querySelector = function(selector) {
+                        if (selector.includes('editor--comment__nameLink-')
+                            || selector.includes('editor--comment__text-')) {
+                            window.signatureReadCount += 1;
+                        }
+                        return originalQuerySelector.call(this, selector);
+                    };
+                }"""
+            )
+
+            first = page.evaluate(
+                dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT, selectors_arg
+            )
+            first_read_count = page.evaluate("window.signatureReadCount")
+            page.evaluate("window.firstControlKeys = window.__dzenReplyControlKeys")
+
+            second = page.evaluate(
+                dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT, selectors_arg
+            )
+            second_read_count = page.evaluate("window.signatureReadCount")
+            second_control_keys = page.evaluate(
+                """(selector) => Array.from(
+                    document.querySelectorAll(selector)
+                ).map((button) => window.__dzenReplyControlKeys.get(button))""",
+                selectors.COMMENT_OPEN_MORE,
+            )
+            control_map_was_rebuilt = page.evaluate(
+                "window.firstControlKeys !== window.__dzenReplyControlKeys"
+            )
+
+            assert first["identity_matches"] and second["identity_matches"]
+            assert len(first["controls"]) == comment_count
+            assert len(second["controls"]) == comment_count
+            assert first_read_count > 0
+            assert second_read_count == first_read_count
+            assert [item["key"] for item in second["controls"]] == second_control_keys
+            assert control_map_was_rebuilt
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_waits_for_delayed_reply_render():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
