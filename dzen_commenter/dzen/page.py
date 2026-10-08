@@ -91,6 +91,8 @@ _STUDIO_REPLY_GROUP_INDICES_SCRIPT = """
 """
 _REPLY_BUTTON_KEY_SCRIPT = """
 (node) => {
+    const signatureCache = window.__dzenReplyCommentSignatures
+        || (window.__dzenReplyCommentSignatures = new WeakMap());
     const commentSelector = '[class*="editor--comment__block-"]';
     const pageThreadSelector = '[class*="editor--comments-page__commentNode-"]';
     const rootThreadSelector = '[class*="editor--root-comment__commentNode-"]';
@@ -150,12 +152,20 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     };
     if (!comment) return fallbackKey();
 
-    const signature = (candidate) => JSON.stringify([
-        candidate.querySelector('[class*="editor--comment__nameLink-"]')
-            ?.getAttribute('href') || '',
-        normalize(candidate.querySelector('[class*="editor--comment__text-"]')
-            ?.innerText),
-    ]);
+    const signature = (candidate) => {
+        if (signatureCache.has(candidate)) {
+            return signatureCache.get(candidate);
+        }
+        const value = JSON.stringify([
+            candidate.querySelector('[class*="editor--comment__nameLink-"]')
+                ?.getAttribute('href') || '',
+            normalize(candidate.querySelector(
+                '[class*="editor--comment__text-"]'
+            )?.innerText),
+        ]);
+        signatureCache.set(candidate, value);
+        return value;
+    };
     const ownSignature = signature(comment);
     let occurrence = 0;
     for (const candidate of comments) {
@@ -179,7 +189,8 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     const keyFor = REPLY_BUTTON_KEY_FUNCTION;
     const groups = Array.from(document.querySelectorAll(selectors.group));
     const allControls = Array.from(document.querySelectorAll(selectors.more));
-    const controlKeys = window.__dzenReplyControlKeys || new WeakMap();
+    const controlKeys = new WeakMap();
+    window.__dzenReplyCommentSignatures = new WeakMap();
     window.__dzenReplyControlKeys = controlKeys;
     const groupIndexes = selectors.scopeIndex === null
         ? groups.map((_group, index) => index)
@@ -1277,6 +1288,7 @@ class DzenStudioPage:
                     and callable(getattr(self._page, "evaluate", None))
                     and callable(mouse_click)
                 ):
+                    self._reply_expansion_phase = "control_target_evaluation"
                     click_target = self._page.evaluate(
                         _REPLY_CONTROL_CLICK_SCRIPT,
                         {
@@ -1300,8 +1312,10 @@ class DzenStudioPage:
                         raise TimeoutError(
                             "reply control changed before it could be clicked"
                         )
+                    self._reply_expansion_phase = "control_mouse_click"
                     mouse_click(click_target["x"], click_target["y"])
                 else:
+                    self._reply_expansion_phase = "control_locator_click"
                     next_button.click(force=True, timeout=click_timeout_ms)
             except Exception as exc:
                 exception_name = type(exc).__name__.casefold()
@@ -1327,6 +1341,8 @@ class DzenStudioPage:
                             "click_attempt": attempt_counts[next_button_key],
                             "clicked_count": clicked_count,
                             "visible_button_count": len(controls),
+                            "failure_phase": self._reply_expansion_phase,
+                            **_safe_exception_fields(exc),
                         },
                     )
                     remaining_ms = int((deadline - monotonic()) * 1_000)

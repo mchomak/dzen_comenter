@@ -948,6 +948,68 @@ def test_reply_control_click_returns_verified_coordinates_for_mouse_input():
             browser.close()
 
 
+def test_reply_control_keys_reuse_one_signature_pass_per_thread():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    comment_count = 60
+    comments = "".join(
+        f"""
+        <div class="editor--comment__block-{index}">
+          <a class="editor--comment__nameLink-author" href="/user/{index}"></a>
+          <p class="editor--comment__text-text">comment {index}</p>
+          <button class="editor--root-comment__openMoreButton-more">
+            Показать 1 ответ
+          </button>
+        </div>
+        """
+        for index in range(comment_count)
+    )
+    html = f"""
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">{comments}</div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate(
+                """() => {
+                    window.signatureReadCount = 0;
+                    const originalQuerySelector = Element.prototype.querySelector;
+                    Element.prototype.querySelector = function(selector) {
+                        if (selector.includes('editor--comment__nameLink-')
+                            || selector.includes('editor--comment__text-')) {
+                            window.signatureReadCount += 1;
+                        }
+                        return originalQuerySelector.call(this, selector);
+                    };
+                }"""
+            )
+            keys = page.evaluate(
+                f"""() => {{
+                    const keyFor = {dzen_page._REPLY_BUTTON_KEY_SCRIPT};
+                    return Array.from(
+                        document.querySelectorAll('{selectors.COMMENT_OPEN_MORE}')
+                    ).map(keyFor);
+                }}"""
+            )
+
+            assert len(keys) == comment_count
+            assert len(set(keys)) == comment_count
+            assert page.evaluate("window.signatureReadCount") <= 2 * comment_count
+        finally:
+            browser.close()
+
+
 def test_hidden_reply_expansion_waits_for_delayed_reply_render():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
