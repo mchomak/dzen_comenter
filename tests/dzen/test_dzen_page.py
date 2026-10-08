@@ -920,20 +920,20 @@ def test_reply_control_click_returns_verified_coordinates_for_mouse_input():
                 },
             )
             control = snapshot["controls"][0]
-            click_target = page.evaluate(
+            click_target = button.evaluate(
                 dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
                 {
                     "group": selectors.POST_GROUP,
                     "more": selectors.COMMENT_OPEN_MORE,
                     "postLink": selectors.POST_LINK,
                     "postLinkFallback": selectors.POST_LINK_FALLBACK,
-                    "groupIndex": 0,
                     "buttonIndex": 0,
                     "expectedPostHref": "/a/post1",
                     "expectedKey": control["key"],
                     "expectedClass": control["class_name"],
                     "expectedText": control["text"],
                 },
+                timeout=5_000,
             )
             bounds = button.bounding_box()
 
@@ -941,6 +941,84 @@ def test_reply_control_click_returns_verified_coordinates_for_mouse_input():
             assert bounds is not None
             assert bounds["x"] <= click_target["x"] <= bounds["x"] + bounds["width"]
             assert bounds["y"] <= click_target["y"] <= bounds["y"] + bounds["height"]
+            assert page.evaluate("window.replyExpansionClicks") == 0
+            page.mouse.click(click_target["x"], click_target["y"])
+            assert page.evaluate("window.replyExpansionClicks") == 1
+        finally:
+            browser.close()
+
+
+def test_reply_control_target_validation_stays_within_owning_group():
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/post1"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="window.replyExpansionClicks++">Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate("window.replyExpansionClicks = 0")
+            button = page.locator(selectors.COMMENT_OPEN_MORE)
+            snapshot = page.evaluate(
+                dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "comment": selectors.COMMENT_NODE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "scopeIndex": 0,
+                    "expectedPostHref": "/a/post1",
+                },
+            )
+            control = snapshot["controls"][0]
+            page.evaluate(
+                """() => {
+                    window.pageWideGroupQueries = 0;
+                    const original = Document.prototype.querySelectorAll;
+                    Document.prototype.querySelectorAll = function(selector) {
+                        if (String(selector).includes('editor--comments-page__groupByPost-')
+                            || String(selector).includes('[data-testid="comment"]')) {
+                            window.pageWideGroupQueries += 1;
+                        }
+                        return original.call(this, selector);
+                    };
+                }"""
+            )
+
+            click_target = button.evaluate(
+                dzen_page._REPLY_CONTROL_CLICK_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                    "postLink": selectors.POST_LINK,
+                    "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                    "buttonIndex": 0,
+                    "expectedPostHref": "/a/post1",
+                    "expectedKey": control["key"],
+                    "expectedClass": control["class_name"],
+                    "expectedText": control["text"],
+                },
+            )
+
+            assert isinstance(click_target, dict)
+            assert page.evaluate("window.pageWideGroupQueries") == 0
             assert page.evaluate("window.replyExpansionClicks") == 0
             page.mouse.click(click_target["x"], click_target["y"])
             assert page.evaluate("window.replyExpansionClicks") == 1

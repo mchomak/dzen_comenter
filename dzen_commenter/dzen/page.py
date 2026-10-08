@@ -249,17 +249,17 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
 }
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
 _REPLY_CONTROL_CLICK_SCRIPT = """
-(selectors) => {
-    const groups = Array.from(document.querySelectorAll(selectors.group));
-    const group = groups[selectors.groupIndex];
+(button, selectors) => {
+    if (!button?.matches(selectors.more)) return false;
+    const group = button.closest(selectors.group);
     if (!group) return false;
     const postLink = group.querySelector(selectors.postLink)
         || group.querySelector(selectors.postLinkFallback);
     const postHref = postLink?.getAttribute("href") || "";
     if (postHref !== selectors.expectedPostHref) return false;
 
-    const button = group.querySelectorAll(selectors.more)[selectors.buttonIndex];
-    if (!button) return false;
+    const buttons = group.querySelectorAll(selectors.more);
+    if (buttons[selectors.buttonIndex] !== button) return false;
     const controlKeys = window.__dzenReplyControlKeys;
     if (selectors.expectedKey
         && !selectors.expectedKey.startsWith("fallback:")
@@ -285,9 +285,8 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
     const currentPostLink = group.querySelector(selectors.postLink)
         || group.querySelector(selectors.postLinkFallback);
     const currentPostHref = currentPostLink?.getAttribute("href") || "";
-    const currentButton = group.querySelectorAll(selectors.more)[
-        selectors.buttonIndex
-    ];
+    const currentButtons = group.querySelectorAll(selectors.more);
+    const currentButton = currentButtons[selectors.buttonIndex];
     if (currentPostHref !== selectors.expectedPostHref
         || currentButton !== button
         || String(button.className || "").trim().replace(/\\s+/g, " ")
@@ -1280,28 +1279,29 @@ class DzenStudioPage:
             previous_control_info = control_info_by_key.get(next_button_key, {})
             page_mouse = getattr(self._page, "mouse", None)
             mouse_click = getattr(page_mouse, "click", None)
+            locator_evaluate = getattr(next_button, "evaluate", None)
             try:
                 self._reply_expansion_phase = "control_click"
                 if (
                     previous_control_info
-                    and callable(getattr(self._page, "evaluate", None))
+                    and callable(locator_evaluate)
                     and callable(mouse_click)
                 ):
                     self._reply_expansion_phase = "control_target_evaluation"
-                    click_target = self._page.evaluate(
+                    click_target = locator_evaluate(
                         _REPLY_CONTROL_CLICK_SCRIPT,
                         {
                             "group": selectors.POST_GROUP,
                             "more": selectors.COMMENT_OPEN_MORE,
                             "postLink": selectors.POST_LINK,
                             "postLinkFallback": selectors.POST_LINK_FALLBACK,
-                            "groupIndex": previous_control_info["group_index"],
                             "buttonIndex": previous_control_info["button_index"],
                             "expectedPostHref": previous_control_info["post_href"],
                             "expectedKey": previous_control_info.get("key"),
                             "expectedClass": previous_control_info["class_name"],
                             "expectedText": previous_control_info["text"],
                         },
+                        timeout=click_timeout_ms,
                     )
                     if (
                         not isinstance(click_target, dict)
