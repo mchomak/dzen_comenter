@@ -64,6 +64,42 @@ _STUDIO_FEED_COUNTS_SCRIPT = """
     };
 }
 """
+_STUDIO_COMMENT_CONTENT_SNAPSHOT_SCRIPT = """
+/* dzen-studio-comment-content-snapshot */
+(selectors) => Array.from(document.querySelectorAll(selectors.group), group => {
+    const comments = Array.from(
+        group.querySelectorAll(selectors.comment)
+    ).map(node => {
+        const authorLink = node.querySelector(selectors.authorLink);
+        const authorText = node.querySelector(selectors.authorText);
+        const commentText = node.querySelector(selectors.commentText);
+        const dateText = node.querySelector(selectors.commentDate);
+        const parentThread = node.closest(selectors.thread);
+        const parentBlock = parentThread?.querySelector(selectors.comment);
+        const parentAuthor = parentBlock?.querySelector(selectors.authorLink);
+        const parentText = parentBlock?.querySelector(selectors.commentText);
+        return {
+            author_href: authorLink?.getAttribute("href") || "",
+            author: authorText?.innerText || "",
+            text: commentText?.innerText || "",
+            date: dateText?.innerText || "",
+            parent: parentText?.innerText ? {
+                author_href: parentAuthor?.getAttribute("href") || "",
+                text: parentText.innerText,
+            } : null,
+        };
+    });
+    const primaryPost = group.querySelector(selectors.postLink);
+    const fallbackPost = group.querySelector(selectors.postLinkFallback);
+    const title = group.querySelector(selectors.title);
+    return {
+        post_href: primaryPost?.getAttribute("href") || "",
+        fallback_post_href: fallbackPost?.getAttribute("href") || "",
+        title: title?.innerText || "",
+        comments,
+    };
+})
+"""
 _STUDIO_FEED_SCROLL_SCRIPT = """
 (selectors) => {
     const groups = Array.from(document.querySelectorAll(selectors.group));
@@ -971,60 +1007,111 @@ class DzenStudioPage:
                 sum(len(nodes) for nodes in comment_nodes_by_group.values()),
                 previous_counts[2],
             )
-            for card_index, (group, group_identity) in enumerate(
-                zip(groups, group_identities), start=1
-            ):
-                post_href = _post_href(group)
-                if not post_href:
-                    # Keep the existing skip behavior: an unresolved link would
-                    # create an unstable synthetic comment id.
-                    skipped_missing_link_count += 1
-                    logger.info(
-                        "Skipped Dzen publication card without a recognized link",
-                        extra={
-                            "event": "studio_publication_skipped",
-                            "failure_stage": "studio_publication_link",
-                            "failure_reason": "post_link_not_found",
-                            "publication_card_index": card_index,
-                        },
-                    )
-                    continue
-                title_el = group.query_selector(selectors.POST_TITLE)
-                publication_title = title_el.inner_text().strip() if title_el else ""
-                previous_messages: list[str] = []
-
-                for node in comment_nodes_by_group[group_identity]:
-                    author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
-                    author_href = author_link.get_attribute("href") or "" if author_link else ""
-                    author_el = node.query_selector(selectors.COMMENT_AUTHOR_TEXT)
-                    text_el = node.query_selector(selectors.COMMENT_TEXT)
-                    date_el = node.query_selector(selectors.COMMENT_DATE_TEXT)
-                    author = author_el.inner_text().strip() if author_el else ""
-                    text = text_el.inner_text().strip() if text_el else ""
-                    comments.append(
-                        Comment(
-                            id=None,
-                            dzen_comment_id=synthetic_id(post_href, author_href, text),
-                            publication_id=0,
-                            author=author,
-                            text=text,
-                            parent_comment_id=self._parent_comment_id(node, post_href),
-                            posted_at=parse_relative_time(
-                                date_el.inner_text() if date_el else None, now
-                            ),
-                            fetched_at=now,
-                            status=CommentStatus.NEW,
-                            publication_title=publication_title,
-                            thread_text="\n".join(previous_messages),
-                            post_url=_post_url(post_href),
+            content_snapshot = self._live_comment_content_snapshot(len(groups))
+            if content_snapshot is not None:
+                for card_index, group_data in enumerate(content_snapshot, start=1):
+                    post_href = self._validated_snapshot_post_href(group_data)
+                    if not post_href:
+                        skipped_missing_link_count += 1
+                        self._log_publication_card_without_link(card_index)
+                        continue
+                    publication_title = self._snapshot_text(group_data.get("title"))
+                    previous_messages: list[str] = []
+                    snapshot_comments = group_data.get("comments")
+                    if not isinstance(snapshot_comments, list):
+                        raise RuntimeError(
+                            "Dzen Studio comment snapshot did not include a comment list"
                         )
-                    )
-                    if text:
-                        previous_messages.append(f"{author or 'Автор'}: {text}")
-                    extracted_since_progress += 1
-                    if extracted_since_progress >= 50:
-                        self._report_progress()
-                        extracted_since_progress = 0
+                    for item in snapshot_comments:
+                        if not isinstance(item, dict):
+                            raise RuntimeError(
+                                "Dzen Studio comment snapshot included an invalid comment"
+                            )
+                        author_href = self._snapshot_text(item.get("author_href"))
+                        author = self._snapshot_text(item.get("author"))
+                        text = self._snapshot_text(item.get("text"))
+                        parent = item.get("parent")
+                        parent_comment_id = None
+                        if isinstance(parent, dict):
+                            parent_text = self._snapshot_text(parent.get("text"))
+                            if parent_text:
+                                parent_comment_id = synthetic_id(
+                                    post_href,
+                                    self._snapshot_text(parent.get("author_href")),
+                                    parent_text,
+                                )
+                        comments.append(
+                            Comment(
+                                id=None,
+                                dzen_comment_id=synthetic_id(
+                                    post_href, author_href, text
+                                ),
+                                publication_id=0,
+                                author=author,
+                                text=text,
+                                parent_comment_id=parent_comment_id,
+                                posted_at=parse_relative_time(
+                                    self._snapshot_text(item.get("date")) or None,
+                                    now,
+                                ),
+                                fetched_at=now,
+                                status=CommentStatus.NEW,
+                                publication_title=publication_title,
+                                thread_text="\n".join(previous_messages),
+                                post_url=_post_url(post_href),
+                            )
+                        )
+                        if text:
+                            previous_messages.append(f"{author or 'Автор'}: {text}")
+                        extracted_since_progress += 1
+                        if extracted_since_progress >= 50:
+                            self._report_progress()
+                            extracted_since_progress = 0
+            else:
+                group_identities = self._studio_group_identities(groups)
+                for card_index, (group, group_identity) in enumerate(
+                    zip(groups, group_identities), start=1
+                ):
+                    post_href = _post_href(group)
+                    if not post_href:
+                        skipped_missing_link_count += 1
+                        self._log_publication_card_without_link(card_index)
+                        continue
+                    title_el = group.query_selector(selectors.POST_TITLE)
+                    publication_title = title_el.inner_text().strip() if title_el else ""
+                    previous_messages = []
+                    for node in comment_nodes_by_group[group_identity]:
+                        author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+                        author_href = author_link.get_attribute("href") or "" if author_link else ""
+                        author_el = node.query_selector(selectors.COMMENT_AUTHOR_TEXT)
+                        text_el = node.query_selector(selectors.COMMENT_TEXT)
+                        date_el = node.query_selector(selectors.COMMENT_DATE_TEXT)
+                        author = author_el.inner_text().strip() if author_el else ""
+                        text = text_el.inner_text().strip() if text_el else ""
+                        comments.append(
+                            Comment(
+                                id=None,
+                                dzen_comment_id=synthetic_id(post_href, author_href, text),
+                                publication_id=0,
+                                author=author,
+                                text=text,
+                                parent_comment_id=self._parent_comment_id(node, post_href),
+                                posted_at=parse_relative_time(
+                                    date_el.inner_text() if date_el else None, now
+                                ),
+                                fetched_at=now,
+                                status=CommentStatus.NEW,
+                                publication_title=publication_title,
+                                thread_text="\n".join(previous_messages),
+                                post_url=_post_url(post_href),
+                            )
+                        )
+                        if text:
+                            previous_messages.append(f"{author or 'Автор'}: {text}")
+                        extracted_since_progress += 1
+                        if extracted_since_progress >= 50:
+                            self._report_progress()
+                            extracted_since_progress = 0
         except Exception as exc:
             if failure_phase == "reply_expansion":
                 failure_phase = (
@@ -1091,6 +1178,64 @@ class DzenStudioPage:
                 f"after {scan_pass_count} passes"
             )
         return comments
+
+    def _live_comment_content_snapshot(
+        self, expected_group_count: int
+    ) -> list[dict[str, Any]] | None:
+        evaluate = getattr(self._page, "evaluate", None)
+        if (
+            not callable(evaluate)
+            or not type(self._page).__module__.startswith("playwright.")
+        ):
+            return None
+        snapshot = evaluate(
+            _STUDIO_COMMENT_CONTENT_SNAPSHOT_SCRIPT,
+            {
+                "group": selectors.POST_GROUP,
+                "postLink": selectors.POST_LINK,
+                "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                "title": selectors.POST_TITLE,
+                "comment": selectors.COMMENT_NODE,
+                "thread": selectors.COMMENT_THREAD,
+                "authorLink": selectors.COMMENT_AUTHOR_LINK,
+                "authorText": selectors.COMMENT_AUTHOR_TEXT,
+                "commentText": selectors.COMMENT_TEXT,
+                "commentDate": selectors.COMMENT_DATE_TEXT,
+            },
+        )
+        if (
+            not isinstance(snapshot, list)
+            or len(snapshot) != expected_group_count
+            or any(not isinstance(group, dict) for group in snapshot)
+        ):
+            raise RuntimeError("Dzen Studio returned an invalid comment content snapshot")
+        return snapshot
+
+    @staticmethod
+    def _snapshot_text(value: Any) -> str:
+        return value.strip() if isinstance(value, str) else ""
+
+    @staticmethod
+    def _validated_snapshot_post_href(group_data: dict[str, Any]) -> str:
+        post_href = DzenStudioPage._snapshot_text(group_data.get("post_href"))
+        if _post_url(post_href) is not None:
+            return post_href
+        fallback = DzenStudioPage._snapshot_text(
+            group_data.get("fallback_post_href")
+        )
+        return fallback if _post_url(fallback) is not None else ""
+
+    @staticmethod
+    def _log_publication_card_without_link(card_index: int) -> None:
+        logger.info(
+            "Skipped Dzen publication card without a recognized link",
+            extra={
+                "event": "studio_publication_skipped",
+                "failure_stage": "studio_publication_link",
+                "failure_reason": "post_link_not_found",
+                "publication_card_index": card_index,
+            },
+        )
 
     def _report_progress(self) -> None:
         if self._progress_callback is None:

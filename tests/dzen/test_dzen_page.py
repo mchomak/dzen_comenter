@@ -671,6 +671,65 @@ def test_fetch_comments_refreshes_health_progress_for_each_feed_pass():
     assert progress == ["tick"] * 4
 
 
+def test_fetch_comments_uses_one_live_dom_snapshot_for_comment_content(monkeypatch):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-hash">
+        <a href="/a/post-1">Публикация</a>
+      </div>
+      <h2 class="editor--comment-post__title-hash">Заголовок</h2>
+      <div class="editor--comment__block-hash">
+        <a class="editor--comment__nameLink-hash" href="/user/u1"></a>
+        <span class="editor--comment__nameText-hash">Автор 1</span>
+        <p aria-label="Текст комментария">Первый комментарий</p>
+        <div class="editor--common-date__date-hash"><span>8 мин</span></div>
+      </div>
+      <div class="editor--comment__block-hash">
+        <a class="editor--comment__nameLink-hash" href="/user/u2"></a>
+        <span class="editor--comment__nameText-hash">Автор 2</span>
+        <p aria-label="Текст комментария">Второй комментарий</p>
+      </div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            evaluate = page.evaluate
+            snapshots = []
+
+            def track_evaluate(expression, arg=None):
+                if "dzen-studio-comment-content-snapshot" in expression:
+                    snapshots.append(expression)
+                return evaluate(expression, arg)
+
+            monkeypatch.setattr(page, "evaluate", track_evaluate)
+
+            comments = DzenStudioPage(page).fetch_comments()
+
+            assert [comment.text for comment in comments] == [
+                "Первый комментарий",
+                "Второй комментарий",
+            ]
+            assert [comment.author for comment in comments] == ["Автор 1", "Автор 2"]
+            assert comments[0].dzen_comment_id == synthetic_id(
+                "/a/post-1", "/user/u1", "Первый комментарий"
+            )
+            assert comments[0].publication_title == "Заголовок"
+            assert comments[0].posted_at is not None
+            assert comments[1].thread_text == "Автор 1: Первый комментарий"
+            assert len(snapshots) == 1
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize(
     ("reply_count", "button_label"),
     [
