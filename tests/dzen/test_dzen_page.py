@@ -1708,7 +1708,7 @@ def test_fetch_comments_does_not_accept_neighbor_progress_as_target_expansion(
             browser.close()
 
 
-def test_fetch_comments_fails_closed_for_ambiguous_publication_identity(caplog):
+def test_fetch_comments_expands_distinct_cards_with_the_same_publication_href():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
     html = """
@@ -1744,30 +1744,32 @@ def test_fetch_comments_fails_closed_for_ambiguous_publication_identity(caplog):
                     const original = document.querySelector(
                         '[data-testid="comment"]'
                     );
-                    original.after(original.cloneNode(true));
+                    const duplicate = original.cloneNode(true);
+                    duplicate.querySelector(
+                        '[aria-label="Текст комментария"]'
+                    ).textContent = 'same parent copy';
+                    for (const button of [original, duplicate].flatMap(
+                        (group) => Array.from(group.querySelectorAll('button'))
+                    )) {
+                        button.onclick = () => {
+                            const text = button.closest('[data-testid="comment"]')
+                                .querySelector('[aria-label="Текст комментария"]')
+                                .textContent;
+                            window.clickedPosts.push(text);
+                            button.remove();
+                        };
+                    }
+                    original.after(duplicate);
                 }
                 """
             )
 
-            with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-                with pytest.raises(RuntimeError):
-                    DzenStudioPage(page).fetch_comments()
+            DzenStudioPage(page).fetch_comments()
 
-            assert page.evaluate("window.clickedPosts") == []
-            ambiguous = next(
-                record for record in caplog.records
-                if getattr(record, "event", None)
-                == "studio_reply_expansion_incomplete"
-                and getattr(record, "failure_reason", None)
-                == "publication_ambiguous"
-            )
-            assert ambiguous.clicked_count == 0
-            serialized = "\n".join(
-                StructuredFormatter().format(record)
-                for record in caplog.records
-                if record.name == "dzen_commenter.dzen.page"
-            )
-            assert "/a/same-post" not in serialized
+            assert page.evaluate("window.clickedPosts") == [
+                "same parent", "same parent copy"
+            ]
+            assert page.locator(selectors.COMMENT_OPEN_MORE).count() == 0
         finally:
             browser.close()
 

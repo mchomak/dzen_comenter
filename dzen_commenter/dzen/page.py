@@ -108,6 +108,22 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         || directComment?.closest(groupSelector);
     const scope = thread || group;
     if (!scope || !group) return null;
+    const postHref = group.querySelector(
+        '[class*="editor--comments-page__postContainer-"] a[href]'
+    )?.getAttribute('href') || '';
+    const cachedGroupOccurrence = window.__dzenReplyGroupOccurrences?.get(group);
+    let groupOccurrence = cachedGroupOccurrence;
+    if (!Number.isInteger(groupOccurrence)) {
+        const localGroups = group.parentElement
+            ? Array.from(group.parentElement.querySelectorAll(groupSelector))
+            : [group];
+        const matchingPublicationGroups = localGroups.filter((candidate) => (
+            candidate.querySelector(
+                '[class*="editor--comments-page__postContainer-"] a[href]'
+            )?.getAttribute('href') || ''
+        ) === postHref);
+        groupOccurrence = matchingPublicationGroups.indexOf(group);
+    }
 
     let comments = Array.from(scope.querySelectorAll(commentSelector));
     const ownerForControl = (control, candidates) => {
@@ -129,9 +145,6 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     }
 
     const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
-    const postHref = group.querySelector(
-        '[class*="editor--comments-page__postContainer-"] a[href]'
-    )?.getAttribute('href') || '';
     const threadIndex = thread
         ? Array.from(group.querySelectorAll(threadSelector)).indexOf(thread)
         : -1;
@@ -144,8 +157,8 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         const controlClass = String(node.className || '').trim()
             .replace(/\\s+/g, ' ');
         return `fallback:${JSON.stringify([
-            postHref, threadIndex, controlClass, normalize(node.innerText),
-            controlIndex,
+            postHref, groupOccurrence, threadIndex, controlClass,
+            normalize(node.innerText), controlIndex,
         ])}`;
     };
     if (!comment) return fallbackKey();
@@ -177,7 +190,8 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     const controlOccurrence = controlsForComment.indexOf(node);
     if (controlOccurrence < 0) return fallbackKey();
     return JSON.stringify([
-        postHref, threadIndex, ownSignature, occurrence, controlOccurrence,
+        postHref, groupOccurrence, threadIndex, ownSignature, occurrence,
+        controlOccurrence,
     ]);
 }
 """
@@ -191,12 +205,34 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
                 (button, index) => [button, index])
         )
         : null;
+    const groupOccurrences = new WeakMap();
+    const publicationOccurrences = new Map();
+    groups.forEach((group) => {
+        const postLink = group.querySelector(selectors.postLink)
+            || group.querySelector(selectors.postLinkFallback);
+        const postHref = postLink?.getAttribute('href') || '';
+        const occurrence = publicationOccurrences.get(postHref) || 0;
+        publicationOccurrences.set(postHref, occurrence + 1);
+        groupOccurrences.set(group, occurrence);
+    });
+    window.__dzenReplyGroupOccurrences = groupOccurrences;
     const controlKeys = new WeakMap();
     window.__dzenReplyControlKeys = controlKeys;
     const groupIndexes = selectors.scopeIndex === null
         ? groups.map((_group, index) => index)
         : [selectors.scopeIndex];
-    if (selectors.scopeIndex !== null && selectors.expectedPostHref) {
+    if (selectors.targetGroup) {
+        const targetGroupIndex = groups.indexOf(selectors.targetGroup);
+        if (targetGroupIndex < 0 || !selectors.targetGroup.isConnected) {
+            return {
+                identity_matches: false,
+                failure_reason: 'publication_missing',
+                post_href: '',
+                controls: [],
+            };
+        }
+        groupIndexes.splice(0, groupIndexes.length, targetGroupIndex);
+    } else if (selectors.scopeIndex !== null && selectors.expectedPostHref) {
         const matchingGroups = groups
             .map((group, index) => ({group, index}))
             .filter(({group}) => {
@@ -852,6 +888,7 @@ class DzenStudioPage:
                     failure_phase = "reply_expansion"
                     self._expand_hidden_replies(
                         scope=scope,
+                        target_group=group if callable(page_locator) else None,
                         initial_controls=initial_controls,
                         clicked_keys=reply_expansion_keys,
                         attempt_counts=reply_expansion_attempts,
@@ -997,20 +1034,6 @@ class DzenStudioPage:
         return groups, (len(groups), comment_count, button_count)
 
     def _groups_with_reply_controls(self, groups) -> list[int]:
-        evaluate = getattr(self._page, "evaluate", None)
-        if callable(getattr(self._page, "locator", None)) and callable(evaluate):
-            indices = evaluate(
-                _STUDIO_REPLY_GROUP_INDICES_SCRIPT,
-                {
-                    "group": selectors.POST_GROUP,
-                    "more": selectors.COMMENT_OPEN_MORE,
-                },
-            )
-            if isinstance(indices, list) and all(
-                isinstance(index, int) and 0 <= index < len(groups)
-                for index in indices
-            ):
-                return indices
         return [
             index
             for index, group in enumerate(groups)
@@ -1043,6 +1066,7 @@ class DzenStudioPage:
         self,
         *,
         scope: Any | None = None,
+        target_group: Any | None = None,
         initial_controls: list[Any] | None = None,
         clicked_keys: set[Any] | None = None,
         attempt_counts: dict[Any, int] | None = None,
@@ -1089,6 +1113,7 @@ class DzenStudioPage:
                             "postLinkFallback": selectors.POST_LINK_FALLBACK,
                             "scopeIndex": scope_index,
                             "expectedPostHref": expected_post_href,
+                            "targetGroup": target_group,
                         },
                     )
                     if not isinstance(snapshot, dict) or not isinstance(
@@ -1466,7 +1491,114 @@ class DzenStudioPage:
             try:
                 self._reply_expansion_phase = "control_click"
                 page_locator = getattr(self._page, "locator", None)
-                if previous_control_info and callable(page_locator):
+                if previous_control_info and target_group is not None:
+                    self._reply_expansion_phase = "control_target_resolution"
+                    post_href = previous_control_info.get("post_href")
+                    expected_key = previous_control_info.get("key")
+                    if not isinstance(post_href, str) or not post_href:
+                        raise _ReplyControlTargetChangedError(
+                            "owning_post_missing"
+                        )
+                    if not isinstance(expected_key, str) or not expected_key:
+                        raise _ReplyControlTargetChangedError(
+                            "target_identity_missing"
+                        )
+                    try:
+                        group_identity = target_group.evaluate(
+                            """
+                            (group, selectors) => {
+                                const link = group.querySelector(selectors.postLink)
+                                    || group.querySelector(selectors.postLinkFallback);
+                                return {
+                                    connected: group.isConnected,
+                                    postHref: link?.getAttribute('href') || '',
+                                };
+                            }
+                            """,
+                            {
+                                "postLink": selectors.POST_LINK,
+                                "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                            },
+                        )
+                    except Exception as exc:
+                        raise _ReplyControlTargetChangedError(
+                            "owning_group_missing"
+                        ) from exc
+                    if not isinstance(group_identity, dict) or not group_identity.get(
+                        "connected"
+                    ):
+                        raise _ReplyControlTargetChangedError(
+                            "owning_group_missing"
+                        )
+                    if group_identity.get("postHref") != post_href:
+                        raise _ReplyControlTargetChangedError(
+                            "owning_post_mismatch"
+                        )
+                    group_buttons = target_group.query_selector_all(
+                        selectors.COMMENT_OPEN_MORE
+                    )
+                    matching_buttons = []
+                    for index, candidate in enumerate(group_buttons):
+                        candidate_key = candidate.evaluate(
+                            _REPLY_BUTTON_KEY_SCRIPT
+                        )
+                        if candidate_key == expected_key:
+                            matching_buttons.append((index, candidate))
+                    if len(matching_buttons) != 1:
+                        raise _ReplyControlTargetChangedError(
+                            "target_identity_ambiguous"
+                            if matching_buttons
+                            else "target_identity_missing"
+                        )
+                    resolved_button_index, target_handle = matching_buttons[0]
+                    try:
+                        self._reply_expansion_phase = "control_target_evaluation"
+                        click_target = target_handle.evaluate(
+                            _REPLY_CONTROL_CLICK_SCRIPT,
+                            {
+                                "group": selectors.POST_GROUP,
+                                "more": selectors.COMMENT_OPEN_MORE,
+                                "postLink": selectors.POST_LINK,
+                                "postLinkFallback": selectors.POST_LINK_FALLBACK,
+                                "buttonIndex": resolved_button_index,
+                                "expectedPostHref": post_href,
+                                "expectedKey": expected_key,
+                                "expectedClass": previous_control_info.get(
+                                    "class_name", ""
+                                ),
+                                "expectedText": previous_control_info.get(
+                                    "text", ""
+                                ),
+                            },
+                        )
+                        if (
+                            not isinstance(click_target, dict)
+                            or click_target.get("ok") is not True
+                        ):
+                            validation_reason = (
+                                click_target.get("reason")
+                                if isinstance(click_target, dict)
+                                else None
+                            )
+                            if validation_reason not in _REPLY_CONTROL_VALIDATION_REASONS:
+                                validation_reason = "invalid_validation_result"
+                            raise _ReplyControlTargetChangedError(
+                                validation_reason
+                            )
+                        self._reply_expansion_phase = "control_target_click"
+                        click_call_in_progress = True
+                        target_handle.click(
+                            force=True,
+                            timeout=click_timeout_ms,
+                        )
+                        click_call_in_progress = False
+                        click_call_returned = True
+                        click_may_have_been_dispatched = True
+                    finally:
+                        dispose_handle = getattr(target_handle, "dispose", None)
+                        if callable(dispose_handle):
+                            dispose_handle()
+                elif previous_control_info and callable(page_locator):
                     self._reply_expansion_phase = "control_target_resolution"
                     post_href = previous_control_info.get("post_href")
                     expected_key = previous_control_info.get("key")
