@@ -440,6 +440,7 @@ def test_run_supervised_continues_when_health_snapshot_write_fails(monkeypatch):
 
     loop = HealthLoop()
     monkeypatch.setattr(main, "write_bot_health", fail_write)
+    monkeypatch.setattr(main, "write_bot_progress", fail_write)
 
     main.run_supervised(
         loop,
