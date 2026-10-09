@@ -658,6 +658,19 @@ def test_fetch_comments_two_level_parse():
         assert c.text == f"text{i}"
 
 
+def test_fetch_comments_refreshes_health_progress_for_each_feed_pass():
+    progress = []
+    groups = [FakeGroup("/a/post1", [make_node(0)])]
+
+    comments = DzenStudioPage(
+        FakePage(groups), progress_callback=lambda: progress.append("tick")
+    ).fetch_comments()
+
+    assert len(comments) == 1
+    # One initial touch and one after each of the three stable feed passes.
+    assert progress == ["tick"] * 4
+
+
 @pytest.mark.parametrize(
     ("reply_count", "button_label"),
     [

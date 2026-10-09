@@ -367,6 +367,7 @@ def test_run_supervised_writes_secret_free_health_after_every_cycle(
     health = json.loads(health_path.read_text(encoding="utf-8"))
     assert health["cycle_succeeded"] is cycle_succeeded
     assert health["authenticated"] is authenticated
+    assert health["cycle_in_progress"] is False
     assert "private exception content" not in health_path.read_text(encoding="utf-8")
 
 
@@ -397,6 +398,31 @@ def test_run_supervised_records_auth_probe_failure_as_unauthenticated(tmp_path):
     health = json.loads(health_path.read_text(encoding="utf-8"))
     assert health["authenticated"] is False
     assert "auth probe details" not in health_path.read_text(encoding="utf-8")
+
+
+def test_run_supervised_marks_long_cycle_in_progress_until_it_finishes(tmp_path):
+    health_path = tmp_path / "bot-health.json"
+
+    class HealthLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH=str(health_path))
+
+        def run_cycle(self):
+            progress = json.loads(health_path.read_text(encoding="utf-8"))
+            assert progress["cycle_in_progress"] is True
+
+    main.run_supervised(
+        HealthLoop(),
+        FakeSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=100,
+        sleep_fn=lambda _delay: None,
+        time_fn=lambda: 0.0,
+        max_cycles=1,
+    )
+
+    final_health = json.loads(health_path.read_text(encoding="utf-8"))
+    assert final_health["cycle_in_progress"] is False
 
 
 def test_run_supervised_continues_when_health_snapshot_write_fails(monkeypatch):

@@ -726,11 +726,13 @@ class DzenStudioPage:
         page: Any | Callable[[], Any],
         *,
         bot_account_name_provider: Callable[[], str] | None = None,
+        progress_callback: Callable[[], None] | None = None,
     ) -> None:
         self._page_source = page
         self._bot_account_name_provider = (
             bot_account_name_provider or (lambda: DEFAULT_BOT_ACCOUNT_NAME)
         )
+        self._progress_callback = progress_callback
         self._article_text_by_url: dict[str, str | None] = {}
         self._reply_expansion_phase = "not_started"
 
@@ -891,8 +893,10 @@ class DzenStudioPage:
         reply_expansion_deadline: float | None = None
         processed_reply_expansion_groups: set[Any] = set()
         comment_nodes_by_group: dict[Any, list[Any]] = {}
+        extracted_since_progress = 0
         failure_phase = "initial_feed_snapshot"
         try:
+            self._report_progress()
             groups, previous_counts = self._studio_feed_snapshot(
                 processed_group_ids=processed_reply_expansion_groups,
                 comment_nodes_by_group=comment_nodes_by_group,
@@ -950,6 +954,7 @@ class DzenStudioPage:
                 else:
                     stable_pass_count = 0
                 previous_counts = current_counts
+                self._report_progress()
                 if stable_pass_count == _STUDIO_FEED_STABLE_PASSES:
                     scan_complete = True
                     break
@@ -1016,6 +1021,10 @@ class DzenStudioPage:
                     )
                     if text:
                         previous_messages.append(f"{author or 'Автор'}: {text}")
+                    extracted_since_progress += 1
+                    if extracted_since_progress >= 50:
+                        self._report_progress()
+                        extracted_since_progress = 0
         except Exception as exc:
             if failure_phase == "reply_expansion":
                 failure_phase = (
@@ -1082,6 +1091,20 @@ class DzenStudioPage:
                 f"after {scan_pass_count} passes"
             )
         return comments
+
+    def _report_progress(self) -> None:
+        if self._progress_callback is None:
+            return
+        try:
+            self._progress_callback()
+        except Exception:
+            logger.warning(
+                "Failed to refresh the bot progress heartbeat",
+                extra={
+                    "event": "bot_progress_heartbeat_failed",
+                    "failure_stage": "studio_feed_read",
+                },
+            )
 
     def _studio_group_identity(self, group: Any) -> Any:
         evaluate = getattr(group, "evaluate", None)

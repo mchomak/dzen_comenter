@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from dzen_commenter.bot_health import write_bot_health
+from dzen_commenter.bot_health import write_bot_health, write_bot_progress
 from dzen_commenter.ai.factory import create_provider
 from dzen_commenter.auth.dzen_login_control import DzenLoginControlServer
 from dzen_commenter.auth.telegram_auth_assistant import TelegramAuthAssistant
@@ -59,6 +59,7 @@ def build_app(
     page = DzenStudioPage(
         lambda: session.page,
         bot_account_name_provider=lambda: runtime_config.get().settings.bot_account_name,
+        progress_callback=lambda: write_bot_progress(settings.BOT_HEALTH_PATH),
     )
 
     if settings.SMTP_HOST:
@@ -133,6 +134,12 @@ def run_supervised(
     cycles = 0
     while max_cycles is None or cycles < max_cycles:
         cycle_succeeded = True
+        health_path = getattr(getattr(loop, "settings", None), "BOT_HEALTH_PATH", None)
+        if health_path:
+            try:
+                write_bot_progress(health_path)
+            except Exception:
+                logger.warning("Failed to write bot progress heartbeat", exc_info=True)
         try:
             loop.run_cycle()
         except Exception as exc:
@@ -180,7 +187,6 @@ def run_supervised(
                 )
                 last_error_signature = error_signature
                 last_error_notification_at = now
-        health_path = getattr(getattr(loop, "settings", None), "BOT_HEALTH_PATH", None)
         if health_path:
             authenticated = False
             try:
@@ -194,6 +200,7 @@ def run_supervised(
                     health_path,
                     cycle_succeeded=cycle_succeeded,
                     authenticated=authenticated,
+                    cycle_in_progress=False,
                 )
             except Exception:
                 logger.warning("Failed to write bot health snapshot", exc_info=True)

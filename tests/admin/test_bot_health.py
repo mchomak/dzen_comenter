@@ -23,7 +23,14 @@ def health_client(tmp_path):
     return TestClient(create_app(settings)), health_path
 
 
-def _write_snapshot(path, *, seconds_ago=0, cycle_succeeded=True, authenticated=True):
+def _write_snapshot(
+    path,
+    *,
+    seconds_ago=0,
+    cycle_succeeded=True,
+    authenticated=True,
+    cycle_in_progress=False,
+):
     heartbeat = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
     path.write_text(
         json.dumps(
@@ -31,6 +38,7 @@ def _write_snapshot(path, *, seconds_ago=0, cycle_succeeded=True, authenticated=
                 "heartbeat_at": heartbeat.isoformat(),
                 "cycle_succeeded": cycle_succeeded,
                 "authenticated": authenticated,
+                "cycle_in_progress": cycle_in_progress,
                 "error": "must never be returned to clients",
             }
         ),
@@ -55,6 +63,26 @@ def test_bot_health_is_starting_until_a_snapshot_exists(health_client):
         ({"cycle_succeeded": False, "authenticated": True}, "degraded", True),
         ({"cycle_succeeded": True, "authenticated": True, "seconds_ago": 300}, "operational", True),
         ({"cycle_succeeded": True, "authenticated": True, "seconds_ago": 601}, "stale", True),
+        (
+            {
+                "cycle_succeeded": False,
+                "authenticated": True,
+                "cycle_in_progress": True,
+                "seconds_ago": 300,
+            },
+            "in_progress",
+            True,
+        ),
+        (
+            {
+                "cycle_succeeded": True,
+                "authenticated": True,
+                "cycle_in_progress": True,
+                "seconds_ago": 601,
+            },
+            "stale",
+            True,
+        ),
     ),
 )
 def test_bot_health_derives_public_status_without_internal_details(
@@ -127,5 +155,49 @@ def test_health_writer_replaces_snapshot_without_extra_fields_or_temp_files(tmp_
         "heartbeat_at": "2026-09-27T12:00:00+00:00",
         "cycle_succeeded": False,
         "authenticated": False,
+        "cycle_in_progress": False,
     }
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_progress_writer_refreshes_heartbeat_and_preserves_last_cycle_result(tmp_path):
+    from dzen_commenter.bot_health import write_bot_progress
+
+    path = tmp_path / "bot-health.json"
+    path.write_text(
+        json.dumps(
+            {
+                "heartbeat_at": "2026-09-27T11:00:00+00:00",
+                "cycle_succeeded": False,
+                "authenticated": True,
+                "cycle_in_progress": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    heartbeat = datetime(2026, 9, 27, 12, 0, 0, tzinfo=timezone.utc)
+
+    write_bot_progress(str(path), now=heartbeat)
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "heartbeat_at": "2026-09-27T12:00:00+00:00",
+        "cycle_succeeded": False,
+        "authenticated": True,
+        "cycle_in_progress": True,
+    }
+
+
+def test_healthcheck_accepts_a_fresh_in_progress_cycle(tmp_path, monkeypatch):
+    from dzen_commenter.bot_health import main
+
+    path = tmp_path / "bot-health.json"
+    _write_snapshot(
+        path,
+        cycle_succeeded=False,
+        authenticated=True,
+        cycle_in_progress=True,
+    )
+    monkeypatch.setenv("BOT_HEALTH_PATH", str(path))
+    monkeypatch.setenv("POLL_INTERVAL", "60")
+
+    assert main() == 0
