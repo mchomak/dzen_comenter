@@ -3351,6 +3351,8 @@ class DzenStudioPage:
                     "event": "publication_source_comment_search_completed",
                     "reply_id": reply_id,
                     "result": "not_found",
+                    "scan_limit_reached": True,
+                    "absence_confirmed": False,
                     "failure_stage": "studio_source_comment_search",
                     "failure_reason": "source_comment_not_found",
                     "failure_type": "SourceCommentUnavailableError",

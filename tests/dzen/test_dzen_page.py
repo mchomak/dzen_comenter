@@ -4280,19 +4280,20 @@ def test_publish_reply_fills_draft_and_waits_without_submitting():
 
 
 def test_publish_reply_unmatched_raises_lookup_error(caplog):
-    groups = [FakeGroup("/a/post1", [make_node(0)])]
+    groups = [FakeGroup("/a/private-post", [make_node(0)])]
     fake = FakePage(groups)
     page = DzenStudioPage(fake)
     comment = Comment(
         id=None,
-        dzen_comment_id="deadbeef-not-on-page",
+        dzen_comment_id="private-synthetic-id",
         publication_id=0,
-        author="a",
-        text="t",
+        author="Private Author Name",
+        text="Sensitive comment body",
         parent_comment_id=None,
         posted_at=None,
         fetched_at=datetime.now(timezone.utc),
         status=CommentStatus.NEW,
+        post_url="https://dzen.ru/a/private-post",
     )
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
         with pytest.raises(LookupError) as error:
@@ -4306,6 +4307,8 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
         if getattr(record, "event", None) == "publication_source_comment_search_completed"
     )
     assert search.result == "not_found"
+    assert search.scan_limit_reached is True
+    assert search.absence_confirmed is False
     assert search.failure_stage == "studio_source_comment_search"
     assert search.failure_reason == "source_comment_not_found"
     assert search.reply_id == 73
@@ -4322,7 +4325,13 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
         for record in caplog.records
         if record.name == "dzen_commenter.dzen.page"
     )
-    assert "deadbeef-not-on-page" not in serialized
+    for private_value in (
+        "private-synthetic-id",
+        "Private Author Name",
+        "Sensitive comment body",
+        "https://dzen.ru/a/private-post",
+    ):
+        assert private_value not in serialized
 
 
 def test_initial_reply_expansion_exception_logs_safely_and_propagates(caplog):
