@@ -751,6 +751,44 @@ def test_studio_feed_scroll_avoids_waiting_for_an_unstable_comment_element():
     assert fake.mouse.wheel_calls == [(0, dzen_page._REPLY_SEARCH_SCROLL_DELTA_Y)]
 
 
+def test_fetch_comments_scans_each_incrementally_loaded_group_for_replies_once():
+    class CountingGroup(FakeGroup):
+        def __init__(self, post_href: str):
+            super().__init__(post_href, [make_node(0)])
+            self.reply_control_scans = 0
+            self.comment_candidate_scans = 0
+
+        def query_selector_all(self, selector: str):
+            if selector == selectors.COMMENT_OPEN_MORE:
+                self.reply_control_scans += 1
+            if selector == selectors.COMMENT_NODE:
+                self.comment_candidate_scans += 1
+            return super().query_selector_all(selector)
+
+    class ProgressivePage(FakePage):
+        def __init__(self, groups, batches):
+            super().__init__(groups)
+            self.batches = list(batches)
+
+        def load_next_scroll_screen(self) -> None:
+            if self.batches:
+                self._groups.extend(self.batches.pop(0))
+
+        def query_selector_all(self, selector: str):
+            if selector == selectors.COMMENT_OPEN_MORE:
+                return []
+            return super().query_selector_all(selector)
+
+    groups = [CountingGroup(f"/a/post{index}") for index in range(8)]
+    page = ProgressivePage(groups[:1], [[group] for group in groups[1:]] + [[]])
+
+    comments = DzenStudioPage(page).fetch_comments()
+
+    assert len(comments) == len(groups)
+    assert [group.reply_control_scans for group in groups] == [1] * len(groups)
+    assert [group.comment_candidate_scans for group in groups] == [1] * len(groups)
+
+
 def test_studio_feed_scroll_script_reaches_last_comment_in_scroll_container():
     from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
@@ -4272,7 +4310,7 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
     assert search.failure_reason == "source_comment_not_found"
     assert search.reply_id == 73
     assert search.scroll_attempt_count == dzen_page._REPLY_SEARCH_MAX_SCROLLS
-    assert search.candidates_checked == dzen_page._REPLY_SEARCH_MAX_SCROLLS + 1
+    assert search.candidates_checked == 1
     failure = next(
         record for record in caplog.records
         if getattr(record, "event", None) == "publication_action_failed"
@@ -4465,9 +4503,9 @@ def test_find_target_child_loaded_initially_expands_before_first_lookup(monkeypa
         operation_order.append("expand")
         return original_expand(**kwargs)
 
-    def record_lookup(comment_id: str):
+    def record_lookup(comment_id: str, **kwargs):
         operation_order.append("lookup")
-        return original_lookup(comment_id)
+        return original_lookup(comment_id, **kwargs)
 
     monkeypatch.setattr(page, "_expand_hidden_replies", record_expand)
     monkeypatch.setattr(page, "_find_comment_node", record_lookup)
@@ -4481,6 +4519,32 @@ def test_find_target_child_loaded_initially_expands_before_first_lookup(monkeypa
     assert parent_node.reply_more_button.clicks == 1
     assert fake.mouse.wheel_calls == []
     assert fake.waited_ms == [dzen_page._REPLY_EXPANSION_POST_CLICK_WAIT_MS]
+
+
+def test_publication_source_search_reads_comments_only_from_target_post():
+    class CountingGroup(FakeGroup):
+        def __init__(self, post_href: str, node: FakeCommentNode):
+            super().__init__(post_href, [node])
+            self.comment_reads = 0
+
+        def query_selector_all(self, selector: str):
+            if selector == selectors.COMMENT_NODE:
+                self.comment_reads += 1
+            return super().query_selector_all(selector)
+
+    unrelated = CountingGroup("/a/unrelated", make_node(0))
+    target_node = make_node(1)
+    target = CountingGroup("/a/target", target_node)
+    page = DzenStudioPage(FakePage([unrelated, target]))
+
+    found = page._find_comment_node_with_scroll(
+        synthetic_id("/a/target", "/user/u1", "text1"),
+        post_url="https://dzen.ru/a/target",
+    )
+
+    assert found is target_node
+    assert unrelated.comment_reads == 0
+    assert target.comment_reads == 1
 
 
 def test_initial_reply_expansion_failure_logs_its_phase_and_reason(caplog, monkeypatch):

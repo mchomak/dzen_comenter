@@ -4,7 +4,7 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from time import monotonic
+from time import monotonic, perf_counter
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -58,13 +58,8 @@ _STUDIO_FEED_MAX_SCAN_PASSES = 40
 _STUDIO_FEED_STABLE_PASSES = 3
 _STUDIO_FEED_COUNTS_SCRIPT = """
 (selectors) => {
-    const groups = Array.from(document.querySelectorAll(selectors.group));
     return {
-        group_count: groups.length,
-        comment_count: groups.reduce(
-            (total, group) => total + group.querySelectorAll(selectors.comment).length,
-            0,
-        ),
+        group_count: document.querySelectorAll(selectors.group).length,
         button_count: document.querySelectorAll(selectors.more).length,
     };
 }
@@ -72,16 +67,54 @@ _STUDIO_FEED_COUNTS_SCRIPT = """
 _STUDIO_FEED_SCROLL_SCRIPT = """
 (selectors) => {
     const groups = Array.from(document.querySelectorAll(selectors.group));
-    let lastItem = groups[groups.length - 1] || null;
-    for (let index = groups.length - 1; index >= 0; index -= 1) {
-        const comments = groups[index].querySelectorAll(selectors.comment);
-        if (comments.length) {
-            lastItem = comments[comments.length - 1];
-            break;
-        }
-    }
-    lastItem?.scrollIntoView({ block: "end", behavior: "instant" });
+    groups[groups.length - 1]?.scrollIntoView({ block: "end", behavior: "instant" });
 }
+"""
+_STUDIO_GROUP_IDENTITY_SCRIPT = """
+element => {
+    const registryKey = "__dzenStudioGroupIdentityRegistry";
+    let registry = window[registryKey];
+    if (!registry) {
+        registry = {groups: new WeakMap(), nextId: 0};
+        Object.defineProperty(window, registryKey, {value: registry});
+    }
+    let identity = registry.groups.get(element);
+    if (identity === undefined) {
+        identity = ++registry.nextId;
+        registry.groups.set(element, identity);
+    }
+    return identity;
+}
+"""
+_STUDIO_GROUP_IDENTITIES_SCRIPT = """
+(selectors) => {
+    const registryKey = "__dzenStudioGroupIdentityRegistry";
+    let registry = window[registryKey];
+    if (!registry) {
+        registry = {groups: new WeakMap(), nextId: 0};
+        Object.defineProperty(window, registryKey, {value: registry});
+    }
+    return Array.from(document.querySelectorAll(selectors.group)).map((group) => {
+        let identity = registry.groups.get(group);
+        if (identity === undefined) {
+            identity = ++registry.nextId;
+            registry.groups.set(group, identity);
+        }
+        return identity;
+    });
+}
+"""
+_STUDIO_RUNTIME_METRICS_SCRIPT = f"""
+() => {{
+    return {{
+        dom_node_count: document.getElementsByTagName("*").length,
+        group_count: document.querySelectorAll({json.dumps(selectors.POST_GROUP)}).length,
+        button_count: document.querySelectorAll({json.dumps(selectors.COMMENT_OPEN_MORE)}).length,
+        js_heap_used_bytes: typeof performance.memory?.usedJSHeapSize === "number"
+            ? performance.memory.usedJSHeapSize
+            : null,
+    }};
+}}
 """
 _STUDIO_REPLY_GROUP_INDICES_SCRIPT = """
 (selectors) => Array.from(document.querySelectorAll(selectors.group))
@@ -847,6 +880,7 @@ class DzenStudioPage:
 
     def fetch_comments(self) -> list[Comment]:
         comments: list[Comment] = []
+        started_at = perf_counter()
         now = moscow_now()
         skipped_missing_link_count = 0
         scan_pass_count = 0
@@ -855,36 +889,43 @@ class DzenStudioPage:
         reply_expansion_keys: set[Any] = set()
         reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
+        processed_reply_expansion_groups: set[Any] = set()
+        comment_nodes_by_group: dict[Any, list[Any]] = {}
         failure_phase = "initial_feed_snapshot"
         try:
-            groups, previous_counts = self._studio_feed_snapshot()
+            groups, previous_counts = self._studio_feed_snapshot(
+                processed_group_ids=processed_reply_expansion_groups,
+                comment_nodes_by_group=comment_nodes_by_group,
+            )
             for scan_pass_count in range(1, _STUDIO_FEED_MAX_SCAN_PASSES + 1):
                 failure_phase = "scroll_to_last_loaded_item"
                 self._scroll_to_last_loaded_item(groups)
-                failure_phase = "reply_control_detection"
-                if (
-                    reply_expansion_deadline is None
-                    and self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
-                ):
-                    reply_expansion_deadline = (
-                        monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
-                    )
+                groups = self._page.query_selector_all(selectors.POST_GROUP)
                 failure_phase = "reply_control_group_detection"
-                for group_index in self._groups_with_reply_controls(groups):
+                group_identities = self._studio_group_identities(groups)
+                for group_index, (group, group_identity) in enumerate(
+                    zip(groups, group_identities)
+                ):
+                    if group_identity in processed_reply_expansion_groups:
+                        continue
+                    processed_reply_expansion_groups.add(group_identity)
+                    initial_controls = group.query_selector_all(
+                        selectors.COMMENT_OPEN_MORE
+                    )
+                    if not initial_controls:
+                        continue
+                    if reply_expansion_deadline is None:
+                        reply_expansion_deadline = (
+                            monotonic()
+                            + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                        )
                     failure_phase = "reply_group_identity"
-                    group = groups[group_index]
                     expected_post_href = _post_href(group)
                     page_locator = getattr(self._page, "locator", None)
                     if callable(page_locator):
                         scope = page_locator(selectors.POST_GROUP).nth(group_index)
-                        initial_controls = None
                     else:
                         scope = group
-                        initial_controls = group.query_selector_all(
-                            selectors.COMMENT_OPEN_MORE
-                        )
-                        if not initial_controls:
-                            continue
                     failure_phase = "reply_expansion"
                     self._expand_hidden_replies(
                         scope=scope,
@@ -897,8 +938,14 @@ class DzenStudioPage:
                         scope_index=group_index,
                     )
                 failure_phase = "feed_snapshot"
-                groups, current_counts = self._studio_feed_snapshot()
-                if current_counts == previous_counts:
+                groups, current_counts = self._studio_feed_snapshot(
+                    processed_group_ids=processed_reply_expansion_groups,
+                    comment_nodes_by_group=comment_nodes_by_group,
+                )
+                if (
+                    current_counts[0] == previous_counts[0]
+                    and current_counts[2] == previous_counts[2]
+                ):
                     stable_pass_count += 1
                 else:
                     stable_pass_count = 0
@@ -908,7 +955,20 @@ class DzenStudioPage:
                     break
 
             failure_phase = "comment_extraction"
-            for card_index, group in enumerate(groups, start=1):
+            group_identities = self._studio_group_identities(groups)
+            for group, group_identity in zip(groups, group_identities):
+                if group_identity not in comment_nodes_by_group:
+                    comment_nodes_by_group[group_identity] = group.query_selector_all(
+                        selectors.COMMENT_NODE
+                    )
+            previous_counts = (
+                len(groups),
+                sum(len(nodes) for nodes in comment_nodes_by_group.values()),
+                previous_counts[2],
+            )
+            for card_index, (group, group_identity) in enumerate(
+                zip(groups, group_identities), start=1
+            ):
                 post_href = _post_href(group)
                 if not post_href:
                     # Keep the existing skip behavior: an unresolved link would
@@ -928,7 +988,7 @@ class DzenStudioPage:
                 publication_title = title_el.inner_text().strip() if title_el else ""
                 previous_messages: list[str] = []
 
-                for node in group.query_selector_all(selectors.COMMENT_NODE):
+                for node in comment_nodes_by_group[group_identity]:
                     author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
                     author_href = author_link.get_attribute("href") or "" if author_link else ""
                     author_el = node.query_selector(selectors.COMMENT_AUTHOR_TEXT)
@@ -968,8 +1028,13 @@ class DzenStudioPage:
                     "failure_stage": "studio_feed_read",
                     "failure_reason": "page_read_failed",
                     "failure_phase": failure_phase,
+                    **self._studio_metric_fields(
+                        started_at,
+                        groups=groups if "groups" in locals() else None,
+                        counts=previous_counts if "previous_counts" in locals() else None,
+                        groups_scanned=len(processed_reply_expansion_groups),
+                    ),
                     **_safe_exception_fields(exc),
-                    "publication_card_count": len(groups) if "groups" in locals() else 0,
                     "comments_extracted": len(comments),
                     "skipped_missing_link_count": skipped_missing_link_count,
                     "scan_pass_count": scan_pass_count,
@@ -981,7 +1046,12 @@ class DzenStudioPage:
                 "Read Dzen Studio feed and comments",
                 extra={
                     "event": "studio_comments_read_completed",
-                    "publication_card_count": len(groups),
+                    **self._studio_metric_fields(
+                        started_at,
+                        groups=groups,
+                        counts=previous_counts,
+                        groups_scanned=len(processed_reply_expansion_groups),
+                    ),
                     "comments_extracted": len(comments),
                     "skipped_missing_link_count": skipped_missing_link_count,
                     "scan_pass_count": scan_pass_count,
@@ -995,7 +1065,12 @@ class DzenStudioPage:
                     "event": "studio_comments_read_incomplete",
                     "failure_stage": "studio_feed_read",
                     "failure_reason": "stability_pass_limit_reached",
-                    "publication_card_count": len(groups),
+                    **self._studio_metric_fields(
+                        started_at,
+                        groups=groups,
+                        counts=previous_counts,
+                        groups_scanned=len(processed_reply_expansion_groups),
+                    ),
                     "comments_extracted": len(comments),
                     "skipped_missing_link_count": skipped_missing_link_count,
                     "scan_pass_count": scan_pass_count,
@@ -1008,8 +1083,160 @@ class DzenStudioPage:
             )
         return comments
 
-    def _studio_feed_snapshot(self):
+    def _studio_group_identity(self, group: Any) -> Any:
+        evaluate = getattr(group, "evaluate", None)
+        if callable(evaluate):
+            try:
+                identity = evaluate(_STUDIO_GROUP_IDENTITY_SCRIPT)
+                if isinstance(identity, int) and not isinstance(identity, bool):
+                    return ("dom", identity)
+            except Exception:
+                pass
+        return ("python", id(group))
+
+    def _studio_group_identities(self, groups: list[Any]) -> list[Any]:
+        evaluate = getattr(self._page, "evaluate", None)
+        if callable(evaluate) and type(self._page).__module__.startswith("playwright."):
+            try:
+                identities = evaluate(
+                    _STUDIO_GROUP_IDENTITIES_SCRIPT,
+                    {"group": selectors.POST_GROUP},
+                )
+                if (
+                    isinstance(identities, list)
+                    and len(identities) == len(groups)
+                    and all(
+                        isinstance(identity, int)
+                        and not isinstance(identity, bool)
+                        for identity in identities
+                    )
+                ):
+                    return [("dom", identity) for identity in identities]
+            except Exception:
+                pass
+        return [self._studio_group_identity(group) for group in groups]
+
+    def _expand_new_reply_groups(
+        self,
+        groups: list[Any],
+        *,
+        processed_groups: set[Any],
+        clicked_keys: set[Any],
+        attempt_counts: dict[Any, int],
+        deadline: float | None,
+        post_url_filter: str | None = None,
+        expand_empty_groups: bool = False,
+    ) -> float | None:
+        expected_post_url = _post_url(post_url_filter or "")
+        has_post_url_filter = bool(post_url_filter)
+        page_locator = getattr(self._page, "locator", None)
+        group_identities = self._studio_group_identities(groups)
+        for group_index, (group, group_identity) in enumerate(
+            zip(groups, group_identities)
+        ):
+            if group_identity in processed_groups:
+                continue
+            processed_groups.add(group_identity)
+            expected_post_href = _post_href(group)
+            if has_post_url_filter and (
+                expected_post_url is None
+                or _post_url(expected_post_href) != expected_post_url
+            ):
+                continue
+            initial_controls = group.query_selector_all(
+                selectors.COMMENT_OPEN_MORE
+            )
+            if not initial_controls and not expand_empty_groups:
+                continue
+            if initial_controls and deadline is None:
+                deadline = (
+                    monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                )
+            if callable(page_locator):
+                scope = page_locator(selectors.POST_GROUP).nth(group_index)
+                target_group = group
+                initial_controls = None
+            else:
+                scope = group
+                target_group = None
+            self._expand_hidden_replies(
+                scope=scope,
+                target_group=target_group,
+                initial_controls=initial_controls,
+                clicked_keys=clicked_keys,
+                attempt_counts=attempt_counts,
+                deadline=deadline,
+                expected_post_href=expected_post_href or None,
+                scope_index=group_index,
+            )
+        return deadline
+
+    def _studio_metric_fields(
+        self,
+        started_at: float,
+        *,
+        groups: list[Any] | None,
+        counts: tuple[int, int, int] | None,
+        groups_scanned: int,
+    ) -> dict[str, int | float]:
+        fields: dict[str, int | float] = {
+            "duration_ms": round((perf_counter() - started_at) * 1_000, 2),
+            "publication_card_count": counts[0] if counts else len(groups or []),
+            "comment_count": counts[1] if counts else 0,
+            "reply_button_count": counts[2] if counts else 0,
+            "groups_scanned": groups_scanned,
+        }
+        evaluate = getattr(self._page, "evaluate", None)
+        page_type_module = type(self._page).__module__
+        if callable(evaluate) and page_type_module.startswith("playwright."):
+            try:
+                metrics = evaluate(_STUDIO_RUNTIME_METRICS_SCRIPT)
+            except Exception:
+                metrics = None
+            if isinstance(metrics, dict):
+                for key in (
+                    "dom_node_count",
+                    "group_count",
+                    "comment_count",
+                    "button_count",
+                    "js_heap_used_bytes",
+                ):
+                    value = metrics.get(key)
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        mapped_key = {
+                            "group_count": "publication_card_count",
+                            "button_count": "reply_button_count",
+                        }.get(key, key)
+                        fields[mapped_key] = value
+        return fields
+
+    def _studio_feed_snapshot(
+        self,
+        *,
+        processed_group_ids: set[Any] | None = None,
+        comment_nodes_by_group: dict[Any, list[Any]] | None = None,
+    ):
         groups = self._page.query_selector_all(selectors.POST_GROUP)
+        if comment_nodes_by_group is None:
+            comment_count = sum(
+                len(group.query_selector_all(selectors.COMMENT_NODE))
+                for group in groups
+            )
+        else:
+            processed_group_ids = processed_group_ids or set()
+            for group, identity in zip(
+                groups, self._studio_group_identities(groups)
+            ):
+                if (
+                    identity in processed_group_ids
+                    and identity not in comment_nodes_by_group
+                ):
+                    comment_nodes_by_group[identity] = group.query_selector_all(
+                        selectors.COMMENT_NODE
+                    )
+            comment_count = sum(
+                len(nodes) for nodes in comment_nodes_by_group.values()
+            )
         page_locator = getattr(self._page, "locator", None)
         evaluate = getattr(self._page, "evaluate", None)
         if callable(page_locator) and callable(evaluate):
@@ -1017,19 +1244,15 @@ class DzenStudioPage:
                 _STUDIO_FEED_COUNTS_SCRIPT,
                 {
                     "group": selectors.POST_GROUP,
-                    "comment": selectors.COMMENT_NODE,
                     "more": selectors.COMMENT_OPEN_MORE,
                 },
             )
             if isinstance(counts, dict) and counts.get("group_count") == len(groups):
                 return groups, (
                     counts["group_count"],
-                    counts["comment_count"],
+                    comment_count,
                     counts["button_count"],
                 )
-        comment_count = sum(
-            len(group.query_selector_all(selectors.COMMENT_NODE)) for group in groups
-        )
         button_count = len(self._page.query_selector_all(selectors.COMMENT_OPEN_MORE))
         return groups, (len(groups), comment_count, button_count)
 
@@ -1052,11 +1275,6 @@ class DzenStudioPage:
             return
 
         last_item = groups[-1] if groups else None
-        for group in reversed(groups):
-            comments = group.query_selector_all(selectors.COMMENT_NODE)
-            if comments:
-                last_item = comments[-1]
-                break
         if last_item is not None:
             last_item.scroll_into_view_if_needed()
         self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
@@ -2121,8 +2339,11 @@ class DzenStudioPage:
                 **correlation,
             },
         )
+        lookup_options = {"reply_id": reply_id}
+        if comment.post_url:
+            lookup_options["post_url"] = comment.post_url
         node = self._find_comment_node_with_scroll(
-            comment.dzen_comment_id, reply_id=reply_id
+            comment.dzen_comment_id, **lookup_options
         )
         if node is None:
             raise SourceCommentUnavailableError("source comment not found on Studio page")
@@ -3029,27 +3250,40 @@ class DzenStudioPage:
             return "invalid_response"
 
     def _find_comment_node_with_scroll(
-        self, comment_id: str, *, reply_id: int | None = None
+        self,
+        comment_id: str,
+        *,
+        reply_id: int | None = None,
+        post_url: str | None = None,
     ):
+        started_at = perf_counter()
         candidates_checked = 0
         reply_expansion_keys: set[Any] = set()
         reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
+        processed_reply_expansion_groups: set[Any] = set()
+        searched_groups: set[Any] = set()
         scroll_attempt_count = 0
+        groups: list[Any] = []
         phase = "initial_reply_expansion"
         try:
-            if self._page.query_selector_all(selectors.COMMENT_OPEN_MORE):
-                reply_expansion_deadline = (
-                    monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
-                )
-            self._expand_hidden_replies(
+            groups = self._page.query_selector_all(selectors.POST_GROUP)
+            reply_expansion_deadline = self._expand_new_reply_groups(
+                groups,
+                processed_groups=processed_reply_expansion_groups,
                 clicked_keys=reply_expansion_keys,
                 attempt_counts=reply_expansion_attempts,
                 deadline=reply_expansion_deadline,
+                post_url_filter=post_url,
+                expand_empty_groups=True,
             )
 
             phase = "initial_lookup"
-            node, pass_candidate_count = self._find_comment_node(comment_id)
+            node, pass_candidate_count = self._find_comment_node(
+                comment_id,
+                post_url=post_url,
+                processed_group_ids=searched_groups,
+            )
             candidates_checked += pass_candidate_count
             if node is not None:
                 logger.info(
@@ -3060,6 +3294,12 @@ class DzenStudioPage:
                         "result": "found",
                         "scroll_attempt_count": scroll_attempt_count,
                         "candidates_checked": candidates_checked,
+                        **self._studio_metric_fields(
+                            started_at,
+                            groups=groups,
+                            counts=(len(groups), candidates_checked, 0),
+                            groups_scanned=len(searched_groups),
+                        ),
                     },
                 )
                 return node
@@ -3069,20 +3309,22 @@ class DzenStudioPage:
                 self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
                 self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
                 phase = "reply_expansion"
-                if (
-                    reply_expansion_deadline is None
-                    and self._page.query_selector_all(selectors.COMMENT_OPEN_MORE)
-                ):
-                    reply_expansion_deadline = (
-                        monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
-                    )
-                self._expand_hidden_replies(
+                groups = self._page.query_selector_all(selectors.POST_GROUP)
+                reply_expansion_deadline = self._expand_new_reply_groups(
+                    groups,
+                    processed_groups=processed_reply_expansion_groups,
                     clicked_keys=reply_expansion_keys,
                     attempt_counts=reply_expansion_attempts,
                     deadline=reply_expansion_deadline,
+                    post_url_filter=post_url,
+                    expand_empty_groups=True,
                 )
                 phase = "lookup"
-                node, pass_candidate_count = self._find_comment_node(comment_id)
+                node, pass_candidate_count = self._find_comment_node(
+                    comment_id,
+                    post_url=post_url,
+                    processed_group_ids=searched_groups,
+                )
                 candidates_checked += pass_candidate_count
                 if node is not None:
                     logger.info(
@@ -3093,6 +3335,12 @@ class DzenStudioPage:
                             "result": "found",
                             "scroll_attempt_count": scroll_attempt_count,
                             "candidates_checked": candidates_checked,
+                            **self._studio_metric_fields(
+                                started_at,
+                                groups=groups,
+                                counts=(len(groups), candidates_checked, 0),
+                                groups_scanned=len(searched_groups),
+                            ),
                         },
                     )
                     return node
@@ -3109,6 +3357,12 @@ class DzenStudioPage:
                     "failure_description": "source comment was not found after scrolling",
                     "scroll_attempt_count": scroll_attempt_count,
                     "candidates_checked": candidates_checked,
+                    **self._studio_metric_fields(
+                        started_at,
+                        groups=groups,
+                        counts=(len(groups), candidates_checked, 0),
+                        groups_scanned=len(searched_groups),
+                    ),
                 },
             )
             return None
@@ -3130,6 +3384,12 @@ class DzenStudioPage:
                     **_safe_lookup_exception_fields(exc),
                     "scroll_attempt_count": scroll_attempt_count,
                     "candidates_checked": candidates_checked,
+                    **self._studio_metric_fields(
+                        started_at,
+                        groups=groups,
+                        counts=(len(groups), candidates_checked, 0),
+                        groups_scanned=len(searched_groups),
+                    ),
                 },
             )
             raise
@@ -3220,9 +3480,18 @@ class DzenStudioPage:
             self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
         raise RuntimeError("source comment thread is uninspectable: replies did not expand")
 
-    def _find_comment_node(self, comment_id: str):
+    def _find_comment_node(
+        self,
+        comment_id: str,
+        *,
+        post_url: str | None = None,
+        processed_group_ids: set[Any] | None = None,
+    ):
         candidates_checked = 0
-        for node, post_href in self._iter_comment_nodes():
+        for node, post_href in self._iter_comment_nodes(
+            post_url=post_url,
+            processed_group_ids=processed_group_ids,
+        ):
             candidates_checked += 1
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
             author_href = author_link.get_attribute("href") or "" if author_link else ""
@@ -3398,8 +3667,26 @@ class DzenStudioPage:
         )
         return hidden
 
-    def _iter_comment_nodes(self):
-        for group in self._page.query_selector_all(selectors.POST_GROUP):
+    def _iter_comment_nodes(
+        self,
+        *,
+        post_url: str | None = None,
+        processed_group_ids: set[Any] | None = None,
+    ):
+        expected_post_url = _post_url(post_url or "")
+        has_post_url_filter = bool(post_url)
+        groups = self._page.query_selector_all(selectors.POST_GROUP)
+        group_identities = self._studio_group_identities(groups)
+        for group, group_identity in zip(groups, group_identities):
+            if processed_group_ids is not None:
+                if group_identity in processed_group_ids:
+                    continue
+                processed_group_ids.add(group_identity)
             post_href = _post_href(group)
+            if has_post_url_filter and (
+                expected_post_url is None
+                or _post_url(post_href) != expected_post_url
+            ):
+                continue
             for node in group.query_selector_all(selectors.COMMENT_NODE):
                 yield node, post_href
