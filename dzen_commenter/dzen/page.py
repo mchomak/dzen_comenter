@@ -132,8 +132,6 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     const postHref = group.querySelector(
         '[class*="editor--comments-page__postContainer-"] a[href]'
     )?.getAttribute('href') || '';
-    const groupIndex = Array.from(document.querySelectorAll(groupSelector))
-        .indexOf(group);
     const threadIndex = thread
         ? Array.from(group.querySelectorAll(threadSelector)).indexOf(thread)
         : -1;
@@ -146,8 +144,8 @@ _REPLY_BUTTON_KEY_SCRIPT = """
         const controlClass = String(node.className || '').trim()
             .replace(/\\s+/g, ' ');
         return `fallback:${JSON.stringify([
-            postHref, groupIndex, threadIndex, controlClass,
-            normalize(node.innerText), controlIndex,
+            postHref, threadIndex, controlClass, normalize(node.innerText),
+            controlIndex,
         ])}`;
     };
     if (!comment) return fallbackKey();
@@ -179,8 +177,7 @@ _REPLY_BUTTON_KEY_SCRIPT = """
     const controlOccurrence = controlsForComment.indexOf(node);
     if (controlOccurrence < 0) return fallbackKey();
     return JSON.stringify([
-        postHref, groupIndex, threadIndex, ownSignature, occurrence,
-        controlOccurrence,
+        postHref, threadIndex, ownSignature, occurrence, controlOccurrence,
     ]);
 }
 """
@@ -199,6 +196,26 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     const groupIndexes = selectors.scopeIndex === null
         ? groups.map((_group, index) => index)
         : [selectors.scopeIndex];
+    if (selectors.scopeIndex !== null && selectors.expectedPostHref) {
+        const matchingGroups = groups
+            .map((group, index) => ({group, index}))
+            .filter(({group}) => {
+                const postLink = group.querySelector(selectors.postLink)
+                    || group.querySelector(selectors.postLinkFallback);
+                return (postLink?.getAttribute('href') || '')
+                    === selectors.expectedPostHref;
+            });
+        if (matchingGroups.length !== 1) {
+            return {
+                identity_matches: false,
+                failure_reason: matchingGroups.length
+                    ? 'publication_ambiguous' : 'publication_missing',
+                post_href: '',
+                controls: [],
+            };
+        }
+        groupIndexes.splice(0, groupIndexes.length, matchingGroups[0].index);
+    }
     const controls = [];
     const groupCommentCounts = [];
 
@@ -227,6 +244,7 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
         }).length;
         groupCommentCounts.push({
             group_index: groupIndex,
+            post_href: postHref,
             visible_comment_count: visibleCommentCount,
         });
         buttons.forEach((button, buttonIndex) => {
@@ -263,17 +281,9 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     };
 }
 """.replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
-_REPLY_CONTROL_HANDLE_SCRIPT = """
-(selectors) => {
-    const groups = document.querySelectorAll(selectors.group);
-    const group = groups[selectors.groupIndex];
-    if (!group) return null;
-    const buttons = group.querySelectorAll(selectors.more);
-    return buttons[selectors.buttonIndex] || null;
-}
-"""
 _REPLY_CONTROL_CLICK_SCRIPT = """
 (button, selectors) => {
+    const keyFor = REPLY_BUTTON_KEY_FUNCTION;
     const reject = (reason) => ({ok: false, reason});
     if (!button?.matches(selectors.more)) {
         return reject("button_selector_mismatch");
@@ -290,14 +300,18 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
         return reject("owning_post_mismatch");
     }
 
-    const buttons = group.querySelectorAll(selectors.more);
+    const buttons = Array.from(group.querySelectorAll(selectors.more));
     if (buttons[selectors.buttonIndex] !== button) {
         return reject("group_control_index_mismatch");
     }
-    const controlKeys = window.__dzenReplyControlKeys;
-    if (selectors.expectedKey
-        && !selectors.expectedKey.startsWith("fallback:")
-        && controlKeys?.get(button) !== selectors.expectedKey) {
+    const identityMatches = buttons.filter(
+        (candidate) => keyFor(candidate) === selectors.expectedKey
+    );
+    if (identityMatches.length !== 1) {
+        return reject(identityMatches.length
+            ? "target_identity_ambiguous" : "target_key_mismatch");
+    }
+    if (identityMatches[0] !== button) {
         return reject("target_key_mismatch");
     }
     const buttonClass = String(button.className || "").trim()
@@ -331,14 +345,19 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
     if (!button.matches(selectors.more)) {
         return reject("button_selector_mismatch_after_scroll");
     }
-    const currentButtons = group.querySelectorAll(selectors.more);
+    const currentButtons = Array.from(group.querySelectorAll(selectors.more));
     if (currentButtons[selectors.buttonIndex] !== button) {
         return reject("group_control_index_changed_after_scroll");
     }
-    const currentControlKeys = window.__dzenReplyControlKeys;
-    if (selectors.expectedKey
-        && !selectors.expectedKey.startsWith("fallback:")
-        && currentControlKeys?.get(button) !== selectors.expectedKey) {
+    const currentIdentityMatches = currentButtons.filter(
+        (candidate) => keyFor(candidate) === selectors.expectedKey
+    );
+    if (currentIdentityMatches.length !== 1) {
+        return reject(currentIdentityMatches.length
+            ? "target_identity_ambiguous_after_scroll"
+            : "target_key_changed_after_scroll");
+    }
+    if (currentIdentityMatches[0] !== button) {
         return reject("target_key_changed_after_scroll");
     }
     const currentClass = String(button.className || "").trim()
@@ -358,7 +377,7 @@ _REPLY_CONTROL_CLICK_SCRIPT = """
     }
     return {ok: true};
 }
-"""
+""".replace("REPLY_BUTTON_KEY_FUNCTION", _REPLY_BUTTON_KEY_SCRIPT)
 
 
 class _ReplyControlTargetChangedError(RuntimeError):
@@ -373,9 +392,14 @@ _REPLY_CONTROL_VALIDATION_REASONS = frozenset(
     {
         "button_selector_mismatch",
         "owning_group_missing",
+        "owning_group_ambiguous",
+        "owning_post_missing",
         "target_detached",
         "owning_post_mismatch",
+        "target_identity_missing",
         "group_control_index_mismatch",
+        "target_identity_ambiguous",
+        "target_identity_ambiguous_after_scroll",
         "target_key_mismatch",
         "target_class_mismatch",
         "target_label_mismatch",
@@ -390,6 +414,7 @@ _REPLY_CONTROL_VALIDATION_REASONS = frozenset(
         "target_label_changed_after_scroll",
         "target_not_visible_after_scroll",
         "target_handle_missing",
+        "stable_control_locator_unavailable",
         "invalid_validation_result",
     }
 )
@@ -1035,7 +1060,7 @@ class DzenStudioPage:
         unresolved_click_reasons: dict[str, str] = {}
         control_info_by_key: dict[str, dict[str, Any]] = {}
         control_ids_by_key: dict[str, str] = {}
-        group_comment_counts_by_index: dict[int, int] = {}
+        group_comment_counts_by_post_href: dict[str, int] = {}
 
         def read_controls_once() -> tuple[list[tuple[Any, str]], set[str]]:
             nonlocal first_controls
@@ -1073,19 +1098,34 @@ class DzenStudioPage:
                             "reply expansion could not read a control snapshot"
                         )
                     if snapshot.get("identity_matches") is not True:
-                        raise RuntimeError(
-                            "Studio publication changed during reply expansion"
+                        identity_failure = snapshot.get("failure_reason")
+                        if identity_failure not in {
+                            "publication_ambiguous",
+                            "publication_missing",
+                        }:
+                            identity_failure = "publication_identity_changed"
+                        self._log_reply_expansion_incomplete(
+                            failure_reason=identity_failure,
+                            clicked_count=clicked_count,
+                            visible_button_count=0,
                         )
-                    group_comment_counts_by_index.clear()
+                        raise RuntimeError(
+                            "Studio publication identity could not be confirmed"
+                        )
+                    group_comment_counts_by_post_href.clear()
                     for item in snapshot.get("group_comment_counts", []):
                         if not isinstance(item, dict):
                             continue
                         group_index = item.get("group_index")
                         comment_count = item.get("visible_comment_count")
-                        if isinstance(group_index, int) and isinstance(
-                            comment_count, int
+                        post_href = item.get("post_href")
+                        if (
+                            isinstance(group_index, int)
+                            and isinstance(comment_count, int)
+                            and isinstance(post_href, str)
+                            and post_href
                         ):
-                            group_comment_counts_by_index[group_index] = (
+                            group_comment_counts_by_post_href[post_href] = (
                                 comment_count
                             )
                     control_metadata = snapshot["controls"]
@@ -1400,7 +1440,6 @@ class DzenStudioPage:
             visible_comment_count_before = previous_control_info.get(
                 "group_comment_count"
             )
-            resolve_element_handle = getattr(next_button, "element_handle", None)
             click_may_have_been_dispatched = False
             click_call_in_progress = False
             click_call_returned = False
@@ -1426,26 +1465,59 @@ class DzenStudioPage:
             }
             try:
                 self._reply_expansion_phase = "control_click"
-                evaluate_handle = getattr(self._page, "evaluate_handle", None)
-                if previous_control_info and callable(evaluate_handle):
+                page_locator = getattr(self._page, "locator", None)
+                if previous_control_info and callable(page_locator):
                     self._reply_expansion_phase = "control_target_resolution"
-                    javascript_handle = evaluate_handle(
-                        _REPLY_CONTROL_HANDLE_SCRIPT,
-                        {
-                            "group": selectors.POST_GROUP,
-                            "more": selectors.COMMENT_OPEN_MORE,
-                            "groupIndex": previous_control_info["group_index"],
-                            "buttonIndex": previous_control_info["button_index"],
-                        },
+                    post_href = previous_control_info.get("post_href")
+                    expected_key = previous_control_info.get("key")
+                    if not isinstance(post_href, str) or not post_href:
+                        raise _ReplyControlTargetChangedError(
+                            "owning_post_missing"
+                        )
+                    if not isinstance(expected_key, str) or not expected_key:
+                        raise _ReplyControlTargetChangedError(
+                            "target_identity_missing"
+                        )
+                    group_index = previous_control_info.get("group_index")
+                    if not isinstance(group_index, int) or group_index < 0:
+                        raise _ReplyControlTargetChangedError(
+                            "owning_group_missing"
+                        )
+                    group_locators = page_locator(selectors.POST_GROUP)
+                    group_locator = group_locators.nth(group_index)
+                    if (
+                        _post_href_from_locator(
+                            group_locator,
+                            timeout_ms=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
+                        )
+                        != post_href
+                    ):
+                        raise _ReplyControlTargetChangedError(
+                            "owning_post_mismatch"
+                        )
+                    button_locators = group_locator.locator(
+                        selectors.COMMENT_OPEN_MORE
                     )
-                    as_element = getattr(javascript_handle, "as_element", None)
-                    target_handle = as_element() if callable(as_element) else None
-                    if target_handle is None:
-                        dispose_handle = getattr(
-                            javascript_handle, "dispose", None
+                    matching_buttons = []
+                    for index in range(button_locators.count()):
+                        candidate = button_locators.nth(index)
+                        candidate_key = candidate.evaluate(
+                            _REPLY_BUTTON_KEY_SCRIPT,
+                            timeout=_REPLY_CONTROL_INSPECTION_TIMEOUT_MS,
                         )
-                        if callable(dispose_handle):
-                            dispose_handle()
+                        if candidate_key == expected_key:
+                            matching_buttons.append((index, candidate))
+                    if len(matching_buttons) != 1:
+                        raise _ReplyControlTargetChangedError(
+                            "target_identity_ambiguous"
+                            if matching_buttons
+                            else "target_identity_missing"
+                        )
+                    resolved_button_index, target_locator = matching_buttons[0]
+                    target_handle = target_locator.element_handle(
+                        timeout=click_timeout_ms
+                    )
+                    if target_handle is None:
                         raise _ReplyControlTargetChangedError(
                             "target_handle_missing"
                         )
@@ -1458,9 +1530,7 @@ class DzenStudioPage:
                                 "more": selectors.COMMENT_OPEN_MORE,
                                 "postLink": selectors.POST_LINK,
                                 "postLinkFallback": selectors.POST_LINK_FALLBACK,
-                                "buttonIndex": previous_control_info[
-                                    "button_index"
-                                ],
+                                "buttonIndex": resolved_button_index,
                                 "expectedPostHref": previous_control_info[
                                     "post_href"
                                 ],
@@ -1498,65 +1568,10 @@ class DzenStudioPage:
                         dispose_handle = getattr(target_handle, "dispose", None)
                         if callable(dispose_handle):
                             dispose_handle()
-                elif (
-                    previous_control_info
-                    and callable(resolve_element_handle)
-                ):
-                    self._reply_expansion_phase = "control_target_resolution"
-                    target_handle = resolve_element_handle(timeout=click_timeout_ms)
-                    if target_handle is None:
-                        raise _ReplyControlTargetChangedError(
-                            "target_handle_missing"
-                        )
-                    try:
-                        self._reply_expansion_phase = "control_target_evaluation"
-                        click_target = target_handle.evaluate(
-                            _REPLY_CONTROL_CLICK_SCRIPT,
-                            {
-                                "group": selectors.POST_GROUP,
-                                "more": selectors.COMMENT_OPEN_MORE,
-                                "postLink": selectors.POST_LINK,
-                                "postLinkFallback": selectors.POST_LINK_FALLBACK,
-                                "buttonIndex": previous_control_info[
-                                    "button_index"
-                                ],
-                                "expectedPostHref": previous_control_info[
-                                    "post_href"
-                                ],
-                                "expectedKey": previous_control_info.get("key"),
-                                "expectedClass": previous_control_info[
-                                    "class_name"
-                                ],
-                                "expectedText": previous_control_info["text"],
-                            },
-                        )
-                        if (
-                            not isinstance(click_target, dict)
-                            or click_target.get("ok") is not True
-                        ):
-                            validation_reason = (
-                                click_target.get("reason")
-                                if isinstance(click_target, dict)
-                                else None
-                            )
-                            if validation_reason not in _REPLY_CONTROL_VALIDATION_REASONS:
-                                validation_reason = "invalid_validation_result"
-                            raise _ReplyControlTargetChangedError(
-                                validation_reason
-                            )
-                        self._reply_expansion_phase = "control_target_click"
-                        click_call_in_progress = True
-                        target_handle.click(
-                            force=True,
-                            timeout=click_timeout_ms,
-                        )
-                        click_call_in_progress = False
-                        click_call_returned = True
-                        click_may_have_been_dispatched = True
-                    finally:
-                        dispose_handle = getattr(target_handle, "dispose", None)
-                        if callable(dispose_handle):
-                            dispose_handle()
+                elif previous_control_info:
+                    raise _ReplyControlTargetChangedError(
+                        "stable_control_locator_unavailable"
+                    )
                 else:
                     self._reply_expansion_phase = "control_locator_click"
                     click_call_in_progress = True
@@ -1683,9 +1698,12 @@ class DzenStudioPage:
                     current_control_info = control_info_by_key.get(
                         next_button_key, {}
                     )
-                    if isinstance(previous_group_index, int):
+                    previous_post_href = previous_control_info.get("post_href")
+                    if isinstance(previous_post_href, str):
                         visible_comment_count_after = (
-                            group_comment_counts_by_index.get(previous_group_index)
+                            group_comment_counts_by_post_href.get(
+                                previous_post_href
+                            )
                         )
                     if visible_comment_count_after is None:
                         visible_comment_count_after = current_control_info.get(
@@ -1774,9 +1792,10 @@ class DzenStudioPage:
             )
             current_control_info = control_info_by_key.get(next_button_key, {})
             key_present_after = next_button_key in present_keys
-            if isinstance(previous_group_index, int):
-                visible_comment_count_after = group_comment_counts_by_index.get(
-                    previous_group_index
+            previous_post_href = previous_control_info.get("post_href")
+            if isinstance(previous_post_href, str):
+                visible_comment_count_after = (
+                    group_comment_counts_by_post_href.get(previous_post_href)
                 )
             if visible_comment_count_after is None:
                 visible_comment_count_after = current_control_info.get(

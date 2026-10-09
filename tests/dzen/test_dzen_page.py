@@ -1340,7 +1340,11 @@ def test_scoped_reply_control_snapshot_counts_only_selected_group():
 
             assert snapshot["identity_matches"] is True
             assert snapshot["group_comment_counts"] == [
-                {"group_index": 1, "visible_comment_count": 2}
+                {
+                    "group_index": 1,
+                    "post_href": "/a/post2",
+                    "visible_comment_count": 2,
+                }
             ]
             assert counted_groups == ["/a/post2"]
             assert [control["group_comment_count"] for control in snapshot["controls"]] == [
@@ -1454,6 +1458,316 @@ def test_hidden_reply_expansion_reads_controls_in_one_dom_snapshot(monkeypatch):
 
             assert expanded == 2
             assert page.query_selector_all(selectors.COMMENT_OPEN_MORE) == []
+        finally:
+            browser.close()
+
+
+def test_fetch_comments_reacquires_reply_target_after_card_insertion(monkeypatch):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/target"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <a class="editor--comment__nameLink-author" href="/user/target-parent">
+            <span class="editor--comment__nameText-author">Target parent</span>
+          </a>
+          <p aria-label="Текст комментария">target root</p>
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="window.clickedPosts.push('/a/target');
+              this.insertAdjacentHTML('afterend', `<div class='editor--comment__block-child' style='min-height: 40px'>
+                <a class='editor--comment__nameLink-author' href='/user/target-child'>
+                  <span class='editor--comment__nameText-author'>Target child</span>
+                </a>
+                <p aria-label='Текст комментария'>target child</p>
+              </div>`);
+              this.remove()">Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    <script>window.clickedPosts = [];</script>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+            original_evaluate = page.evaluate
+            original_locator = page.locator
+            original_evaluate_handle = page.evaluate_handle
+            inserted = False
+
+            def insert_card():
+                nonlocal inserted
+                if inserted:
+                    return
+                inserted = True
+                original_evaluate(
+                    """
+                    () => {
+                        const decoy = document.createElement('div');
+                        decoy.setAttribute('data-testid', 'comment');
+                        decoy.innerHTML = `
+                          <div class="editor--comments-page__postContainer-post">
+                            <a href="/a/decoy"></a>
+                          </div>
+                          <div class="editor--comments-page__commentNode-thread">
+                            <div class="editor--comment__block-decoy" style="min-height: 40px">
+                              <a class="editor--comment__nameLink-author" href="/user/decoy">
+                                <span class="editor--comment__nameText-author">Decoy</span>
+                              </a>
+                              <p aria-label="Текст комментария">decoy root</p>
+                              <button class="editor--root-comment__openMoreButton-more"
+                                onclick="window.clickedPosts.push('/a/decoy'); this.remove()">
+                                Показать 1 ответ
+                              </button>
+                            </div>
+                          </div>`;
+                        document.querySelector('[data-testid="comment"]')
+                            .before(decoy);
+                    }
+                    """
+                )
+
+            def insert_before_group_resolution(selector, *args, **kwargs):
+                if selector == selectors.POST_GROUP:
+                    insert_card()
+                return original_locator(selector, *args, **kwargs)
+
+            def insert_before_handle_resolution(script, arg=None):
+                insert_card()
+                return original_evaluate_handle(script, arg)
+
+            monkeypatch.setattr(page, "locator", insert_before_group_resolution)
+            monkeypatch.setattr(
+                page, "evaluate_handle", insert_before_handle_resolution
+            )
+
+            comments = DzenStudioPage(page).fetch_comments()
+
+            by_text = {comment.text: comment for comment in comments}
+            assert inserted is True
+            assert "target child" in by_text
+            assert by_text["target child"].parent_comment_id == by_text[
+                "target root"
+            ].dzen_comment_id
+            assert page.evaluate("window.clickedPosts") == [
+                "/a/target",
+                "/a/decoy",
+            ]
+        finally:
+            browser.close()
+
+
+def test_fetch_comments_does_not_accept_neighbor_progress_as_target_expansion(
+    monkeypatch,
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/target"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <a class="editor--comment__nameLink-author" href="/user/target-parent"></a>
+          <p aria-label="Текст комментария">target root</p>
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="if (!window.redirected) {
+              window.redirected = true;
+              document.querySelector('[data-decoy] button').click();
+            }">Показать 1 ответ</button>
+        </div>
+      </div>
+    </div>
+    <script>window.clickedPosts = []; window.redirected = false;</script>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
+            )
+            monkeypatch.setattr(
+                dzen_page, "_REPLY_EXPANSION_RENDER_TIMEOUT_MS", 0
+            )
+            original_evaluate = page.evaluate
+            original_locator = page.locator
+            original_evaluate_handle = page.evaluate_handle
+            inserted = False
+
+            def insert_decoy():
+                nonlocal inserted
+                if inserted:
+                    return
+                inserted = True
+                original_evaluate(
+                    """
+                    () => {
+                        const decoy = document.createElement('div');
+                        decoy.setAttribute('data-testid', 'comment');
+                        decoy.setAttribute('data-decoy', 'true');
+                        decoy.innerHTML = `
+                          <div class="editor--comments-page__postContainer-post">
+                            <a href="/a/decoy"></a>
+                          </div>
+                          <div class="editor--comments-page__commentNode-thread">
+                            <div class="editor--comment__block-decoy" style="min-height: 40px">
+                              <a class="editor--comment__nameLink-author" href="/user/decoy"></a>
+                              <p aria-label="Текст комментария">decoy root</p>
+                              <button class="editor--root-comment__openMoreButton-more"
+                                onclick="window.clickedPosts.push('/a/decoy');
+                                  const child = document.createElement('div');
+                                  child.className = 'editor--comment__block-child';
+                                  child.setAttribute('style', 'min-height: 40px');
+                                  const text = document.createElement('p');
+                                  text.setAttribute('aria-label', 'Текст комментария');
+                                  text.textContent = 'decoy child';
+                                  child.append(text);
+                                  this.after(child);
+                                  this.remove()">Показать 1 ответ</button>
+                            </div>
+                          </div>`;
+                        document.querySelector('[data-testid="comment"]')
+                            .before(decoy);
+                    }
+                    """
+                )
+
+            def insert_before_group_resolution(selector, *args, **kwargs):
+                if selector == selectors.POST_GROUP:
+                    insert_decoy()
+                return original_locator(selector, *args, **kwargs)
+
+            def insert_after_handle_resolution(script, arg=None):
+                handle = original_evaluate_handle(script, arg)
+                insert_decoy()
+                return handle
+
+            monkeypatch.setattr(page, "locator", insert_before_group_resolution)
+            monkeypatch.setattr(
+                page, "evaluate_handle", insert_after_handle_resolution
+            )
+
+            with pytest.raises(RuntimeError):
+                DzenStudioPage(page).fetch_comments()
+
+            state = original_evaluate(
+                """
+                () => {
+                    const cards = Array.from(
+                        document.querySelectorAll('[data-testid="comment"]')
+                    );
+                    const cardFor = (href) => cards.find((card) =>
+                        card.querySelector(`a[href="${href}"]`)
+                    );
+                    const target = cardFor('/a/target');
+                    const decoy = cardFor('/a/decoy');
+                    return {
+                        targetChild: Boolean(
+                            target.querySelector('.editor--comment__block-child')
+                        ),
+                        targetControlVisible: Boolean(
+                            target.querySelector(
+                                '.editor--root-comment__openMoreButton-more'
+                            )
+                        ),
+                        decoyChild: Boolean(
+                            decoy.querySelector('.editor--comment__block-child')
+                        ),
+                        clickedPosts: window.clickedPosts,
+                    };
+                }
+                """
+            )
+            assert inserted is True
+            assert state == {
+                "targetChild": False,
+                "targetControlVisible": True,
+                "decoyChild": True,
+                "clickedPosts": ["/a/decoy"],
+            }
+        finally:
+            browser.close()
+
+
+def test_fetch_comments_fails_closed_for_ambiguous_publication_identity(caplog):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comments-page__postContainer-post">
+        <a href="/a/same-post"></a>
+      </div>
+      <div class="editor--comments-page__commentNode-thread">
+        <div class="editor--comment__block-parent" style="min-height: 40px">
+          <a class="editor--comment__nameLink-author" href="/user/parent"></a>
+          <p aria-label="Текст комментария">same parent</p>
+          <button class="editor--root-comment__openMoreButton-more"
+            onclick="window.clickedPosts.push('/a/same-post'); this.remove()">
+            Показать 1 ответ
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>window.clickedPosts = [];</script>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            page.evaluate(
+                """
+                () => {
+                    const original = document.querySelector(
+                        '[data-testid="comment"]'
+                    );
+                    original.after(original.cloneNode(true));
+                }
+                """
+            )
+
+            with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+                with pytest.raises(RuntimeError):
+                    DzenStudioPage(page).fetch_comments()
+
+            assert page.evaluate("window.clickedPosts") == []
+            ambiguous = next(
+                record for record in caplog.records
+                if getattr(record, "event", None)
+                == "studio_reply_expansion_incomplete"
+                and getattr(record, "failure_reason", None)
+                == "publication_ambiguous"
+            )
+            assert ambiguous.clicked_count == 0
+            serialized = "\n".join(
+                StructuredFormatter().format(record)
+                for record in caplog.records
+                if record.name == "dzen_commenter.dzen.page"
+            )
+            assert "/a/same-post" not in serialized
         finally:
             browser.close()
 
@@ -1815,7 +2129,6 @@ def test_hidden_reply_expansion_uses_group_identity_when_comment_owner_is_missin
             monkeypatch.setattr(
                 dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0
             )
-            monkeypatch.setattr(dzen_page, "_REPLY_BUTTON_KEY_SCRIPT", "() => null")
             clicked_keys = set()
 
             expanded = DzenStudioPage(page)._expand_hidden_replies(
@@ -2040,6 +2353,9 @@ def _make_target_validation_page(mode: str):
             state["click_order"].append(("dispose", self.handle_index))
 
     class TargetLocator:
+        def count(self):
+            return 1
+
         def nth(self, index: int):
             assert index == 0
             return self
@@ -2062,7 +2378,35 @@ def _make_target_validation_page(mode: str):
                 return False
             return {"x": 12, "y": 24}
 
+    class GroupLocator:
+        def nth(self, index: int):
+            assert index == 0
+            return self
+
+        def locator(self, selector: str):
+            if selector == selectors.COMMENT_OPEN_MORE:
+                return locator
+            assert selector in {
+                selectors.POST_LINK,
+                selectors.POST_LINK_FALLBACK,
+            }
+            return post_link_locator
+
+    class PostLinkLocator:
+        def count(self):
+            return 1
+
+        def nth(self, index: int):
+            assert index == 0
+            return self
+
+        def get_attribute(self, name: str, *, timeout: int | None = None):
+            assert name == "href"
+            return metadata["post_href"]
+
     locator = TargetLocator()
+    post_link_locator = PostLinkLocator()
+    group_locator = GroupLocator()
     page = FakePage([])
     metadata = {
         "group_index": 0,
@@ -2083,6 +2427,7 @@ def _make_target_validation_page(mode: str):
             "group_comment_counts": [
                 {
                     "group_index": 0,
+                "post_href": metadata["post_href"],
                     "visible_comment_count": state["group_comment_count"],
                 }
             ],
@@ -2095,7 +2440,11 @@ def _make_target_validation_page(mode: str):
 
     page.evaluate = read_snapshot
     page.locator = lambda selector: (
-        locator if selector == selectors.COMMENT_OPEN_MORE else None
+        locator
+        if selector == selectors.COMMENT_OPEN_MORE
+        else group_locator
+        if selector == selectors.POST_GROUP
+        else None
     )
 
     def mouse_click(x: float, y: float):
