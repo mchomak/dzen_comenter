@@ -3,7 +3,6 @@ from datetime import date, datetime, time, timedelta
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_302_FOUND
@@ -21,6 +20,7 @@ from dzen_commenter.admin.validation import split_csv_items, validate_settings_f
 from dzen_commenter.admin.vnc_access import VncAccessClient, VncAccessUnavailable
 from dzen_commenter.auth import DzenLoginControlClient, DzenLoginControlUnavailable
 from dzen_commenter.bot_health import get_bot_health
+from dzen_commenter.db import create_database_engine
 from dzen_commenter.config.runtime_config import RuntimeConfig, RuntimeConfigData
 
 templates.env.filters["thread_messages"] = parse_thread_messages
@@ -220,7 +220,7 @@ def create_app(
 def _get_engine(app: FastAPI) -> Engine | None:
     engine = app.state.engine
     if engine is None and app.state.settings.DATABASE_URL:
-        engine = create_engine(app.state.settings.DATABASE_URL)
+        engine = create_database_engine(app.state.settings.DATABASE_URL)
         app.state.engine = engine
     return engine
 

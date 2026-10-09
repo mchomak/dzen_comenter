@@ -38,9 +38,9 @@ class Recorder:
 def install_di_fakes(monkeypatch):
     rec = Recorder()
 
-    def fake_create_engine(url):
+    def fake_create_database_engine(url):
         engine = SimpleNamespace(_kind="engine", url=url)
-        rec.events.append(("create_engine", url, engine))
+        rec.events.append(("create_database_engine", url, engine))
         return engine
 
     class FakeRepository:
@@ -113,7 +113,7 @@ def install_di_fakes(monkeypatch):
             self.kwargs = kwargs
             rec.events.append(("loop", self))
 
-    monkeypatch.setattr(main.sqlalchemy, "create_engine", fake_create_engine)
+    monkeypatch.setattr(main, "create_database_engine", fake_create_database_engine)
     monkeypatch.setattr(main, "PostgresCommentRepository", FakeRepository)
     monkeypatch.setattr(main, "create_provider", fake_create_provider)
     monkeypatch.setattr(main, "DameoPromptBuilder", FakePromptBuilder)

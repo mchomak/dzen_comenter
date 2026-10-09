@@ -5,8 +5,6 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-import sqlalchemy
-
 from dzen_commenter.bot_health import write_bot_health
 from dzen_commenter.ai.factory import create_provider
 from dzen_commenter.auth.dzen_login_control import DzenLoginControlServer
@@ -15,6 +13,7 @@ from dzen_commenter.browser.session_manager import PlaywrightSessionManager
 from dzen_commenter.config.runtime_config import RuntimeConfig, ensure_runtime_config
 from dzen_commenter.config.settings import Settings
 from dzen_commenter.contracts.interfaces import Notifier
+from dzen_commenter.db import create_database_engine
 from dzen_commenter.db.repository import PostgresCommentRepository
 from dzen_commenter.dzen.page import DzenStudioPage
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
@@ -33,7 +32,7 @@ logger = logging.getLogger(__name__)
 def build_app(
     settings: Settings,
 ) -> tuple[OrchestratorLoop, PlaywrightSessionManager, Notifier]:
-    engine = sqlalchemy.create_engine(settings.DATABASE_URL)
+    engine = create_database_engine(settings.DATABASE_URL)
     repository = PostgresCommentRepository(engine)
 
     ai_provider = create_provider(settings)
