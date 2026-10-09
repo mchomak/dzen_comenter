@@ -231,6 +231,45 @@ class PlaywrightSessionManager:
             else:
                 self._consecutive_keepalive_timeouts = 0
 
+    def recover_if_browser_crashed(self, exception: Exception) -> bool:
+        """Restart the persistent context only for a known renderer crash."""
+        with self._lock:
+            crash_kind = self._renderer_crash_kind(exception)
+            if crash_kind is None:
+                return False
+
+            logger.warning(
+                "Chromium renderer crash detected; restarting browser session",
+                extra={
+                    "event": "browser_crash_recovery_started",
+                    "crash_kind": crash_kind,
+                    "error_type": type(exception).__name__,
+                },
+            )
+            try:
+                self._restart_browser_session()
+            except Exception as recovery_error:
+                logger.error(
+                    "Browser session recovery failed after renderer crash",
+                    extra={
+                        "event": "browser_crash_recovery_failed",
+                        "crash_kind": crash_kind,
+                        "trigger_error_type": type(exception).__name__,
+                        "recovery_error_type": type(recovery_error).__name__,
+                    },
+                )
+                raise exception from recovery_error
+
+            self._consecutive_keepalive_timeouts = 0
+            logger.info(
+                "Browser session recovered after renderer crash",
+                extra={
+                    "event": "browser_crash_recovery_succeeded",
+                    "crash_kind": crash_kind,
+                },
+            )
+            return True
+
     def _restart_browser_session(self) -> None:
         self._close_browser_session()
         self._start()
@@ -271,6 +310,20 @@ class PlaywrightSessionManager:
                 "target page, context or browser has been closed",
             )
         )
+
+    @staticmethod
+    def _renderer_crash_kind(exc: Exception) -> str | None:
+        if not isinstance(exc, PlaywrightError):
+            return None
+        message = str(exc).lower()
+        for marker, kind in (
+            ("target crashed", "target_crashed"),
+            ("page crashed", "page_crashed"),
+            ("renderer crashed", "renderer_crashed"),
+        ):
+            if marker in message:
+                return kind
+        return None
 
     def _is_on_comments_url(self) -> bool:
         current_url = getattr(self._page, "url", "")

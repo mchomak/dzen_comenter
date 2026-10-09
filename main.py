@@ -147,6 +147,22 @@ def run_supervised(
                 },
             )
             cycle_succeeded = False
+            recover_if_browser_crashed = getattr(
+                session, "recover_if_browser_crashed", None
+            )
+            if callable(recover_if_browser_crashed):
+                try:
+                    recover_if_browser_crashed(exc)
+                except Exception as recovery_error:
+                    logger.warning(
+                        "Browser session recovery failed; preserving the cycle error",
+                        extra={
+                            "event": "main_loop_browser_recovery_failed",
+                            "cycle": cycles + 1,
+                            "error_type": type(exc).__name__,
+                            "recovery_error_type": type(recovery_error).__name__,
+                        },
+                    )
             now = time_fn()
             error_signature = (type(exc), str(exc))
             repeated_error = (

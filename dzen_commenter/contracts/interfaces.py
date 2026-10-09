@@ -220,6 +220,9 @@ class SessionManager(Protocol):
     def restore(self) -> bool:
         ...
 
+    def recover_if_browser_crashed(self, exception: Exception) -> bool:
+        ...
+
     def reset_authentication(self) -> None:
         ...
 

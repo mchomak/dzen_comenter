@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from playwright.sync_api import Error as PlaywrightError
 
 import main
 from dzen_commenter.monitoring.developer_notifier import DeveloperNotifier
@@ -86,6 +87,9 @@ def install_di_fakes(monkeypatch):
         def start(self):
             self.start_calls += 1
             rec.events.append(("session_start", self))
+
+        def recover_if_browser_crashed(self, exception):
+            return False
 
     class FakeDzenPage:
         def __init__(self, page, **kwargs):
@@ -275,9 +279,14 @@ class FakeLoop:
 class FakeSession:
     def __init__(self):
         self.keep_alive_calls = 0
+        self.recovery_calls = []
 
     def keep_alive(self):
         self.keep_alive_calls += 1
+
+    def recover_if_browser_crashed(self, exception):
+        self.recovery_calls.append(exception)
+        return False
 
 
 class FakeNotifier:
@@ -286,6 +295,41 @@ class FakeNotifier:
 
     def notify_error(self, message, error=None):
         self.errors.append((message, error))
+
+
+def test_run_supervised_recovers_target_crashed_immediately_once_without_replaying_cycle():
+    events = []
+
+    class CrashedLoop:
+        def run_cycle(self):
+            events.append("cycle")
+            raise PlaywrightError("Target crashed")
+
+    class RecoveringSession(FakeSession):
+        def recover_if_browser_crashed(self, error):
+            events.append(("recover", error))
+            return True
+
+    main.run_supervised(
+        CrashedLoop(),
+        RecoveringSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=1000,
+        sleep_fn=lambda _delay: events.append("sleep"),
+        time_fn=lambda: 0.0,
+        max_cycles=1,
+    )
+
+    recoveries = [
+        event for event in events if isinstance(event, tuple) and event[0] == "recover"
+    ]
+    assert len(recoveries) == 1
+    assert isinstance(recoveries[0][1], PlaywrightError)
+    assert str(recoveries[0][1]) == "Target crashed"
+    assert events[0] == "cycle"
+    assert events[1] == recoveries[0]
+    assert events[2] == "sleep"
 
 
 @pytest.mark.parametrize(

@@ -128,7 +128,14 @@ def make_sequence_factory(contexts: list[FakeContext]):
 
 # Acceptance 2 — структурное соответствие контракту SessionManager.
 def test_implements_session_manager_contract():
-    for name in ("start", "is_logged_in", "login", "save_state", "restore"):
+    for name in (
+        "start",
+        "is_logged_in",
+        "login",
+        "save_state",
+        "restore",
+        "recover_if_browser_crashed",
+    ):
         proto_sig = inspect.signature(getattr(SessionManager, name))
         impl_sig = inspect.signature(getattr(PlaywrightSessionManager, name))
         assert list(proto_sig.parameters) == list(impl_sig.parameters)
@@ -552,6 +559,80 @@ def test_keep_alive_preserves_crash_error_when_recovery_fails():
 
     with pytest.raises(PlaywrightError, match="Page crashed"):
         mgr.keep_alive()
+
+
+def test_recover_if_browser_crashed_reuses_persistent_profile_and_storage_state(tmp_path):
+    profile_path = tmp_path / "profile"
+    profile_path.mkdir()
+    profile_marker = profile_path / "Local State"
+    profile_marker.write_text("existing profile", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    state_path.write_text('{"cookies": []}', encoding="utf-8")
+    settings = make_settings(
+        USER_DATA_DIR=str(profile_path),
+        STORAGE_STATE_PATH=str(state_path),
+    )
+    crashed_context = FakeContext(FakePage())
+    recovered_page = FakePage()
+    recovered_context = FakeContext(recovered_page)
+    manager = PlaywrightSessionManager(
+        settings,
+        playwright_factory=make_sequence_factory(
+            [crashed_context, recovered_context]
+        ),
+    )
+    manager.start()
+
+    assert manager.recover_if_browser_crashed(PlaywrightError("Target crashed")) is True
+
+    assert crashed_context.close_calls == 1
+    assert recovered_context.launch_kwargs["user_data_dir"] == str(profile_path)
+    assert recovered_page.goto_calls == [settings.COMMENTS_URL]
+    assert manager.page is recovered_page
+    assert profile_marker.read_text(encoding="utf-8") == "existing profile"
+    assert state_path.read_text(encoding="utf-8") == '{"cookies": []}'
+
+
+def test_recover_if_browser_crashed_ignores_ordinary_playwright_errors():
+    settings = make_settings()
+    page = FakePage()
+    context = FakeContext(page)
+    manager = PlaywrightSessionManager(
+        settings, playwright_factory=make_factory(context)
+    )
+    manager.start()
+
+    assert manager.recover_if_browser_crashed(
+        PlaywrightError("ordinary navigation failure")
+    ) is False
+
+    assert context.close_calls == 0
+    assert manager.page is page
+
+
+def test_recover_if_browser_crashed_preserves_trigger_and_logs_recovery_failure(caplog):
+    settings = make_settings()
+    context = FakeContext(FakePage())
+    manager = PlaywrightSessionManager(
+        settings,
+        playwright_factory=make_sequence_factory([context]),
+    )
+    manager.start()
+    error = PlaywrightError("Target crashed")
+
+    with caplog.at_level("ERROR", logger="dzen_commenter.browser.session_manager"):
+        with pytest.raises(PlaywrightError) as raised:
+            manager.recover_if_browser_crashed(error)
+
+    assert raised.value is error
+    record = next(
+        record
+        for record in caplog.records
+        if record.name == "dzen_commenter.browser.session_manager"
+    )
+    assert record.event == "browser_crash_recovery_failed"
+    assert record.trigger_error_type == "Error"
+    assert record.recovery_error_type == "IndexError"
 
 
 def test_reset_authentication_clears_cookies_removes_state_and_opens_comments(tmp_path):
