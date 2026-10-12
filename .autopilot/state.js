@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-09T20:15:02+03:00",
-  "updatedAt": "2026-10-09T20:37:12+00:00",
+  "updatedAt": "2026-10-13T02:07:00+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -35,26 +35,28 @@ window.STATE =
       "id": "spec",
       "status": "done",
       "startedAt": "2026-10-09T20:34:56+03:00",
-      "finishedAt": "2026-10-09T17:38:59+00:00"
+      "finishedAt": "2026-10-13T00:10:00+03:00",
+      "note": "G2 прошёл: независимая сверка brief/spec без пропусков и лишних требований."
     },
     {
       "id": "plan",
       "status": "done",
-      "finishedAt": "2026-10-09T17:38:59+00:00",
-      "note": "4 таска, ярус T2"
+      "startedAt": "2026-10-13T00:10:00+03:00",
+      "finishedAt": "2026-10-13T00:30:53+03:00",
+      "note": "8 тасков, ярус T2; два новых таска независимы и идут в волне 6."
     },
     {
       "id": "build",
       "status": "active",
-      "startedAt": "2026-10-09T17:38:59+00:00",
-      "note": "Код 01a9591 проверен, отправлен в main, архив передан на сервер. Временная проверка подтвердила app/admin/Postgres healthy; последующие SSH и HTTP probes зависают без протокольного ответа, поэтому rollout не завершён."
+      "startedAt": "2026-10-13T00:30:53+03:00",
+      "note": "Продолжение после production-диагностики: T07 завершён; T08 чинит конечный лимит retry после review."
     },
     {
       "id": "review",
-      "status": "done",
+      "status": "pending",
       "startedAt": "2026-10-09T17:56:43+00:00",
       "finishedAt": "2026-10-09T20:21:05+00:00",
-      "note": "Независимое ревью батчевого DOM-снимка и heartbeat прошло без замечаний."
+      "note": "Предыдущие таски прошли ревью; ожидается ревью T07–T08."
     },
     {
       "id": "final",
@@ -62,12 +64,12 @@ window.STATE =
     }
   ],
   "requirements": {
-    "total": 6,
-    "done": 5,
-    "inTicket": 1,
+    "total": 10,
+    "done": 8,
+    "inTicket": 2,
     "inSpec": 0,
     "placeholder": 0,
-    "deferred": 1,
+    "deferred": 0,
     "dropped": 0
   },
   "tickets": [
@@ -191,8 +193,9 @@ window.STATE =
         "tests/dzen/",
         "tests/orchestrator/"
       ],
-      "status": "in-progress",
+      "status": "done",
       "startedAt": "2026-10-09T18:50:04+00:00",
+      "finishedAt": "2026-10-09T20:25:00+00:00",
       "files": [
         "dzen_commenter/dzen/page.py",
         "tests/dzen/test_dzen_page.py"
@@ -263,8 +266,9 @@ window.STATE =
         "dzen_commenter/dzen/page.py",
         "tests/dzen/test_dzen_page.py"
       ],
-      "status": "in-progress",
+      "status": "done",
       "startedAt": "2026-10-09T19:20:37+00:00",
+      "finishedAt": "2026-10-09T20:25:00+00:00",
       "files": [
         "dzen_commenter/dzen/page.py",
         "tests/dzen/test_dzen_page.py"
@@ -281,12 +285,46 @@ window.STATE =
       "repairs": 0,
       "handoffs": 0,
       "concerns": [
-        "Production deployment pending: TCP connects on 22 and 8080 but later SSH banner and HTTP response probes timed out. An earlier preflight briefly confirmed app/admin/Postgres healthy and /health/bot operational; current production state cannot be read."
+        "After deployment, the bot later became stale; production logs showed a shared reply-expansion timeout and a cycle with no heartbeat. G01 covers remediation."
       ]
+    },
+    {
+      "id": "07",
+      "title": "Устойчивое чтение Studio",
+      "requirements": ["G01"],
+      "blockedBy": ["06"],
+      "wave": 6,
+      "zone": ["dzen_commenter/dzen/", "tests/dzen/"],
+      "status": "done",
+      "startedAt": "2026-10-13T00:33:16+03:00",
+      "finishedAt": "2026-10-13T02:02:50+03:00",
+      "retries": 0,
+      "repairs": 1,
+      "repairFindings": ["T07 craft: тесты повторного поиска привязаны к приватному _expand_hidden_replies; длительность проверяется самоподтверждающимся >= 0 вместо управляемых часов." ],
+      "handoffs": 0,
+      "files": ["dzen_commenter/dzen/page.py", "tests/dzen/test_dzen_page.py"],
+      "tests": { "focusedPassed": 166, "fullPassed": 612, "failed": 0, "skipped": 51 }
+    },
+    {
+      "id": "08",
+      "title": "Восстановление зависшего цикла",
+      "requirements": ["G01", "D01"],
+      "blockedBy": ["05"],
+      "wave": 6,
+      "zone": ["main.py", "dzen_commenter/bot_health.py", "dzen_commenter/orchestrator/", "tests/test_main.py", "tests/admin/", "tests/orchestrator/"],
+      "status": "repair",
+      "startedAt": "2026-10-13T00:33:16+03:00",
+      "retries": 0,
+      "repairs": 1,
+      "repairFindings": ["T08 spec: run_cycle/keep_alive TimeoutError retries need a finite attempt cap per Decision 15 and ticket criterion 6."],
+      "handoffs": 0,
+      "files": ["main.py", "dzen_commenter/bot_health.py", "dzen_commenter/orchestrator/loop.py", "tests/test_main.py", "tests/admin/test_bot_health.py", "tests/orchestrator/test_loop.py"],
+      "tests": { "focusedPassed": 197, "fullPassed": 612, "failed": 0, "skipped": 51 },
+      "concerns": ["Watchdog/termination validated with fakes; real container restart not yet exercised."]
     }
   ],
   "singlePass": null,
-  "tests": { "passed": 597, "failed": 0, "skipped": 51 },
+  "tests": { "passed": 612, "failed": 0, "skipped": 51 },
   "debt": {
     "placeholders": [],
     "assumptions": [],
@@ -295,13 +333,13 @@ window.STATE =
   "additions": [],
   "coverage": {
     "status": "PASS",
-    "found": 1,
-    "fixed": 1,
+    "found": 4,
+    "fixed": 4,
     "deferred": 0,
     "findings": [
       {
-        "type": "clarified",
-        "detail": "R06 deployment has measurable rollout criteria in spec §6; no required behavior was missing."
+        "type": "resolved",
+        "detail": "Independent G2 initially found scope, timeout/DB handling, and recovery criteria that were only partly explicit; brief/spec were amended and final independent check passed with no gaps, partial coverage, or extras."
       }
     ]
   },
@@ -315,8 +353,8 @@ window.STATE =
     "tests/dzen/test_dzen_page.py:3087 — existing F841 predates ticket 04"
   ],
   "reviewers": {
-    "manifestSpec": "/root/review_manifest_spec",
-    "craft": "/root/t02_db_pool_health"
+    "manifestSpec": "/root/review_t07_manifest_spec",
+    "craft": "/root/coverage_check_main_brief_v5"
   },
   "blind": {
     "status": "partial",

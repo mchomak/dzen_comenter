@@ -7,7 +7,7 @@
 | DzenStudioPage | Загрузка ленты, поиск комментария и раскрытие веток | Существующие fetch_comments и publish_reply; приватный поиск принимает URL публикации как необязательный фильтр | DOM-обходы, идентичность контролов и метрики |
 | PlaywrightSessionManager | Жизненный цикл Chromium | recover_if_browser_crashed(exception) -> bool | Детали закрытия и пересоздания контекста |
 | database engine factory | Параметры SQLAlchemy соединений | create_database_engine(url) -> Engine | Настройки пула |
-| Orchestrator/supervisor | Очереди публикаций и восстановление после ошибки | Существующий fail_publication / mark_publication_unconfirmed | Claim tokens и transition rules |
+| Orchestrator/supervisor | Очереди публикаций и восстановление после ошибки | Существующие fail_publication / mark_publication_unconfirmed; потокобезопасный снимок активной попытки `{reply_id, claim_token}` | Claim tokens и transition rules |
 | Bot health | Свежесть последнего heartbeat и завершённый результат цикла | `write_bot_progress` сохраняет `cycle_in_progress`; `/health/bot` возвращает `in_progress`, пока timestamp свежий | Файл snapshot и атомарная замена |
 
 ## Правила проекта
@@ -39,3 +39,23 @@
 ## Из таска 04 — ограниченный поиск источника
 
 - `publication_source_comment_search_completed` сообщает `scan_limit_reached` и `absence_confirmed` независимо: исчерпанный лимит передаёт `true` и `false` соответственно.
+
+## Для продолжения работ по G01
+
+- Studio scan сохраняет существующую конечную fail-closed семантику; общий бюджет равен 30 минутам. `progress_callback` вызывается по ходу обработки групп, а после DOM re-render допускается один повторный поиск только с проверкой идентичности.
+- Supervisor принимает только свежий heartbeat как progress; после 35 минут без progress завершает зависший цикл. Перед выходом он обязан сохранить существующее состояние `publication_unconfirmed`, если submit мог начаться; автоматического повторного submit нет.
+- Orchestrator публикует thread-safe снимок активной попытки `{reply_id, claim_token}` после durable `submitting`. Watchdog перед завершением процесса вызывает существующий переход в `publication_unconfirmed` и дожидается результата БД. Если БД недоступна, watchdog не объявляет безопасную фиксацию успешной и не делает повтор submit; durable submitting claim остаётся non-retriable до существующего lease recovery. Запрещены обход фиксации через `os._exit` и надежда на остановку зависшего Playwright-потока.
+- Для production-ошибок используются только структурированные безопасные поля (event/phase/reason/count/duration), без данных публикаций. Один `OperationalError` не классифицируется как проблема пула без повторяемого подтверждения.
+- Швы для изменений: DzenStudioPage на fake-page/monotonic clock; run_supervised на fake session/clock; Orchestrator с fake repository/claim token; health endpoint на временных heartbeat snapshots. Не запускать реальную публикацию.
+## Из таска 07 — устойчивое чтение Studio
+
+- Полный проход раскрытия ответов имеет общий конечный бюджет 30 минут и обновляет `progress_callback` по обработке групп.
+- Ошибки расширения контролов дают безопасные structured events `studio_reply_expansion_incomplete` и `studio_reply_expansion_control_snapshot_deferred` с `failure_phase`, `duration_ms` и техническими счётчиками; тексты/авторы/URL/HTML не логируются.
+- После stale/изменённого DOM-контрола разрешается один повторный поиск с проверкой идентичности публикации/ветки/контрола; неоднозначная отправка не повторяется.
+- Тестовый шов: fake Studio page и управляемый monotonic clock.
+## Из таска 08 — безопасное завершение зависшего цикла
+
+- Orchestrator exposes `active_publication_attempt()` and `mark_active_publication_unconfirmed(*, reason)`; active `{reply_id, claim_token}` is published under a lock only after durable `submitting`.
+- `get_bot_health(..., stale_after_seconds=...)` allows a finite testable stale threshold; `run_supervised` accepts injected clock/wait/termination functions.
+- Watchdog runs independently of the blocking cycle/keep-alive, waits for durable `publication_unconfirmed` before termination, and never retries submit. If the database write fails, the durable submitting claim remains non-retriable until existing lease recovery.
+- Test seam: fake repository, clock, wait and termination functions; no live Dzen calls.

@@ -667,8 +667,8 @@ def test_fetch_comments_refreshes_health_progress_for_each_feed_pass():
     ).fetch_comments()
 
     assert len(comments) == 1
-    # One initial touch and one after each of the three stable feed passes.
-    assert progress == ["tick"] * 4
+    # One initial touch, one for the card, then each of three stable passes.
+    assert progress == ["tick"] * 5
 
 
 def test_fetch_comments_uses_one_live_dom_snapshot_for_comment_content(monkeypatch):
@@ -2438,7 +2438,14 @@ def _make_target_validation_page(mode: str):
         "handle_clicks": [],
         "click_order": [],
         "mouse_clicks": [],
+        "post_href_checks": 0,
+        "control_key_checks": 0,
+        "control_snapshot_calls": 0,
     }
+
+    root_comment = make_node(0)
+    root_comment.hidden_comment_children = [make_node(1)]
+    page = FakePage([FakeGroup("/a/post1", [root_comment])])
 
     class Handle:
         def __init__(self, handle_index: int):
@@ -2447,6 +2454,8 @@ def _make_target_validation_page(mode: str):
         def evaluate(self, script: str, arg=None):
             assert script == dzen_page._REPLY_CONTROL_CLICK_SCRIPT
             state["handle_target_evaluations"] += 1
+            if mode == "target_changed_always":
+                return {"ok": False, "reason": "target_detached"}
             if mode == "target_changed" and state["handle_target_evaluations"] == 1:
                 return {"ok": False, "reason": "target_detached"}
             return {"ok": True, "x": 12, "y": 24}
@@ -2459,6 +2468,7 @@ def _make_target_validation_page(mode: str):
             if mode == "ambiguous_click_failure":
                 raise TimeoutError("click result is unknown")
             state["visible"] = False
+            root_comment.reply_more_button.click()
 
         def dispose(self):
             state["handle_disposals"] += 1
@@ -2481,6 +2491,7 @@ def _make_target_validation_page(mode: str):
 
         def evaluate(self, script: str, arg=None, *, timeout: int | None = None):
             if script == dzen_page._REPLY_BUTTON_KEY_SCRIPT:
+                state["control_key_checks"] += 1
                 return "stable-control-key"
             assert script == dzen_page._REPLY_CONTROL_CLICK_SCRIPT
             state["locator_target_evaluations"] += 1
@@ -2514,17 +2525,17 @@ def _make_target_validation_page(mode: str):
 
         def get_attribute(self, name: str, *, timeout: int | None = None):
             assert name == "href"
+            state["post_href_checks"] += 1
             return metadata["post_href"]
 
     locator = TargetLocator()
     post_link_locator = PostLinkLocator()
     group_locator = GroupLocator()
-    page = FakePage([])
     metadata = {
         "group_index": 0,
         "button_index": 0,
         "global_index": 0,
-        "post_href": "https://dzen.ru/a/post1?token=private-token",
+        "post_href": "/a/post1",
         "key": "stable-control-key",
         "visible": True,
         "group_comment_count": 1,
@@ -2533,13 +2544,34 @@ def _make_target_validation_page(mode: str):
     }
 
     def read_snapshot(_script: str, _arg=None):
+        if _script == dzen_page._STUDIO_FEED_COUNTS_SCRIPT:
+            return {
+                "group_count": len(page._groups),
+                "button_count": len(
+                    page.query_selector_all(selectors.COMMENT_OPEN_MORE)
+                ),
+            }
+        if _script == dzen_page._STUDIO_FEED_SCROLL_SCRIPT:
+            return None
+        if _script != dzen_page._REPLY_CONTROL_SNAPSHOT_SCRIPT:
+            return None
+        state["control_snapshot_calls"] += 1
+        if mode in {"publication_missing_once", "publication_missing_always"} and (
+            mode == "publication_missing_always"
+            or state["control_snapshot_calls"] == 1
+        ):
+            return {
+                "identity_matches": False,
+                "failure_reason": "publication_missing",
+                "controls": [],
+            }
         return {
             "identity_matches": True,
-            "post_href": "https://dzen.ru/a/post1?token=private-token",
+            "post_href": "/a/post1",
             "group_comment_counts": [
                 {
                     "group_index": 0,
-                "post_href": metadata["post_href"],
+                    "post_href": metadata["post_href"],
                     "visible_comment_count": state["group_comment_count"],
                 }
             ],
@@ -2565,6 +2597,52 @@ def _make_target_validation_page(mode: str):
 
     page.mouse.click = mouse_click
     return page, state
+
+
+def test_hidden_reply_expansion_re_resolves_a_temporarily_missing_publication(
+    monkeypatch,
+):
+    page, state = _make_target_validation_page("publication_missing_once")
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    comments = DzenStudioPage(page).fetch_comments()
+
+    assert len(comments) == 2
+    assert state["control_snapshot_calls"] == 3
+    assert state["post_href_checks"] == 1
+    assert state["control_key_checks"] == 1
+    assert state["handle_clicks"] == [1]
+
+
+def test_hidden_reply_expansion_stops_after_one_missing_publication_recheck(
+    caplog, monkeypatch
+):
+    page, state = _make_target_validation_page("publication_missing_always")
+    clock = {"now": 10.0}
+
+    def advance_for_snapshot_retry(timeout_ms: float) -> None:
+        if timeout_ms == 0:
+            clock["now"] += 0.125
+
+    page.on_wait_timeout = advance_for_snapshot_retry
+    monkeypatch.setattr(dzen_page, "perf_counter", lambda: clock["now"])
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="target changed before"):
+            DzenStudioPage(page).fetch_comments()
+
+    incomplete = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "studio_reply_expansion_incomplete"
+    )
+    assert state["control_snapshot_calls"] == 2
+    assert state["post_href_checks"] == 0
+    assert state["control_key_checks"] == 0
+    assert state["handle_clicks"] == []
+    assert incomplete.failure_reason == "publication_missing"
+    assert incomplete.failure_phase == "control_dom_snapshot"
+    assert incomplete.duration_ms == 125.0
 
 
 def test_hidden_reply_expansion_reports_resolution_timeout_and_reacquires(
@@ -2620,6 +2698,24 @@ def test_hidden_reply_expansion_retries_target_validation_rejection(
     ]
     assert state["mouse_clicks"] == []
     assert deferred.target_validation_reason == "target_detached"
+
+
+def test_hidden_reply_expansion_revalidates_identity_only_once_after_dom_change(
+    monkeypatch,
+):
+    page, state = _make_target_validation_page("target_changed_always")
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_POST_CLICK_WAIT_MS", 0)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_RENDER_TIMEOUT_MS", 0)
+
+    with pytest.raises(RuntimeError):
+        DzenStudioPage(page).fetch_comments()
+
+    assert state["handle_target_evaluations"] == 2
+    assert state["resolution_calls"] == 2
+    assert state["control_key_checks"] == 2
+    assert state["post_href_checks"] == 2
+    assert state["handle_clicks"] == []
+    assert state["handle_disposals"] == 2
 
 
 @pytest.mark.parametrize(
@@ -3063,6 +3159,99 @@ def test_fetch_comments_expands_replies_across_a_large_feed_after_three_minutes(
 
     assert len(comments) == 500
     assert elapsed_ms > 180_000
+
+
+def test_fetch_comments_uses_one_bounded_deadline_for_slow_reply_groups(monkeypatch):
+    groups = []
+    elapsed_ms = 0
+    for index in range(25):
+        parent = make_node(index)
+        parent.hidden_comment_children = [make_node(index + 25)]
+        original_expand = parent.reply_more_button.on_click
+
+        def expand_and_advance(original_expand=original_expand):
+            nonlocal elapsed_ms
+            elapsed_ms += 30_000
+            original_expand()
+
+        parent.reply_more_button.on_click = expand_and_advance
+        groups.append(FakeGroup(f"/a/slow-post{index}", [parent]))
+
+    fake = FakePage(groups)
+    fake.wait_for_timeout = lambda timeout_ms: (
+        setattr(fake, "waited_ms", fake.waited_ms + [timeout_ms]),
+        advance_clock(timeout_ms),
+    )
+
+    def advance_clock(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        elapsed_ms += timeout_ms
+
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 100)
+
+    comments = DzenStudioPage(fake).fetch_comments()
+
+    assert len(comments) == 50
+    assert elapsed_ms > 10 * 60_000
+    assert elapsed_ms < 30 * 60_000
+
+
+def test_fetch_comments_does_not_reset_deadline_for_each_reply_group(monkeypatch):
+    groups = []
+    elapsed_ms = 0
+    for index in range(65):
+        parent = make_node(index)
+        parent.hidden_comment_children = [make_node(index + 65)]
+        original_expand = parent.reply_more_button.on_click
+
+        def expand_and_advance(original_expand=original_expand):
+            nonlocal elapsed_ms
+            elapsed_ms += 30_000
+            original_expand()
+
+        parent.reply_more_button.on_click = expand_and_advance
+        groups.append(FakeGroup(f"/a/bounded-post{index}", [parent]))
+
+    fake = FakePage(groups)
+
+    def wait_for_timeout(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        fake.waited_ms.append(timeout_ms)
+        elapsed_ms += timeout_ms
+
+    fake.wait_for_timeout = wait_for_timeout
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+    monkeypatch.setattr(dzen_page, "_REPLY_EXPANSION_MAX_CLICKS", 100)
+
+    with pytest.raises(RuntimeError, match="reply expansion reached its time limit"):
+        DzenStudioPage(fake).fetch_comments()
+
+    clicked_groups = sum(group._nodes[0].reply_more_button.clicks for group in groups)
+    assert clicked_groups < len(groups)
+    assert 29 * 60_000 < elapsed_ms < 31 * 60_000
+
+
+def test_fetch_comments_reports_progress_after_each_reply_group():
+    groups = []
+    for index in range(5):
+        parent = make_node(index)
+        parent.hidden_comment_children = [make_node(index + 5)]
+        groups.append(FakeGroup(f"/a/progress-post{index}", [parent]))
+
+    fake = FakePage(groups)
+    progress_click_counts = []
+    page = DzenStudioPage(
+        fake,
+        progress_callback=lambda: progress_click_counts.append(
+            sum(group._nodes[0].reply_more_button.clicks for group in groups)
+        ),
+    )
+
+    comments = page.fetch_comments()
+
+    assert len(comments) == 10
+    assert progress_click_counts[:6] == [0, 1, 2, 3, 4, 5]
 
 
 def test_fetch_comments_expands_replies_for_826_publications_within_time_limit(

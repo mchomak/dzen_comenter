@@ -293,14 +293,33 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
     if (selectors.targetGroup) {
         const targetGroupIndex = groups.indexOf(selectors.targetGroup);
         if (targetGroupIndex < 0 || !selectors.targetGroup.isConnected) {
-            return {
-                identity_matches: false,
-                failure_reason: 'publication_missing',
-                post_href: '',
-                controls: [],
-            };
+            const matchingGroups = Number.isInteger(
+                selectors.expectedGroupOccurrence
+            ) ? groups
+                .map((group, index) => ({group, index}))
+                .filter(({group}) => {
+                    const postLink = group.querySelector(selectors.postLink)
+                        || group.querySelector(selectors.postLinkFallback);
+                    return (postLink?.getAttribute('href') || '')
+                            === selectors.expectedPostHref
+                        && groupOccurrences.get(group)
+                            === selectors.expectedGroupOccurrence;
+                }) : [];
+            if (matchingGroups.length !== 1) {
+                return {
+                    identity_matches: false,
+                    failure_reason: matchingGroups.length
+                        ? 'publication_ambiguous' : 'publication_missing',
+                    post_href: '',
+                    controls: [],
+                };
+            }
+            groupIndexes.splice(
+                0, groupIndexes.length, matchingGroups[0].index
+            );
+        } else {
+            groupIndexes.splice(0, groupIndexes.length, targetGroupIndex);
         }
-        groupIndexes.splice(0, groupIndexes.length, targetGroupIndex);
     } else if (selectors.scopeIndex !== null && selectors.expectedPostHref) {
         const matchingGroups = groups
             .map((group, index) => ({group, index}))
@@ -308,7 +327,10 @@ _REPLY_CONTROL_SNAPSHOT_SCRIPT = """
                 const postLink = group.querySelector(selectors.postLink)
                     || group.querySelector(selectors.postLinkFallback);
                 return (postLink?.getAttribute('href') || '')
-                    === selectors.expectedPostHref;
+                        === selectors.expectedPostHref
+                    && (!Number.isInteger(selectors.expectedGroupOccurrence)
+                        || groupOccurrences.get(group)
+                            === selectors.expectedGroupOccurrence);
             });
         if (matchingGroups.length !== 1) {
             return {
@@ -528,12 +550,12 @@ _REPLY_CONTROL_VALIDATION_REASONS = frozenset(
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
-_REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 10 * 60_000
+_REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 30 * 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
 _REPLY_EXPANSION_RENDER_TIMEOUT_MS = 2_000
 _REPLY_EXPANSION_RENDER_POLL_MS = 1_000
 _REPLY_CONTROL_INSPECTION_TIMEOUT_MS = 1_000
-_REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS = 3
+_REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS = 2
 # Read the DOM quickly after a click, then use bounded, lower-frequency polls
 # if Studio renders the replies asynchronously.
 _REPLY_EXPANSION_POST_CLICK_WAIT_MS = 250
@@ -771,6 +793,7 @@ class DzenStudioPage:
         self._progress_callback = progress_callback
         self._article_text_by_url: dict[str, str | None] = {}
         self._reply_expansion_phase = "not_started"
+        self._reply_expansion_started_at: float | None = None
 
     @property
     def _page(self) -> Any:
@@ -943,9 +966,19 @@ class DzenStudioPage:
                 groups = self._page.query_selector_all(selectors.POST_GROUP)
                 failure_phase = "reply_control_group_detection"
                 group_identities = self._studio_group_identities(groups)
+                group_occurrences: dict[str, int] = {}
                 for group_index, (group, group_identity) in enumerate(
                     zip(groups, group_identities)
                 ):
+                    expected_post_href = _post_href(group)
+                    expected_group_occurrence = None
+                    if expected_post_href:
+                        expected_group_occurrence = group_occurrences.get(
+                            expected_post_href, 0
+                        )
+                        group_occurrences[expected_post_href] = (
+                            expected_group_occurrence + 1
+                        )
                     if group_identity in processed_reply_expansion_groups:
                         continue
                     processed_reply_expansion_groups.add(group_identity)
@@ -953,6 +986,7 @@ class DzenStudioPage:
                         selectors.COMMENT_OPEN_MORE
                     )
                     if not initial_controls:
+                        self._report_progress()
                         continue
                     if reply_expansion_deadline is None:
                         reply_expansion_deadline = (
@@ -960,23 +994,26 @@ class DzenStudioPage:
                             + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
                         )
                     failure_phase = "reply_group_identity"
-                    expected_post_href = _post_href(group)
                     page_locator = getattr(self._page, "locator", None)
                     if callable(page_locator):
                         scope = page_locator(selectors.POST_GROUP).nth(group_index)
+                        expansion_controls = None
                     else:
                         scope = group
+                        expansion_controls = initial_controls
                     failure_phase = "reply_expansion"
                     self._expand_hidden_replies(
                         scope=scope,
-                        target_group=group if callable(page_locator) else None,
-                        initial_controls=initial_controls,
+                        target_group=None,
+                        initial_controls=expansion_controls,
                         clicked_keys=reply_expansion_keys,
                         attempt_counts=reply_expansion_attempts,
                         deadline=reply_expansion_deadline,
                         expected_post_href=expected_post_href or None,
+                        expected_group_occurrence=expected_group_occurrence,
                         scope_index=group_index,
                     )
+                    self._report_progress()
                 failure_phase = "feed_snapshot"
                 groups, current_counts = self._studio_feed_snapshot(
                     processed_group_ids=processed_reply_expansion_groups,
@@ -1299,13 +1336,22 @@ class DzenStudioPage:
         has_post_url_filter = bool(post_url_filter)
         page_locator = getattr(self._page, "locator", None)
         group_identities = self._studio_group_identities(groups)
+        group_occurrences: dict[str, int] = {}
         for group_index, (group, group_identity) in enumerate(
             zip(groups, group_identities)
         ):
+            expected_post_href = _post_href(group)
+            expected_group_occurrence = None
+            if expected_post_href:
+                expected_group_occurrence = group_occurrences.get(
+                    expected_post_href, 0
+                )
+                group_occurrences[expected_post_href] = (
+                    expected_group_occurrence + 1
+                )
             if group_identity in processed_groups:
                 continue
             processed_groups.add(group_identity)
-            expected_post_href = _post_href(group)
             if has_post_url_filter and (
                 expected_post_url is None
                 or _post_url(expected_post_href) != expected_post_url
@@ -1322,7 +1368,7 @@ class DzenStudioPage:
                 )
             if callable(page_locator):
                 scope = page_locator(selectors.POST_GROUP).nth(group_index)
-                target_group = group
+                target_group = None
                 initial_controls = None
             else:
                 scope = group
@@ -1335,6 +1381,7 @@ class DzenStudioPage:
                 attempt_counts=attempt_counts,
                 deadline=deadline,
                 expected_post_href=expected_post_href or None,
+                expected_group_occurrence=expected_group_occurrence,
                 scope_index=group_index,
             )
         return deadline
@@ -1458,13 +1505,16 @@ class DzenStudioPage:
         attempt_counts: dict[Any, int] | None = None,
         deadline: float | None = None,
         expected_post_href: str | None = None,
+        expected_group_occurrence: int | None = None,
         scope_index: int | None = None,
     ) -> int:
+        self._reply_expansion_started_at = perf_counter()
         if clicked_keys is None:
             clicked_keys = set()
         if attempt_counts is None:
             attempt_counts = {}
         clicked_count = 0
+        identity_revalidation_attempted: set[str] = set()
         first_controls = initial_controls
         unresolved_click_keys: set[str] = set()
         unresolved_click_reasons: dict[str, str] = {}
@@ -1499,6 +1549,7 @@ class DzenStudioPage:
                             "postLinkFallback": selectors.POST_LINK_FALLBACK,
                             "scopeIndex": scope_index,
                             "expectedPostHref": expected_post_href,
+                            "expectedGroupOccurrence": expected_group_occurrence,
                             "targetGroup": target_group,
                         },
                     )
@@ -1515,6 +1566,10 @@ class DzenStudioPage:
                             "publication_missing",
                         }:
                             identity_failure = "publication_identity_changed"
+                        if identity_failure == "publication_missing":
+                            raise _ReplyControlTargetChangedError(
+                                "publication_missing"
+                            )
                         self._log_reply_expansion_incomplete(
                             failure_reason=identity_failure,
                             clicked_count=clicked_count,
@@ -1690,18 +1745,44 @@ class DzenStudioPage:
                         "timeout" in exception_name
                         or "timeout" in exception_message
                     )
+                    retry_missing_publication = (
+                        isinstance(exc, _ReplyControlTargetChangedError)
+                        and exc.reason_code == "publication_missing"
+                    )
                     if (
-                        not is_timeout
+                        not (is_timeout or retry_missing_publication)
                         or snapshot_attempt == _REPLY_CONTROL_SNAPSHOT_MAX_ATTEMPTS
                     ):
+                        if retry_missing_publication:
+                            self._log_reply_expansion_incomplete(
+                                failure_reason="publication_missing",
+                                clicked_count=clicked_count,
+                                visible_button_count=0,
+                            )
                         raise
                     logger.info(
                         "Dzen reply controls will be re-read after a DOM update",
                         extra={
                             "event": "studio_reply_expansion_control_snapshot_deferred",
                             "failure_stage": "studio_reply_expansion",
-                            "failure_reason": "control_snapshot_timeout",
+                            "failure_phase": self._reply_expansion_phase,
+                            "failure_reason": (
+                                "publication_missing"
+                                if retry_missing_publication
+                                else "control_snapshot_timeout"
+                            ),
                             "snapshot_attempt": snapshot_attempt,
+                            "clicked_count": clicked_count,
+                            "visible_button_count": 0,
+                            "duration_ms": round(
+                                max(
+                                    0.0,
+                                    perf_counter()
+                                    - self._reply_expansion_started_at,
+                                )
+                                * 1_000,
+                                2,
+                            ),
                         },
                     )
                     self._page.wait_for_timeout(
@@ -2139,11 +2220,14 @@ class DzenStudioPage:
                     click_failure_reason = "control_click_timeout"
                 else:
                     click_failure_reason = "control_click_failed"
-                should_reconcile = ambiguous_click_call or (
-                    (is_not_visible or is_timeout or is_target_changed)
+                safe_identity_retry = (
+                    not ambiguous_click_call
+                    and (is_not_visible or is_timeout or is_target_changed)
+                    and next_button_key not in identity_revalidation_attempted
                     and attempt_counts[next_button_key]
                     < _REPLY_EXPANSION_MAX_ATTEMPTS
                 )
+                should_reconcile = ambiguous_click_call or safe_identity_retry
 
                 def log_deferred_click(
                     *,
@@ -2161,6 +2245,15 @@ class DzenStudioPage:
                             "failure_reason": failure_reason,
                             "clicked_count": click_count,
                             "visible_button_count": visible_button_count,
+                            "duration_ms": round(
+                                max(
+                                    0.0,
+                                    perf_counter()
+                                    - self._reply_expansion_started_at,
+                                )
+                                * 1_000,
+                                2,
+                            ),
                             "target_validation_reason": getattr(
                                 error, "reason_code", None
                             ),
@@ -2171,6 +2264,7 @@ class DzenStudioPage:
 
                 if should_reconcile:
                     if not ambiguous_click_call:
+                        identity_revalidation_attempted.add(next_button_key)
                         unresolved_click_keys.add(next_button_key)
                         unresolved_click_reasons[next_button_key] = (
                             click_failure_reason
@@ -2395,20 +2489,27 @@ class DzenStudioPage:
         match = re.match(r"показать\s+(\d+)\b", label, flags=re.IGNORECASE)
         return bool(match and after_count - before_count >= int(match.group(1)))
 
-    @staticmethod
     def _log_reply_expansion_incomplete(
+        self,
         *,
         failure_reason: str,
         clicked_count: int,
         visible_button_count: int,
         attempt_diagnostics: dict[str, Any] | None = None,
     ) -> None:
+        started_at = self._reply_expansion_started_at
         extra = {
             "event": "studio_reply_expansion_incomplete",
             "failure_stage": "studio_reply_expansion",
+            "failure_phase": self._reply_expansion_phase,
             "failure_reason": failure_reason,
             "clicked_count": clicked_count,
             "visible_button_count": visible_button_count,
+            "duration_ms": (
+                round(max(0.0, perf_counter() - started_at) * 1_000, 2)
+                if started_at is not None
+                else 0.0
+            ),
         }
         if attempt_diagnostics is not None:
             extra.update(attempt_diagnostics)
