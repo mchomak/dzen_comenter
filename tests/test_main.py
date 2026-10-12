@@ -1,4 +1,6 @@
 import json
+import threading
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -425,6 +427,158 @@ def test_run_supervised_marks_long_cycle_in_progress_until_it_finishes(tmp_path)
     assert final_health["cycle_in_progress"] is False
 
 
+def test_run_supervised_marks_active_publication_before_stale_worker_termination(
+    tmp_path,
+):
+    health_path = tmp_path / "bot-health.json"
+    release_cycle = threading.Event()
+    cycle_started = threading.Event()
+    terminated = threading.Event()
+    unconfirmed = []
+    events = []
+    future_now = datetime.now(timezone.utc) + timedelta(minutes=36)
+
+    class StalledLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH=str(health_path))
+
+        def run_cycle(self):
+            cycle_started.set()
+            assert release_cycle.wait(timeout=2)
+
+        def active_publication_attempt(self):
+            return (42, "fake-claim-token")
+
+        def mark_active_publication_unconfirmed(self, *, reason):
+            events.append("unconfirmed")
+            unconfirmed.append(reason)
+            return True
+
+    def terminate_process():
+        events.append("terminate")
+        terminated.set()
+        release_cycle.set()
+
+    with pytest.raises(SystemExit):
+        main.run_supervised(
+            StalledLoop(),
+            FakeSession(),
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=1000,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: 0.0,
+            wall_time_fn=lambda: future_now,
+            watchdog_wait_fn=lambda _stop, _delay: False,
+            process_terminate_fn=terminate_process,
+            max_cycles=1,
+        )
+
+    assert cycle_started.is_set()
+    assert terminated.is_set()
+    assert unconfirmed == ["worker heartbeat stale"]
+    assert events == ["unconfirmed", "terminate"]
+    final_health = json.loads(health_path.read_text(encoding="utf-8"))
+    assert final_health["cycle_in_progress"] is True
+
+
+def test_run_supervised_stops_when_unconfirmed_transition_cannot_be_verified(
+    tmp_path, caplog
+):
+    from sqlalchemy.exc import OperationalError
+
+    health_path = tmp_path / "bot-health.json"
+    release_cycle = threading.Event()
+    terminated = threading.Event()
+    future_now = datetime.now(timezone.utc) + timedelta(minutes=36)
+
+    class StalledLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH=str(health_path))
+
+        def run_cycle(self):
+            assert release_cycle.wait(timeout=2)
+
+        def active_publication_attempt(self):
+            return (42, "fake-claim-token")
+
+        def mark_active_publication_unconfirmed(self, *, reason):
+            raise OperationalError("UPDATE private_queue", {}, RuntimeError("db details"))
+
+    def terminate_process():
+        terminated.set()
+        release_cycle.set()
+
+    with caplog.at_level("ERROR", logger="main"), pytest.raises(SystemExit):
+        main.run_supervised(
+            StalledLoop(),
+            FakeSession(),
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=1000,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: 0.0,
+            wall_time_fn=lambda: future_now,
+            watchdog_wait_fn=lambda _stop, _delay: False,
+            process_terminate_fn=terminate_process,
+            max_cycles=1,
+        )
+
+    assert terminated.is_set()
+    failure_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None)
+        == "stale_cycle_publication_unconfirmed_failed"
+    )
+    assert failure_record.reason == "database_transition_unconfirmed"
+    assert "private_queue" not in caplog.text
+    assert "db details" not in caplog.text
+    assert not any(
+        getattr(record, "event", None) == "stale_cycle_publication_unconfirmed"
+        for record in caplog.records
+    )
+
+
+def test_run_supervised_keeps_a_fresh_long_cycle_running(tmp_path):
+    health_path = tmp_path / "bot-health.json"
+    release_cycle = threading.Event()
+    future_now = datetime.now(timezone.utc) + timedelta(minutes=34)
+    wait_calls = 0
+    terminations = []
+
+    class LongCycleLoop:
+        settings = SimpleNamespace(BOT_HEALTH_PATH=str(health_path))
+
+        def run_cycle(self):
+            assert release_cycle.wait(timeout=2)
+
+    def watchdog_wait(stop_event, _delay):
+        nonlocal wait_calls
+        wait_calls += 1
+        if wait_calls == 1:
+            return False
+        release_cycle.set()
+        return True
+
+    main.run_supervised(
+        LongCycleLoop(),
+        FakeSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=1000,
+        sleep_fn=lambda _delay: None,
+        time_fn=lambda: 0.0,
+        wall_time_fn=lambda: future_now,
+        watchdog_wait_fn=watchdog_wait,
+        process_terminate_fn=lambda: terminations.append(True),
+        max_cycles=1,
+    )
+
+    assert terminations == []
+    assert wait_calls >= 2
+    final_health = json.loads(health_path.read_text(encoding="utf-8"))
+    assert final_health["cycle_in_progress"] is False
+
+
 def test_run_supervised_continues_when_health_snapshot_write_fails(monkeypatch):
     class HealthLoop:
         settings = SimpleNamespace(BOT_HEALTH_PATH="unwritable-health-path")
@@ -522,7 +676,237 @@ def test_run_supervised_logs_context_for_a_failed_cycle(caplog):
     assert record.event == "main_loop_cycle_failed"
     assert record.cycle == 1
     assert record.error_type == "RuntimeError"
-    assert record.error_message == "boom on cycle 1"
+    assert record.phase == "cycle"
+    assert record.operation == "run_cycle"
+    assert record.reason == "operation_failed"
+    assert record.retry_policy == "max_3_consecutive_failures"
+    assert not hasattr(record, "error_message")
+
+
+def test_run_supervised_classifies_timeouts_without_logging_exception_payload(
+    caplog,
+):
+    class TimeoutLoop:
+        def run_cycle(self):
+            raise TimeoutError("private comment and database query details")
+
+    session = FakeSession()
+    with caplog.at_level("WARNING", logger="main"):
+        main.run_supervised(
+            TimeoutLoop(),
+            session,
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=1000,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: 0.0,
+            max_cycles=1,
+        )
+
+    record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_cycle_failed"
+    )
+    assert record.phase == "cycle"
+    assert record.operation == "run_cycle"
+    assert record.reason == "timeout"
+    assert record.retry_policy == "max_3_consecutive_failures"
+    assert "private comment and database query details" not in caplog.text
+    assert session.recovery_calls == []
+
+
+def test_run_supervised_stops_after_three_cycle_failures_then_resumes(caplog):
+    class RecoveringLoop:
+        def __init__(self):
+            self.calls = 0
+
+        def run_cycle(self):
+            self.calls += 1
+            if self.calls <= main._MAX_OPERATION_ATTEMPTS:
+                raise TimeoutError("temporary read timeout")
+
+    loop = RecoveringLoop()
+    with caplog.at_level("WARNING", logger="main"):
+        main.run_supervised(
+            loop,
+            FakeSession(),
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=1000,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: 0.0,
+            max_cycles=5,
+        )
+
+    assert loop.calls == main._MAX_OPERATION_ATTEMPTS + 1
+    exhausted = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_recovery_exhausted"
+    )
+    assert exhausted.phase == "cycle"
+    assert exhausted.operation == "run_cycle"
+    assert exhausted.reason == "retry_limit_reached"
+    assert exhausted.attempts == main._MAX_OPERATION_ATTEMPTS
+    skipped = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_operation_skipped"
+    )
+    assert skipped.phase == "cycle"
+    assert skipped.operation == "run_cycle"
+    assert skipped.reason == "recovery_cooldown"
+
+
+def test_run_supervised_stops_after_three_keepalive_failures_then_resumes(caplog):
+    class FailingKeepaliveSession(FakeSession):
+        def keep_alive(self):
+            self.keep_alive_calls += 1
+            if self.keep_alive_calls <= main._MAX_OPERATION_ATTEMPTS:
+                raise TimeoutError("private keepalive details")
+
+    session = FailingKeepaliveSession()
+    times = iter((0.0, 1.0, 2.0, 3.0, 4.0, 5.0))
+    with caplog.at_level("WARNING", logger="main"):
+        main.run_supervised(
+            FakeLoop(),
+            session,
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=1,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: next(times),
+            max_cycles=5,
+        )
+
+    assert session.keep_alive_calls == main._MAX_OPERATION_ATTEMPTS + 1
+    exhausted = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_recovery_exhausted"
+    )
+    assert exhausted.phase == "keepalive"
+    assert exhausted.operation == "session.keep_alive"
+    assert exhausted.reason == "retry_limit_reached"
+    assert exhausted.attempts == main._MAX_OPERATION_ATTEMPTS
+    skipped = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_operation_skipped"
+        and record.phase == "keepalive"
+    )
+    assert skipped.reason == "recovery_cooldown"
+    assert "private keepalive details" not in caplog.text
+
+
+def test_run_supervised_never_retries_cycle_with_active_submit_claim():
+    class SubmitThenTimeoutLoop:
+        def __init__(self):
+            self.calls = 0
+            self.submit_calls = 0
+            self.active = None
+            self.unconfirmed_reasons = []
+
+        def run_cycle(self):
+            self.calls += 1
+            if self.active is None and not self.unconfirmed_reasons:
+                self.submit_calls += 1
+                self.active = (41, "claim-token")
+                raise TimeoutError("publication wait timed out")
+
+        def active_publication_attempt(self):
+            return self.active
+
+        def mark_active_publication_unconfirmed(self, *, reason):
+            self.unconfirmed_reasons.append(reason)
+            self.active = None
+            return True
+
+    loop = SubmitThenTimeoutLoop()
+    main.run_supervised(
+        loop,
+        FakeSession(),
+        FakeNotifier(),
+        poll_interval=1,
+        keepalive_interval=1000,
+        sleep_fn=lambda _delay: None,
+        time_fn=lambda: 0.0,
+        max_cycles=2,
+    )
+
+    assert loop.calls == 2
+    assert loop.submit_calls == 1
+    assert loop.unconfirmed_reasons == ["cycle failed after durable submit"]
+
+
+def test_run_supervised_classifies_keepalive_timeout_without_renderer_recovery(
+    caplog,
+):
+    class TimeoutSession(FakeSession):
+        def keep_alive(self):
+            raise TimeoutError("private keepalive details")
+
+    session = TimeoutSession()
+    times = iter((0.0, 10.0))
+    with caplog.at_level("WARNING", logger="main"):
+        main.run_supervised(
+            FakeLoop(),
+            session,
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=5,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: next(times),
+            max_cycles=1,
+        )
+
+    record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_keepalive_failed"
+    )
+    assert record.phase == "keepalive"
+    assert record.operation == "session.keep_alive"
+    assert record.reason == "timeout"
+    assert record.retry_policy == "max_3_consecutive_failures"
+    assert "private keepalive details" not in caplog.text
+    assert session.recovery_calls == []
+
+
+def test_run_supervised_reports_operational_error_without_sql_or_pool_claim(caplog):
+    from sqlalchemy.exc import OperationalError
+
+    class DatabaseErrorLoop:
+        def run_cycle(self):
+            raise OperationalError(
+                "SELECT private_comment FROM comments",
+                {"comment": "private"},
+                RuntimeError("connection details"),
+            )
+
+    with caplog.at_level("WARNING", logger="main"):
+        main.run_supervised(
+            DatabaseErrorLoop(),
+            FakeSession(),
+            FakeNotifier(),
+            poll_interval=1,
+            keepalive_interval=1000,
+            sleep_fn=lambda _delay: None,
+            time_fn=lambda: 0.0,
+            max_cycles=1,
+        )
+
+    record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "main_loop_cycle_failed"
+    )
+    assert record.reason == "database_operational_error"
+    assert record.operation == "run_cycle"
+    assert "pool" not in caplog.text.casefold()
+    assert "private_comment" not in caplog.text
+    assert "connection details" not in caplog.text
 
 
 def test_run_supervised_throttles_duplicate_error_notifications():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -8,7 +9,7 @@ from datetime import datetime, timedelta
 
 from dzen_commenter.config.runtime_config import RuntimeConfig, is_bot_account_author
 from dzen_commenter.config.settings import Settings
-from dzen_commenter.contracts.enums import CommentStatus, PublicationFailureOutcome
+from dzen_commenter.contracts.enums import PublicationFailureOutcome
 from dzen_commenter.contracts.errors import (
     PublicationUnconfirmedError,
     SourceCommentUnavailableError,
@@ -68,6 +69,35 @@ class OrchestratorLoop:
         self.runtime_config = runtime_config
         self.sleep_fn = sleep_fn
         self._authorization_not_confirmed_notified = False
+        self._active_publication_lock = threading.RLock()
+        self._active_publication: tuple[int, str] | None = None
+
+    def active_publication_attempt(self) -> tuple[int, str] | None:
+        """Return the active durable submit claim without exposing mutable state."""
+        with self._active_publication_lock:
+            return self._active_publication
+
+    def mark_active_publication_unconfirmed(self, *, reason: str) -> bool:
+        """Persist an unknown submit outcome before a stale worker is stopped."""
+        with self._active_publication_lock:
+            attempt = self._active_publication
+            if attempt is None:
+                return False
+            reply_id, claim_token = attempt
+            self.repository.mark_publication_unconfirmed(
+                reply_id,
+                claim_token=claim_token,
+                reason=reason,
+            )
+            if self._active_publication == attempt:
+                self._active_publication = None
+            return True
+
+    def _set_active_publication_attempt(
+        self, attempt: tuple[int, str] | None
+    ) -> None:
+        with self._active_publication_lock:
+            self._active_publication = attempt
 
     def run_cycle(self) -> None:
         if self.auth_assistant.poll_auth_command():
@@ -168,6 +198,9 @@ class OrchestratorLoop:
                         self.repository.mark_publication_submitting(
                             claimed.reply_id, claim_token=claimed.claim_token
                         )
+                        self._set_active_publication_attempt(
+                            (claimed.reply_id, claimed.claim_token)
+                        )
                     except Exception as marker_error:
                         raise RuntimeError(
                             "publication submit marker failed before click"
@@ -182,11 +215,12 @@ class OrchestratorLoop:
                         before_submit=before_submit,
                     )
             except PublicationUnconfirmedError as exc:
-                self.repository.mark_publication_unconfirmed(
-                    claimed.reply_id,
-                    claim_token=claimed.claim_token,
-                    reason=str(exc),
-                )
+                if not self.mark_active_publication_unconfirmed(reason=str(exc)):
+                    self.repository.mark_publication_unconfirmed(
+                        claimed.reply_id,
+                        claim_token=claimed.claim_token,
+                        reason=str(exc),
+                    )
                 logger.warning(
                     "Dzen reply publication was not confirmed",
                     extra={
@@ -197,6 +231,23 @@ class OrchestratorLoop:
                 )
                 continue
             except Exception as exc:
+                if self.active_publication_attempt() == (
+                    claimed.reply_id,
+                    claimed.claim_token,
+                ):
+                    self.mark_active_publication_unconfirmed(
+                        reason="publication outcome unknown after submit failure"
+                    )
+                    logger.warning(
+                        "Dzen reply publication outcome is unknown",
+                        extra={
+                            "event": "publication_unconfirmed",
+                            **correlation,
+                            "failure_type": type(exc).__name__,
+                        },
+                    )
+                    continue
+
                 error_reason = f"Dzen reply publication failed: {exc}"
                 outcome = self.repository.fail_publication(
                     claimed.reply_id,
@@ -250,11 +301,13 @@ class OrchestratorLoop:
                 continue
 
             published_at = moscow_now() if runtime_settings.auto_publish else None
-            self.repository.complete_publication(
-                claimed.reply_id,
-                claim_token=claimed.claim_token,
-                published_at=published_at,
-            )
+            with self._active_publication_lock:
+                self.repository.complete_publication(
+                    claimed.reply_id,
+                    claim_token=claimed.claim_token,
+                    published_at=published_at,
+                )
+                self._active_publication = None
             logger.info(
                 "Dzen publication job completed",
                 extra={

@@ -59,7 +59,11 @@ def _write_snapshot(path: str, payload: dict[str, object]) -> None:
 
 
 def get_bot_health(
-    path: str, poll_interval: float, *, now: datetime | None = None
+    path: str,
+    poll_interval: float,
+    *,
+    now: datetime | None = None,
+    stale_after_seconds: float | None = None,
 ) -> dict:
     target = Path(path)
     try:
@@ -91,7 +95,13 @@ def get_bot_health(
         return {"status": "degraded", "heartbeat_at": None}
 
     current = now or datetime.now(timezone.utc)
-    threshold = timedelta(seconds=max(3 * poll_interval, 600))
+    threshold = timedelta(
+        seconds=(
+            max(3 * poll_interval, 600)
+            if stale_after_seconds is None
+            else max(0, stale_after_seconds)
+        )
+    )
     if current.astimezone(timezone.utc) - heartbeat.astimezone(timezone.utc) > threshold:
         status = "stale"
     elif cycle_in_progress:

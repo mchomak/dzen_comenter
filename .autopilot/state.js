@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-09T20:15:02+03:00",
-  "updatedAt": "2026-10-13T02:07:00+03:00",
+  "updatedAt": "2026-10-13T02:27:44+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -47,15 +47,16 @@ window.STATE =
     },
     {
       "id": "build",
-      "status": "active",
+      "status": "done",
       "startedAt": "2026-10-13T00:30:53+03:00",
-      "note": "Продолжение после production-диагностики: T07 завершён; T08 чинит конечный лимит retry после review."
+      "note": "Продолжение после production-диагностики: T07 завершён; T08 чинит конечный лимит retry после review.",
+      "finishedAt": "2026-10-13T02:27:44+03:00"
     },
     {
       "id": "review",
-      "status": "pending",
+      "status": "done",
       "startedAt": "2026-10-09T17:56:43+00:00",
-      "finishedAt": "2026-10-09T20:21:05+00:00",
+      "finishedAt": "2026-10-13T02:27:44+03:00",
       "note": "Предыдущие таски прошли ревью; ожидается ревью T07–T08."
     },
     {
@@ -65,8 +66,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 10,
-    "done": 8,
-    "inTicket": 2,
+    "done": 10,
+    "inTicket": 0,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -99,7 +100,12 @@ window.STATE =
         "dzen_commenter/dzen/page.py",
         "tests/dzen/test_dzen_page.py"
       ],
-      "tests": { "focusedPassed": 158, "fullPassed": 590, "failed": 0, "skipped": 51 },
+      "tests": {
+        "focusedPassed": 158,
+        "fullPassed": 590,
+        "failed": 0,
+        "skipped": 51
+      },
       "commit": "add4a2e"
     },
     {
@@ -131,7 +137,13 @@ window.STATE =
         "tests/admin/test_database_engine.py",
         "tests/test_main.py"
       ],
-      "tests": { "adminPassed": 134, "workerPassed": 15, "fullPassed": 586, "failed": 0, "skipped": 51 },
+      "tests": {
+        "adminPassed": 134,
+        "workerPassed": 15,
+        "fullPassed": 586,
+        "failed": 0,
+        "skipped": 51
+      },
       "commit": "716fd88",
       "concerns": [
         "tests/test_main.py:153 — worker test does not assert factory call or engine identity",
@@ -166,7 +178,12 @@ window.STATE =
         "tests/browser/test_session_manager.py",
         "tests/test_main.py"
       ],
-      "tests": { "focusedPassed": 63, "fullPassed": 590, "failed": 0, "skipped": 51 },
+      "tests": {
+        "focusedPassed": 63,
+        "fullPassed": 590,
+        "failed": 0,
+        "skipped": 51
+      },
       "commit": "15c669a",
       "concerns": [
         "main.py:150 — recovery is accessed via optional getattr despite being required by the SessionManager contract"
@@ -200,7 +217,12 @@ window.STATE =
         "dzen_commenter/dzen/page.py",
         "tests/dzen/test_dzen_page.py"
       ],
-      "tests": { "focusedPassed": 7, "fullPassed": 590, "failed": 0, "skipped": 51 },
+      "tests": {
+        "focusedPassed": 7,
+        "fullPassed": 590,
+        "failed": 0,
+        "skipped": 51
+      },
       "commit": "5e37f04",
       "concerns": [
         "tests/dzen/test_dzen_page.py:3087 — existing F841 predates ticket 04"
@@ -291,40 +313,92 @@ window.STATE =
     {
       "id": "07",
       "title": "Устойчивое чтение Studio",
-      "requirements": ["G01"],
-      "blockedBy": ["06"],
+      "requirements": [
+        "G01"
+      ],
+      "blockedBy": [
+        "06"
+      ],
       "wave": 6,
-      "zone": ["dzen_commenter/dzen/", "tests/dzen/"],
+      "zone": [
+        "dzen_commenter/dzen/",
+        "tests/dzen/"
+      ],
       "status": "done",
       "startedAt": "2026-10-13T00:33:16+03:00",
       "finishedAt": "2026-10-13T02:02:50+03:00",
       "retries": 0,
       "repairs": 1,
-      "repairFindings": ["T07 craft: тесты повторного поиска привязаны к приватному _expand_hidden_replies; длительность проверяется самоподтверждающимся >= 0 вместо управляемых часов." ],
+      "repairFindings": [
+        "T07 craft: тесты повторного поиска привязаны к приватному _expand_hidden_replies; длительность проверяется самоподтверждающимся >= 0 вместо управляемых часов."
+      ],
       "handoffs": 0,
-      "files": ["dzen_commenter/dzen/page.py", "tests/dzen/test_dzen_page.py"],
-      "tests": { "focusedPassed": 166, "fullPassed": 612, "failed": 0, "skipped": 51 }
+      "files": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/test_dzen_page.py"
+      ],
+      "commit": "638391e",
+      "tests": {
+        "focusedPassed": 166,
+        "fullPassed": 612,
+        "failed": 0,
+        "skipped": 51
+      }
     },
     {
       "id": "08",
       "title": "Восстановление зависшего цикла",
-      "requirements": ["G01", "D01"],
-      "blockedBy": ["05"],
+      "requirements": [
+        "G01",
+        "D01"
+      ],
+      "blockedBy": [
+        "05"
+      ],
       "wave": 6,
-      "zone": ["main.py", "dzen_commenter/bot_health.py", "dzen_commenter/orchestrator/", "tests/test_main.py", "tests/admin/", "tests/orchestrator/"],
-      "status": "repair",
+      "zone": [
+        "main.py",
+        "dzen_commenter/bot_health.py",
+        "dzen_commenter/orchestrator/",
+        "tests/test_main.py",
+        "tests/admin/",
+        "tests/orchestrator/"
+      ],
+      "status": "done",
       "startedAt": "2026-10-13T00:33:16+03:00",
       "retries": 0,
       "repairs": 1,
-      "repairFindings": ["T08 spec: run_cycle/keep_alive TimeoutError retries need a finite attempt cap per Decision 15 and ticket criterion 6."],
+      "repairFindings": [
+        "T08 spec: run_cycle/keep_alive TimeoutError retries need a finite attempt cap per Decision 15 and ticket criterion 6."
+      ],
       "handoffs": 0,
-      "files": ["main.py", "dzen_commenter/bot_health.py", "dzen_commenter/orchestrator/loop.py", "tests/test_main.py", "tests/admin/test_bot_health.py", "tests/orchestrator/test_loop.py"],
-      "tests": { "focusedPassed": 197, "fullPassed": 612, "failed": 0, "skipped": 51 },
-      "concerns": ["Watchdog/termination validated with fakes; real container restart not yet exercised."]
+      "files": [
+        "main.py",
+        "dzen_commenter/bot_health.py",
+        "dzen_commenter/orchestrator/loop.py",
+        "tests/test_main.py",
+        "tests/admin/test_bot_health.py",
+        "tests/orchestrator/test_loop.py"
+      ],
+      "tests": {
+        "focusedPassed": 200,
+        "fullPassed": 615,
+        "failed": 0,
+        "skipped": 51
+      },
+      "concerns": [
+        "Production container restart was not simulated locally; deployment health check remains a release verification.",
+        "Craft MEDIUM: retry-boundary tests derive expected call count from _MAX_OPERATION_ATTEMPTS, so the tests do not independently pin the selected value of three."
+      ],
+      "finishedAt": "2026-10-13T02:27:44+03:00"
     }
   ],
   "singlePass": null,
-  "tests": { "passed": 612, "failed": 0, "skipped": 51 },
+  "tests": {
+    "passed": 615,
+    "failed": 0,
+    "skipped": 51
+  },
   "debt": {
     "placeholders": [],
     "assumptions": [],

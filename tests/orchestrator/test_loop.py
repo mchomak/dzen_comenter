@@ -324,6 +324,71 @@ def test_unconfirmed_publication_stops_automatic_retries(
     assert len(harness.ai_provider.calls) == 1
 
 
+def test_stale_watchdog_can_mark_the_durable_active_publication_unconfirmed(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["Готовый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    assert callable(getattr(harness.loop, "active_publication_attempt", None))
+    observed_attempts = []
+
+    def blocked_publication(
+        _comment, _text, *, auto_publish, reply_id=None, before_submit=None
+    ):
+        assert auto_publish is True
+        assert reply_id == 1
+        before_submit()
+        observed_attempts.append(harness.loop.active_publication_attempt())
+        assert harness.loop.mark_active_publication_unconfirmed(
+            reason="worker heartbeat stale"
+        ) is True
+        raise KeyboardInterrupt
+
+    harness.page.publish_reply = blocked_publication
+
+    with pytest.raises(KeyboardInterrupt):
+        harness.loop.run_cycle()
+
+    assert observed_attempts == [(1, "publication-1")]
+    assert harness.repository.publication_queue[1]["state"] == "completed"
+    assert harness.repository.replies[1].status is ReplyStatus.UNCONFIRMED
+    assert harness.loop.active_publication_attempt() is None
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.publication_queue[1]["attempt_count"] == 1
+
+
+def test_timeout_after_durable_submit_is_unconfirmed_and_never_retried(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        comments=[comment_factory(1)],
+        ai_responses=["Готовый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    publish_attempts = []
+
+    def timeout_after_submit(
+        _comment, _text, *, auto_publish, reply_id=None, before_submit=None
+    ):
+        publish_attempts.append(reply_id)
+        before_submit()
+        raise TimeoutError("private browser details")
+
+    harness.page.publish_reply = timeout_after_submit
+
+    harness.loop.run_cycle()
+    harness.loop.run_cycle()
+
+    assert publish_attempts == [1]
+    assert harness.repository.publication_queue[1]["attempt_count"] == 1
+    assert harness.repository.replies[1].status is ReplyStatus.UNCONFIRMED
+
+
 @pytest.mark.parametrize("marker_persisted", (False, True))
 def test_submit_marker_failure_before_click_uses_retry_cooldown(
     loop_factory, comment_factory, monkeypatch, marker_persisted

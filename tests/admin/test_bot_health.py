@@ -114,7 +114,6 @@ def test_shared_evaluator_uses_the_exact_freshness_limit(
     tmp_path, poll_interval, freshness_limit
 ):
     path = tmp_path / "bot-health.json"
-    now = datetime(2026, 9, 27, 12, 1, 30, tzinfo=timezone.utc)
     heartbeat = datetime(2026, 9, 27, 12, 0, 0, tzinfo=timezone.utc)
     path.write_text(
         json.dumps(
@@ -201,3 +200,32 @@ def test_healthcheck_accepts_a_fresh_in_progress_cycle(tmp_path, monkeypatch):
     monkeypatch.setenv("POLL_INTERVAL", "60")
 
     assert main() == 0
+
+
+def test_health_evaluator_supports_the_supervisor_watchdog_threshold(tmp_path):
+    path = tmp_path / "bot-health.json"
+    heartbeat = datetime(2026, 9, 27, 12, 0, 0, tzinfo=timezone.utc)
+    path.write_text(
+        json.dumps(
+            {
+                "heartbeat_at": heartbeat.isoformat(),
+                "cycle_succeeded": False,
+                "authenticated": True,
+                "cycle_in_progress": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert get_bot_health(
+        str(path),
+        60,
+        now=heartbeat + timedelta(minutes=34),
+        stale_after_seconds=35 * 60,
+    )["status"] == "in_progress"
+    assert get_bot_health(
+        str(path),
+        60,
+        now=heartbeat + timedelta(minutes=36),
+        stale_after_seconds=35 * 60,
+    )["status"] == "stale"
