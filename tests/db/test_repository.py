@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
-import dzen_commenter.db.repository as repository_module
 from dzen_commenter.contracts.enums import (
     CommentStatus,
     GenerationFailureOutcome,
@@ -89,7 +90,13 @@ def _make_reply(
 def test_tables_exist_with_columns(engine):
     insp = inspect(engine)
     tables = set(insp.get_table_names())
-    assert {"publications", "comments", "replies", "reply_publication_queue"} <= tables
+    assert {
+        "publications",
+        "comments",
+        "replies",
+        "reply_publication_queue",
+        "ai_call_reservations",
+    } <= tables
 
     pub_cols = {c["name"] for c in insp.get_columns("publications")}
     assert {
@@ -132,6 +139,15 @@ def test_tables_exist_with_columns(engine):
         "article_context_status",
         "is_cta_candidate",
     } <= rep_cols
+
+    assert {column["name"] for column in insp.get_columns("ai_call_reservations")} == {
+        "id",
+        "reserved_at",
+    }
+    assert any(
+        index["name"] == "ix_ai_call_reservations_reserved_at"
+        for index in insp.get_indexes("ai_call_reservations")
+    )
 
 
 def test_generation_queue_migration_preserves_batch_tables(engine):
@@ -294,6 +310,83 @@ def test_article_context_migration_preserves_existing_publications(engine):
     assert row == ("Existing title", "http://existing", None, None, None, None)
 
 
+def test_ai_call_reservations_migration_backfills_legacy_attempt_before_new_failure(
+    engine,
+):
+    from alembic import command
+    from alembic.config import Config
+
+    config = Config(str(REPO_ROOT / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(REPO_ROOT / "dzen_commenter" / "db" / "migrations")
+    )
+    command.downgrade(config, "0011_publication_claim_token")
+    with engine.begin() as conn:
+        now = conn.execute(
+            text("SELECT CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow'")
+        ).scalar_one()
+        created_at = now - timedelta(minutes=10)
+        publication_id = conn.execute(
+            text(
+                "INSERT INTO publications (dzen_publication_id, title, url) "
+                "VALUES ('before-ai-ledger', 'Existing title', 'https://example.test') "
+                "RETURNING id"
+            )
+        ).scalar_one()
+        comment_id = conn.execute(
+            text(
+                "INSERT INTO comments (dzen_comment_id, publication_id, author, text, "
+                "status) VALUES ('legacy-ai-comment', :publication_id, 'author', "
+                "'comment text', 'generated') RETURNING id"
+            ),
+            {"publication_id": publication_id},
+        ).scalar_one()
+        reply_id = conn.execute(
+            text(
+                "INSERT INTO replies (comment_id, generated_text, status, created_at) "
+                "VALUES (:comment_id, 'reply text', 'generated', :created_at) "
+                "RETURNING id"
+            ),
+            {"comment_id": comment_id, "created_at": created_at},
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO replies (comment_id, generated_text, status, created_at) "
+                "VALUES (:comment_id, 'not counted', 'draft', :created_at), "
+                "(:comment_id, 'too old', 'generated', :old_created_at)"
+            ),
+            {
+                "comment_id": comment_id,
+                "created_at": created_at,
+                "old_created_at": now - timedelta(hours=1, seconds=1),
+            },
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.connect() as conn:
+        reply_row = conn.execute(
+            text("SELECT generated_text, status, created_at FROM replies WHERE id = :id"),
+            {"id": reply_id},
+        ).one()
+        reservation_rows = conn.execute(
+            text("SELECT reserved_at FROM ai_call_reservations ORDER BY reserved_at")
+        ).all()
+
+    assert reply_row == ("reply text", "generated", created_at)
+    assert reservation_rows == [(created_at,)]
+    migrated_repo = PostgresCommentRepository(engine)
+    cutoff = now - timedelta(hours=1)
+    assert migrated_repo.count_ai_attempts_since(cutoff) == 1
+
+    # The first post-migration provider call reserves a slot but fails before a
+    # Reply row is written. It must still consume the second hourly slot.
+    failed_call_at = created_at + timedelta(seconds=1)
+    assert migrated_repo.reserve_ai_call(failed_call_at, limit=2) is True
+    assert migrated_repo.count_ai_attempts_since(cutoff) == 2
+    assert migrated_repo.reserve_ai_call(failed_call_at + timedelta(seconds=1), limit=2) is False
+
+
 def test_save_reply_stores_article_context_status(repo, engine):
     publication_id = repo.upsert_publication(_make_publication())
     comment_id = repo.upsert_comment(_make_comment(publication_id))
@@ -352,36 +445,48 @@ def test_published_reply_counters_ignore_errors_and_old_replies(repo):
     assert repo.count_cta_candidates_produced() == 3
 
 
-def test_ai_attempt_counter_includes_recent_generated_published_and_errors(repo):
+def test_ai_attempt_counter_does_not_double_count_a_completed_new_call(repo):
     publication_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 7, 31, 12, 0, 0)
-    recent_statuses = (
-        ReplyStatus.GENERATED,
-        ReplyStatus.PUBLISHED,
-        ReplyStatus.ERROR,
+    assert repo.reserve_ai_call(now, limit=10)
+    reply_comment_id = repo.upsert_comment(
+        _make_comment(publication_id, dzen_id="reply-without-reservation")
     )
+    reply = _make_reply(reply_comment_id, status=ReplyStatus.GENERATED)
+    reply.created_at = now
+    repo.save_reply(reply)
 
-    for index, status in enumerate(recent_statuses):
-        comment_id = repo.upsert_comment(
-            _make_comment(publication_id, dzen_id=f"recent-{index}")
-        )
-        reply = _make_reply(comment_id, status=status)
-        reply.created_at = now
-        repo.save_reply(reply)
+    assert repo.count_ai_attempts_since(now - timedelta(hours=1)) == 1
+    assert repo.reserve_ai_call(now, limit=1) is False
 
-    old_comment_id = repo.upsert_comment(_make_comment(publication_id, dzen_id="old"))
-    old_reply = _make_reply(old_comment_id)
-    old_reply.created_at = now - timedelta(hours=1, microseconds=1)
-    repo.save_reply(old_reply)
 
-    skipped_comment_id = repo.upsert_comment(
-        _make_comment(publication_id, dzen_id="skipped")
-    )
-    skipped_reply = _make_reply(skipped_comment_id, status=ReplyStatus.SKIPPED)
-    skipped_reply.created_at = now
-    repo.save_reply(skipped_reply)
+def test_ai_call_reservations_are_durable_and_enforce_rolling_hour_limit(repo, engine):
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    restarted_repository = PostgresCommentRepository(engine)
 
-    assert repo.count_ai_attempts_since(now - timedelta(hours=1)) == 4
+    assert repo.reserve_ai_call(now, limit=2) is True
+    assert restarted_repository.count_ai_attempts_since(now - timedelta(hours=1)) == 1
+    assert restarted_repository.reserve_ai_call(
+        now + timedelta(minutes=1), limit=2
+    ) is True
+    assert repo.reserve_ai_call(now + timedelta(minutes=2), limit=2) is False
+    assert repo.reserve_ai_call(now + timedelta(hours=1, seconds=1), limit=2) is True
+
+
+def test_ai_call_reservations_serialize_concurrent_workers(repo, engine):
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    worker_count = 8
+    start = Barrier(worker_count)
+
+    def reserve_slot(_: int) -> bool:
+        start.wait(timeout=5)
+        return PostgresCommentRepository(engine).reserve_ai_call(now, limit=3)
+
+    with ThreadPoolExecutor(max_workers=worker_count) as workers:
+        outcomes = list(workers.map(reserve_slot, range(worker_count)))
+
+    assert sum(outcomes) == 3
+    assert repo.count_ai_attempts_since(now - timedelta(hours=1)) == 3
 
 
 # --- Acceptance 2: UNIQUE constraints ---
@@ -820,6 +925,65 @@ def test_generation_queue_enqueues_once_and_claims_the_earliest_ready_comment(
     assert first_queue == ("claimed", 1, now)
     assert first_status == "generating"
     assert repo.claim_next_generation(now).comment.id == second_id
+
+
+def test_release_generation_claim_requeues_and_ignores_stale_token(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    comment_id = repo.upsert_comment(_make_comment(publication_id))
+    assert repo.enqueue_generation(comment_id, queued_at=now)
+
+    first_claim = repo.claim_next_generation(now)
+    assert first_claim is not None
+    assert first_claim.attempt_count == 1
+
+    repo.release_generation_claim(comment_id, claim_token=first_claim.claim_token)
+
+    with engine.connect() as conn:
+        released = conn.execute(
+            select(
+                ReplyGenerationQueueTable.state,
+                ReplyGenerationQueueTable.attempt_count,
+                ReplyGenerationQueueTable.claimed_at,
+                ReplyGenerationQueueTable.claim_token,
+            ).where(ReplyGenerationQueueTable.comment_id == comment_id)
+        ).one()
+        comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+    assert released == ("queued", 0, None, None)
+    assert comment_status == "new"
+
+    current_claim = repo.claim_next_generation(now + timedelta(seconds=1))
+    assert current_claim is not None
+    assert current_claim.comment.id == comment_id
+    assert current_claim.attempt_count == 1
+    assert current_claim.claim_token != first_claim.claim_token
+
+    repo.release_generation_claim(comment_id, claim_token=first_claim.claim_token)
+
+    with engine.connect() as conn:
+        still_claimed = conn.execute(
+            select(
+                ReplyGenerationQueueTable.state,
+                ReplyGenerationQueueTable.attempt_count,
+                ReplyGenerationQueueTable.claimed_at,
+                ReplyGenerationQueueTable.claim_token,
+            ).where(ReplyGenerationQueueTable.comment_id == comment_id)
+        ).one()
+        comment_status = conn.execute(
+            select(CommentTable.status).where(CommentTable.id == comment_id)
+        ).scalar_one()
+    assert still_claimed == (
+        "claimed",
+        1,
+        now + timedelta(seconds=1),
+        current_claim.claim_token,
+    )
+    assert comment_status == "generating"
+
+    repo.release_generation_claim(comment_id, claim_token=current_claim.claim_token)
+    assert repo.claim_next_generation(now + timedelta(seconds=2)).comment.id == comment_id
 
 
 def test_generation_queue_claims_freshest_comments_with_fetched_at_fallback(repo):

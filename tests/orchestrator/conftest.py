@@ -61,6 +61,7 @@ class FakeCommentRepository:
         self.has_generated_reply_calls: list[int] = []
         self.has_published_reply_calls: list[int] = []
         self.generation_queue: dict[int, dict[str, object]] = {}
+        self.ai_call_reservations: list[datetime] = []
         self.article_contexts: dict[int, ArticleContext] = {}
         self.publication_queue: dict[int, dict[str, object]] = {}
         self.enqueue_publication_calls: list[int] = []
@@ -163,19 +164,13 @@ class FakeCommentRepository:
         )
 
     def count_ai_attempts_since(self, since: datetime) -> int:
-        return sum(
-            reply.status
-            in (
-                ReplyStatus.GENERATED,
-                ReplyStatus.PUBLISHED,
-                ReplyStatus.ERROR,
-                ReplyStatus.SKIPPED,
-                ReplyStatus.UNCONFIRMED,
-            )
-            and reply.created_at is not None
-            and reply.created_at >= since
-            for reply in self.replies.values()
-        )
+        return sum(attempt_at >= since for attempt_at in self.ai_call_reservations)
+
+    def reserve_ai_call(self, now: datetime, *, limit: int) -> bool:
+        if self.count_ai_attempts_since(now - timedelta(hours=1)) >= limit:
+            return False
+        self.ai_call_reservations.append(now)
+        return True
 
     def count_cta_candidates_produced(self) -> int:
         return sum(
@@ -273,6 +268,24 @@ class FakeCommentRepository:
             comment=self.comments[comment_id],
             attempt_count=int(row["attempt_count"]),
             claim_token=claim_token,
+        )
+
+    def release_generation_claim(
+        self, comment_id: int, *, claim_token: str
+    ) -> None:
+        queue = self.generation_queue[comment_id]
+        if queue["state"] != "claimed" or queue["claim_token"] != claim_token:
+            return
+        attempt_count = max(0, int(queue["attempt_count"]) - 1)
+        queue["state"] = "queued"
+        queue["attempt_count"] = attempt_count
+        queue["claimed_at"] = None
+        queue["claim_token"] = None
+        self.set_comment_status(
+            comment_id,
+            CommentStatus.NEW
+            if attempt_count == 0
+            else CommentStatus.GENERATION_RETRY,
         )
 
     def complete_generation(

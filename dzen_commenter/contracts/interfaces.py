@@ -71,10 +71,18 @@ class CommentRepository(Protocol):
     def count_ai_attempts_since(self, since: datetime) -> int:
         ...
 
+    def reserve_ai_call(self, now: datetime, *, limit: int) -> bool:
+        ...
+
     def enqueue_generation(self, comment_id: int, *, queued_at: datetime) -> bool:
         ...
 
     def claim_next_generation(self, now: datetime) -> ClaimedGeneration | None:
+        ...
+
+    def release_generation_claim(
+        self, comment_id: int, *, claim_token: str
+    ) -> None:
         ...
 
     def complete_generation(

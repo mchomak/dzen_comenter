@@ -11,9 +11,9 @@ def test_migrations_have_one_linear_head():
     config = Config(str(REPO_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == ["0011_publication_claim_token"]
-    assert script.get_revision("0011_publication_claim_token").down_revision == (
-        "0010_reply_generation_queue"
+    assert script.get_heads() == ["0012_ai_call_reservations"]
+    assert script.get_revision("0012_ai_call_reservations").down_revision == (
+        "0011_publication_claim_token"
     )
 
 

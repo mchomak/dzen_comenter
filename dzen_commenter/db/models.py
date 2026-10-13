@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -56,6 +56,14 @@ class ReplyTable(Base):
     created_at: Mapped[datetime | None] = mapped_column()
     article_context_status: Mapped[str | None] = mapped_column(Text)
     is_cta_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class AICallReservationTable(Base):
+    __tablename__ = "ai_call_reservations"
+    __table_args__ = (Index("ix_ai_call_reservations_reserved_at", "reserved_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reserved_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
 class ReplyPublicationQueueTable(Base):

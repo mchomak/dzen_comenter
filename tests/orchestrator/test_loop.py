@@ -78,6 +78,7 @@ def test_run_cycle_generates_and_publishes_one_cleaned_reply_with_article_contex
     harness.page.article_text_by_url[comment.post_url] = "Очищенный текст статьи"
 
     harness.loop.run_cycle()
+    harness.loop.run_cycle()
 
     reply = harness.repository.replies[1]
     assert reply.generated_text == "author-1, готовый ответ"
@@ -88,6 +89,255 @@ def test_run_cycle_generates_and_publishes_one_cleaned_reply_with_article_contex
     assert len(harness.ai_provider.calls) == 1
     assert "не более 990 символов" in harness.ai_provider.calls[0][0]
     assert harness.prompt_builder.contexts[0].article_text == "Очищенный текст статьи"
+
+
+def test_run_cycle_finishes_ready_generation_and_publication_before_studio_scan(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    harness = loop_factory(
+        ai_responses=["Готовый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comment.publication_id = publication_id
+    comment_id = harness.repository.upsert_eligible_comment(
+        comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
+    )
+
+    def fetch_comments():
+        assert harness.repository.generation_queue[comment_id]["state"] == "completed"
+        assert harness.repository.replies[1].status is ReplyStatus.PUBLISHED
+        assert harness.repository.publication_queue[1]["state"] == "completed"
+        return []
+
+    harness.page.fetch_comments = fetch_comments
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert len(harness.page.publish_calls) == 1
+
+
+def test_run_cycle_drains_at_most_five_generation_jobs_and_one_publication(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        ai_responses=["Готовый ответ"] * 6,
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comments = [comment_factory(index) for index in range(1, 7)]
+    comment_ids = []
+    for comment in comments:
+        comment.publication_id = publication_id
+        comment_ids.append(
+            harness.repository.upsert_eligible_comment(
+                comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
+            )
+        )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 5
+    assert [harness.repository.generation_queue[item]["state"] for item in comment_ids] == [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "queued",
+    ]
+    assert len(harness.page.publish_calls) == 1
+
+
+def test_run_cycle_stops_generation_at_the_remaining_hourly_quota(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        ai_responses=["Готовый ответ"] * 4,
+        settings_overrides={"MAX_COMMENTS_PER_HOUR": 2},
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comments = [comment_factory(index) for index in range(1, 5)]
+    comment_ids = []
+    for comment in comments:
+        comment.publication_id = publication_id
+        comment_ids.append(
+            harness.repository.upsert_eligible_comment(
+                comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
+            )
+        )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 2
+    assert [harness.repository.generation_queue[item]["state"] for item in comment_ids] == [
+        "completed",
+        "completed",
+        "queued",
+        "queued",
+    ]
+
+
+def test_quota_race_releases_generation_claim_without_consuming_job_attempt(
+    loop_factory, comment_factory, monkeypatch
+):
+    harness = loop_factory(
+        ai_responses=["Не должен вызываться"],
+        settings_overrides={"MAX_COMMENTS_PER_HOUR": 2},
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comment = comment_factory(1)
+    comment.publication_id = publication_id
+    comment_id = harness.repository.upsert_eligible_comment(
+        comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
+    )
+    monkeypatch.setattr(
+        harness.repository,
+        "reserve_ai_call",
+        lambda now, *, limit: False,
+    )
+
+    harness.loop.run_cycle()
+
+    queue = harness.repository.generation_queue[comment_id]
+    assert harness.ai_provider.calls == []
+    assert queue["state"] == "queued"
+    assert queue["attempt_count"] == 0
+    assert harness.repository.comments[comment_id].status is CommentStatus.NEW
+
+
+def test_shortening_retry_stops_when_only_one_hourly_ai_slot_remains(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: now)
+    harness = loop_factory(
+        ai_responses=["Слишком длинный первый вариант", "Короткий ответ"],
+        settings_overrides={
+            "MAX_COMMENTS_PER_HOUR": 2,
+            "MAX_REPLY_LENGTH": 12,
+        },
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    assert harness.repository.reserve_ai_call(now, limit=2) is True
+    comment = comment_factory(1)
+    comment.publication_id = publication_id
+    comment_id = harness.repository.upsert_eligible_comment(comment, queued_at=now)
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+    assert harness.repository.generation_queue[comment_id]["state"] == "queued"
+    assert harness.repository.comments[comment_id].status is CommentStatus.GENERATION_RETRY
+    assert harness.repository.replies[1].status is ReplyStatus.ERROR
+
+
+def test_shortening_retry_consumes_hourly_quota_in_following_cycle(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        ai_responses=["Слишком длинный первый вариант", "Короткий ответ", "Третий ответ"],
+        settings_overrides={
+            "MAX_COMMENTS_PER_HOUR": 2,
+            "MAX_REPLY_LENGTH": 12,
+        },
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comments = [comment_factory(index) for index in range(1, 3)]
+    comment_ids = []
+    for comment in comments:
+        comment.publication_id = publication_id
+        comment_ids.append(
+            harness.repository.upsert_eligible_comment(
+                comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
+            )
+        )
+
+    harness.loop.run_cycle()
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 2
+    assert harness.repository.generation_queue[comment_ids[1]]["state"] == "queued"
+
+
+def test_studio_scan_failure_keeps_generation_and_publication_already_completed(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(1)
+    harness = loop_factory(
+        ai_responses=["Готовый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True},
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comment.publication_id = publication_id
+    comment_id = harness.repository.upsert_eligible_comment(
+        comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
+    )
+
+    def fail_scan():
+        raise RuntimeError("studio unavailable")
+
+    harness.page.fetch_comments = fail_scan
+
+    with pytest.raises(RuntimeError, match="studio unavailable"):
+        harness.loop.run_cycle()
+
+    assert harness.repository.generation_queue[comment_id]["state"] == "completed"
+    assert harness.repository.replies[1].status is ReplyStatus.PUBLISHED
+    assert harness.repository.publication_queue[1]["state"] == "completed"
 
 
 def test_overlong_reply_is_regenerated_once_with_limit_in_regular_prompt(
@@ -101,6 +351,7 @@ def test_overlong_reply_is_regenerated_once_with_limit_in_regular_prompt(
         settings_overrides={"MAX_REPLY_LENGTH": 12},
     )
 
+    harness.loop.run_cycle()
     harness.loop.run_cycle()
 
     assert len(harness.ai_provider.calls) == 2
@@ -123,6 +374,7 @@ def test_reply_still_fails_safely_if_shortening_retry_is_over_limit(
     )
 
     harness.loop.run_cycle()
+    harness.loop.run_cycle()
 
     assert len(harness.ai_provider.calls) == 2
     assert harness.repository.comments[1].status is CommentStatus.GENERATION_RETRY
@@ -143,6 +395,7 @@ def test_cta_reply_prompt_includes_the_dynamic_length_limit_once(
         settings_overrides={"MAX_REPLY_LENGTH": 40, "CTA_EVERY_N_COMMENTS": 1},
     )
 
+    harness.loop.run_cycle()
     harness.loop.run_cycle()
 
     assert len(harness.ai_provider.calls) == 1
@@ -255,6 +508,7 @@ def test_protocol_only_output_retries_generation_without_a_publication_job(loop_
     harness = loop_factory(comments=[comment_factory(1)], ai_responses=["Ответ: SKIP"])
 
     harness.loop.run_cycle()
+    harness.loop.run_cycle()
 
     assert harness.repository.comments[1].status is CommentStatus.GENERATION_RETRY
     assert harness.repository.generation_queue[1]["next_attempt_at"] == now + timedelta(minutes=60)
@@ -265,6 +519,7 @@ def test_protocol_only_output_retries_generation_without_a_publication_job(loop_
 def test_explicit_skip_is_terminal_without_publication(loop_factory, comment_factory):
     harness = loop_factory(comments=[comment_factory(1)], ai_responses=["SKIP"])
 
+    harness.loop.run_cycle()
     harness.loop.run_cycle()
 
     assert harness.repository.comments[1].status is CommentStatus.SKIPPED
@@ -281,6 +536,7 @@ def test_publication_retry_preserves_generated_text_and_never_regenerates(loop_f
     original_publish = harness.page.publish_reply
     harness.page.publish_reply = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("DOM changed"))
 
+    harness.loop.run_cycle()
     harness.loop.run_cycle()
     saved_text = harness.repository.replies[1].generated_text
     assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_RETRY
@@ -348,6 +604,7 @@ def test_stale_watchdog_can_mark_the_durable_active_publication_unconfirmed(
         raise KeyboardInterrupt
 
     harness.page.publish_reply = blocked_publication
+    harness.loop.run_cycle()
 
     with pytest.raises(KeyboardInterrupt):
         harness.loop.run_cycle()
@@ -411,6 +668,7 @@ def test_submit_marker_failure_before_click_uses_retry_cooldown(
 
     harness.repository.mark_publication_submitting = fail_marker
     harness.loop.run_cycle()
+    harness.loop.run_cycle()
 
     queue = harness.repository.publication_queue[1]
     assert harness.page.publish_calls == []
@@ -456,6 +714,7 @@ def test_unavailable_source_exhausts_publication_without_developer_alert(
     log.addHandler(handler)
     try:
         with caplog.at_level(logging.WARNING, logger=log.name):
+            harness.loop.run_cycle()
             harness.loop.run_cycle()
             saved_text = harness.repository.replies[1].generated_text
             assert harness.repository.comments[1].status is CommentStatus.PUBLICATION_RETRY
@@ -505,6 +764,7 @@ def test_other_terminal_publication_failure_still_alerts(
     try:
         with caplog.at_level(logging.INFO, logger=log.name):
             harness.loop.run_cycle()
+            harness.loop.run_cycle()
     finally:
         log.removeHandler(handler)
 
@@ -541,6 +801,7 @@ def test_publication_completion_trace_correlates_draft_without_marking_published
     )
     log = logging.getLogger("dzen_commenter.orchestrator.loop")
 
+    harness.loop.run_cycle()
     with caplog.at_level(logging.INFO, logger=log.name):
         harness.loop.run_cycle()
 
@@ -574,6 +835,7 @@ def test_publication_completion_trace_reports_published_after_auto_publish(
     )
     log = logging.getLogger("dzen_commenter.orchestrator.loop")
 
+    harness.loop.run_cycle()
     with caplog.at_level(logging.INFO, logger=log.name):
         harness.loop.run_cycle()
 
@@ -595,6 +857,7 @@ def test_article_context_is_cached_for_the_next_single_comment(loop_factory, com
 
     harness.loop.run_cycle()
     harness.page.comments = [second]
+    harness.loop.run_cycle()
     harness.page.article_text_by_url[first.post_url] = "Не должен читаться"
     harness.loop.run_cycle()
 

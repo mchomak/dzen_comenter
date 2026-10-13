@@ -39,6 +39,10 @@ CTA_PROMPT_TEMPLATE = (
 logger = logging.getLogger(__name__)
 
 
+class _HourlyAIAttemptLimitReached(Exception):
+    pass
+
+
 class OrchestratorLoop:
     def __init__(
         self,
@@ -109,6 +113,12 @@ class OrchestratorLoop:
             if not self._ensure_session():
                 return
 
+        runtime_settings = self.runtime_config.get().settings
+        now = moscow_now()
+        self.repository.enqueue_pending_generations(queued_at=now)
+        self._drain_generation_queue(runtime_settings, max_jobs=5)
+        self._run_publication_cycle(runtime_settings, max_publications=1)
+
         publication_id = self.repository.upsert_publication(
             Publication(
                 id=None,
@@ -120,11 +130,6 @@ class OrchestratorLoop:
 
         with self._browser_access():
             comments = self.page.fetch_comments()
-        runtime_settings = self.runtime_config.get().settings
-        now = moscow_now()
-        generation_limit_available = self.repository.count_ai_attempts_since(
-            now - timedelta(hours=1)
-        ) < runtime_settings.max_comments_per_hour
         for comment in comments:
             if is_bot_account_author(
                 comment.author, runtime_settings.bot_account_name
@@ -136,20 +141,51 @@ class OrchestratorLoop:
             ):
                 comment_id = self.repository.upsert_comment(comment)
                 self.repository.skip_comment_if_new(comment_id)
-            elif generation_limit_available:
+            else:
                 comment_id = self.repository.upsert_eligible_comment(
                     comment, queued_at=now
                 )
-            else:
-                comment_id = self.repository.upsert_comment(comment)
             comment.id = comment_id
             if self.repository.has_published_reply(comment_id):
                 continue
 
-        if generation_limit_available:
-            self.repository.enqueue_pending_generations(queued_at=now)
-            self._run_generation_cycle(runtime_settings)
-        self._run_publication_cycle(runtime_settings, max_publications=1)
+    def _drain_generation_queue(self, runtime_settings, *, max_jobs: int) -> int:
+        processed = 0
+        for _ in range(max_jobs):
+            now = moscow_now()
+            if self.repository.count_ai_attempts_since(
+                now - timedelta(hours=1)
+            ) >= runtime_settings.max_comments_per_hour:
+                break
+
+            job_ai_attempts = 0
+
+            def generate_with_quota(prompt: str) -> str:
+                nonlocal job_ai_attempts
+                attempt_at = moscow_now()
+                if not self.repository.reserve_ai_call(
+                    attempt_at, limit=runtime_settings.max_comments_per_hour
+                ):
+                    if job_ai_attempts == 0:
+                        raise _HourlyAIAttemptLimitReached(
+                            "Hourly AI attempt limit reached before the model call"
+                        )
+                    raise RuntimeError(
+                        "Hourly AI attempt limit reached before the shortening retry"
+                    )
+                job_ai_attempts += 1
+                return self.ai_provider.generate(
+                    prompt,
+                    temperature=self.settings.AI_TEMPERATURE,
+                    max_tokens=self.settings.AI_MAX_TOKENS,
+                )
+
+            if not self._run_generation_cycle(
+                runtime_settings, ai_generate=generate_with_quota
+            ):
+                break
+            processed += 1
+        return processed
 
     def _run_publication_cycle(
         self,
@@ -388,10 +424,12 @@ class OrchestratorLoop:
         max_age_days = self.runtime_config.get().settings.max_comment_age_days
         return (now - posted_at).days > max_age_days
 
-    def _run_generation_cycle(self, runtime_settings) -> None:
+    def _run_generation_cycle(
+        self, runtime_settings, *, ai_generate: Callable[[str], str]
+    ) -> bool:
         claimed = self.repository.claim_next_generation(moscow_now())
         if claimed is None:
-            return
+            return False
 
         comment = claimed.comment
         comment_id = comment.id
@@ -404,7 +442,7 @@ class OrchestratorLoop:
                 reason="Comment is an existing own reply",
                 article_context_status="without_article_text",
             )
-            return
+            return True
         if self._is_too_old(comment.posted_at):
             self._skip_generation(
                 comment_id,
@@ -412,16 +450,24 @@ class OrchestratorLoop:
                 reason="Comment is older than the configured limit",
                 article_context_status="without_article_text",
             )
-            return
+            return True
 
         article_text, article_context_status = self._get_article_text(comment)
-        self._generate_reply(
-            comment,
-            runtime_settings,
-            claim_token=claimed.claim_token,
-            article_text=article_text,
-            article_context_status=article_context_status,
-        )
+        try:
+            self._generate_reply(
+                comment,
+                runtime_settings,
+                claim_token=claimed.claim_token,
+                article_text=article_text,
+                article_context_status=article_context_status,
+                ai_generate=ai_generate,
+            )
+        except _HourlyAIAttemptLimitReached:
+            self.repository.release_generation_claim(
+                comment_id, claim_token=claimed.claim_token
+            )
+            return False
+        return True
 
     def _get_article_text(self, comment: Comment) -> tuple[str, str]:
         cached_context = self.repository.get_article_context(comment.publication_id)
@@ -459,6 +505,7 @@ class OrchestratorLoop:
         claim_token: str,
         article_text: str,
         article_context_status: str,
+        ai_generate: Callable[[str], str],
     ) -> None:
         comment_id = comment.id
         if comment_id is None:
@@ -504,11 +551,7 @@ class OrchestratorLoop:
                 f"не более {model_reply_length} символов."
             )
             text = self._extract_reply_text(
-                self.ai_provider.generate(
-                    prompt,
-                    temperature=self.settings.AI_TEMPERATURE,
-                    max_tokens=self.settings.AI_MAX_TOKENS,
-                )
+                ai_generate(prompt)
             )
             if text is None:
                 self._skip_generation(
@@ -530,11 +573,7 @@ class OrchestratorLoop:
                     "текст ответа или ровно SKIP."
                 )
                 text = self._extract_reply_text(
-                    self.ai_provider.generate(
-                        retry_prompt,
-                        temperature=self.settings.AI_TEMPERATURE,
-                        max_tokens=self.settings.AI_MAX_TOKENS,
-                    )
+                    ai_generate(retry_prompt)
                 )
                 if text is None:
                     self._skip_generation(
@@ -562,6 +601,8 @@ class OrchestratorLoop:
                 created_at=moscow_now(),
                 is_cta_candidate=is_cta_candidate,
             )
+        except _HourlyAIAttemptLimitReached:
+            raise
         except Exception as exc:
             error_reason = f"Reply generation failed: {exc}"
             self.repository.fail_generation(

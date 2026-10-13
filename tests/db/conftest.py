@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _drop_all(engine) -> None:
     with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS ai_call_reservations CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS reply_generation_queue CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS reply_publication_queue CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS reply_batch_items CASCADE"))
@@ -50,8 +51,9 @@ def clean_rows(engine):
     with engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE reply_generation_queue, reply_publication_queue, reply_batch_items, comment_batch_queue, reply_batches, "
-                "replies, comments, publications RESTART IDENTITY CASCADE"
+                "TRUNCATE ai_call_reservations, reply_generation_queue, reply_publication_queue, "
+                "reply_batch_items, comment_batch_queue, reply_batches, replies, comments, "
+                "publications RESTART IDENTITY CASCADE"
             )
         )
     yield

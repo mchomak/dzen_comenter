@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from uuid import uuid4
 
-from sqlalchemy import case, exists, func, literal, or_, select, update
+from sqlalchemy import case, delete, exists, func, literal, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -21,6 +21,7 @@ from dzen_commenter.contracts.models import (
     Reply,
 )
 from dzen_commenter.db.models import (
+    AICallReservationTable,
     CommentTable,
     PublicationTable,
     ReplyGenerationQueueTable,
@@ -37,6 +38,7 @@ class PostgresCommentRepository:
 
     _PUBLICATION_CLAIM_LEASE = timedelta(hours=2)
     _GENERATION_CLAIM_LEASE = timedelta(minutes=5)
+    _AI_CALL_RESERVATION_LOCK_KEY = 0x445A454E414931
 
     def upsert_publication(self, pub: Publication) -> int:
         stmt = (
@@ -235,20 +237,38 @@ class PostgresCommentRepository:
             return int(conn.execute(stmt).scalar_one())
 
     def count_ai_attempts_since(self, since: datetime) -> int:
-        stmt = select(func.count()).select_from(ReplyTable).where(
-            ReplyTable.status.in_(
-                [
-                    ReplyStatus.GENERATED.value,
-                    ReplyStatus.PUBLISHED.value,
-                    ReplyStatus.ERROR.value,
-                    ReplyStatus.SKIPPED.value,
-                    ReplyStatus.UNCONFIRMED.value,
-                ]
-            ),
-            ReplyTable.created_at >= since,
-        )
         with self._engine.begin() as conn:
-            return int(conn.execute(stmt).scalar_one())
+            return self._count_ai_call_reservations(conn, since)
+
+    @staticmethod
+    def _count_ai_call_reservations(conn, since: datetime) -> int:
+        stmt = select(func.count()).select_from(AICallReservationTable).where(
+            AICallReservationTable.reserved_at >= since
+        )
+        return int(conn.execute(stmt).scalar_one())
+
+    def reserve_ai_call(self, now: datetime, *, limit: int) -> bool:
+        if limit <= 0:
+            return False
+
+        cutoff = now - timedelta(hours=1)
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                {"lock_key": self._AI_CALL_RESERVATION_LOCK_KEY},
+            )
+            conn.execute(
+                delete(AICallReservationTable).where(
+                    AICallReservationTable.reserved_at < cutoff
+                )
+            )
+            reserved = self._count_ai_call_reservations(conn, cutoff)
+            if reserved >= limit:
+                return False
+            conn.execute(
+                insert(AICallReservationTable).values(reserved_at=now)
+            )
+            return True
 
     @staticmethod
     def _enqueue_generation_statement(comment_id: int, queued_at: datetime):
@@ -391,6 +411,45 @@ class PostgresCommentRepository:
             attempt_count=attempt_count,
             claim_token=claim_token,
         )
+
+    def release_generation_claim(
+        self, comment_id: int, *, claim_token: str
+    ) -> None:
+        with self._engine.begin() as conn:
+            queue = conn.execute(
+                select(ReplyGenerationQueueTable.attempt_count)
+                .where(
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "claimed",
+                    ReplyGenerationQueueTable.claim_token == claim_token,
+                )
+                .with_for_update()
+            ).scalar_one_or_none()
+            if queue is None:
+                return
+
+            attempt_count = max(0, int(queue) - 1)
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(ReplyGenerationQueueTable.comment_id == comment_id)
+                .values(
+                    state="queued",
+                    attempt_count=attempt_count,
+                    claimed_at=None,
+                    claim_token=None,
+                )
+            )
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id == comment_id)
+                .values(
+                    status=(
+                        CommentStatus.NEW.value
+                        if attempt_count == 0
+                        else CommentStatus.GENERATION_RETRY.value
+                    )
+                )
+            )
 
     def complete_generation(
         self,
