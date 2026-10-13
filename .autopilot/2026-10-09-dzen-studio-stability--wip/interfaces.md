@@ -59,3 +59,9 @@
 - `get_bot_health(..., stale_after_seconds=...)` allows a finite testable stale threshold; `run_supervised` accepts injected clock/wait/termination functions.
 - Watchdog runs independently of the blocking cycle/keep-alive, waits for durable `publication_unconfirmed` before termination, and never retries submit. If the database write fails, the durable submitting claim remains non-retriable until existing lease recovery.
 - Test seam: fake repository, clock, wait and termination functions; no live Dzen calls.
+
+## Из таска 09 — live scan без удержания DOM handles
+
+- На live Playwright-пути comment counts берутся без накопления Python-списков `ElementHandle` между scan passes; content extraction остаётся одним сериализованным DOM-снимком.
+- Fake/non-live fallback продолжает собирать `COMMENT_NODE` handles, когда live snapshot API недоступен.
+- Тестовый шов: fake live page с snapshot/counts и non-live page с обычным DOM query; проверяются точность счётчиков, отсутствие live handles и сохранность fallback.

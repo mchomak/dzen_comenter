@@ -6,12 +6,12 @@ window.STATE =
   "mode": "full",
   "depth": "normal",
   "polish": null,
-  "tier": "T2",
+  "tier": "T3",
   "briefFile": "2026-10-09-brief.md",
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-09T20:15:02+03:00",
-  "updatedAt": "2026-10-13T02:27:44+03:00",
+  "updatedAt": "2026-10-13T12:19:07+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -47,17 +47,17 @@ window.STATE =
     },
     {
       "id": "build",
-      "status": "done",
-      "startedAt": "2026-10-13T00:30:53+03:00",
-      "note": "Продолжение после production-диагностики: T07 завершён; T08 чинит конечный лимит retry после review.",
-      "finishedAt": "2026-10-13T02:27:44+03:00"
+      "status": "active",
+      "startedAt": "2026-10-13T12:14:03+03:00",
+      "note": "T10 закрывает найденный в ревью live fallback с ElementHandle и усиливает тесты счётчиков.",
+      "finishedAt": null
     },
     {
       "id": "review",
       "status": "done",
-      "startedAt": "2026-10-09T17:56:43+00:00",
-      "finishedAt": "2026-10-13T02:27:44+03:00",
-      "note": "Предыдущие таски прошли ревью; ожидается ревью T07–T08."
+      "startedAt": "2026-10-13T12:08:50+03:00",
+      "finishedAt": "2026-10-13T12:13:27+03:00",
+      "note": "T09 проверен по manifest/spec и craft; два не блокирующих замечания перенесены в финальную triage."
     },
     {
       "id": "final",
@@ -391,11 +391,71 @@ window.STATE =
         "Craft MEDIUM: retry-boundary tests derive expected call count from _MAX_OPERATION_ATTEMPTS, so the tests do not independently pin the selected value of three."
       ],
       "finishedAt": "2026-10-13T02:27:44+03:00"
+    },
+    {
+      "id": "09",
+      "title": "Убрать удержание DOM-ссылок при чтении Studio",
+      "requirements": [
+        "G01",
+        "R08"
+      ],
+      "blockedBy": [
+        "07"
+      ],
+      "wave": 7,
+      "zone": [
+        "dzen_commenter/dzen/",
+        "tests/dzen/"
+      ],
+      "status": "done",
+      "startedAt": "2026-10-13T12:03:28+03:00",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "files": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/test_dzen_page.py"
+      ],
+      "tests": {
+        "focusedPassed": 37,
+        "fullPassed": 617,
+        "failed": 0,
+        "skipped": 51
+      },
+      "concerns": [
+        "Craft: malformed live count evaluation may fall back to ElementHandle collection on a Playwright page; close via T10.",
+        "Craft: live count regression used a single-group fixture; use varied multi-group counts in T10."
+      ],
+      "finishedAt": "2026-10-13T12:13:27+03:00"
+    },
+    {
+      "id": "10",
+      "title": "Не собирать DOM handles при ошибке live-счётчика",
+      "requirements": [
+        "G01",
+        "R08"
+      ],
+      "blockedBy": [
+        "09"
+      ],
+      "wave": 8,
+      "zone": [
+        "dzen_commenter/dzen/",
+        "tests/dzen/"
+      ],
+      "status": "pending",
+      "retries": 0,
+      "repairs": 0,
+      "handoffs": 0,
+      "files": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/test_dzen_page.py"
+      ]
     }
   ],
   "singlePass": null,
   "tests": {
-    "passed": 615,
+    "passed": 617,
     "failed": 0,
     "skipped": 51
   },
@@ -418,6 +478,8 @@ window.STATE =
     ]
   },
   "concerns": [
+    "T09 craft: malformed live count evaluation may fall back to ElementHandle collection on a Playwright page; pending T10.",
+    "T09 craft: live count regression used a single-group fixture; pending T10.",
     "tests/test_main.py:153 — worker test does not assert factory call or engine identity",
     "tests/admin/test_database_engine.py:8 — factory test does not exercise admin app boundary",
     "tests/dzen/test_dzen_page.py:754 — metrics fields are not asserted in the new regression tests",
@@ -427,8 +489,8 @@ window.STATE =
     "tests/dzen/test_dzen_page.py:3087 — existing F841 predates ticket 04"
   ],
   "reviewers": {
-    "manifestSpec": "/root/review_t07_manifest_spec",
-    "craft": "/root/coverage_check_main_brief_v5"
+    "manifestSpec": "/root/t09_manifest_review",
+    "craft": "/root/t09_craft_review"
   },
   "blind": {
     "status": "partial",

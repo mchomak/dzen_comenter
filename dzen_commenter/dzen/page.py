@@ -58,8 +58,13 @@ _STUDIO_FEED_MAX_SCAN_PASSES = 40
 _STUDIO_FEED_STABLE_PASSES = 3
 _STUDIO_FEED_COUNTS_SCRIPT = """
 (selectors) => {
+    const groups = Array.from(document.querySelectorAll(selectors.group));
     return {
-        group_count: document.querySelectorAll(selectors.group).length,
+        group_count: groups.length,
+        comment_count: groups.reduce(
+            (count, group) => count + group.querySelectorAll(selectors.comment).length,
+            0
+        ),
         button_count: document.querySelectorAll(selectors.more).length,
     };
 }
@@ -1033,19 +1038,15 @@ class DzenStudioPage:
                     break
 
             failure_phase = "comment_extraction"
-            group_identities = self._studio_group_identities(groups)
-            for group, group_identity in zip(groups, group_identities):
-                if group_identity not in comment_nodes_by_group:
-                    comment_nodes_by_group[group_identity] = group.query_selector_all(
-                        selectors.COMMENT_NODE
-                    )
-            previous_counts = (
-                len(groups),
-                sum(len(nodes) for nodes in comment_nodes_by_group.values()),
-                previous_counts[2],
-            )
             content_snapshot = self._live_comment_content_snapshot(len(groups))
             if content_snapshot is not None:
+                # The live DOM snapshot already contains every comment. Keep the
+                # scan count from evaluate() and avoid retaining ElementHandles.
+                previous_counts = (
+                    len(groups),
+                    previous_counts[1],
+                    previous_counts[2],
+                )
                 for card_index, group_data in enumerate(content_snapshot, start=1):
                     post_href = self._validated_snapshot_post_href(group_data)
                     if not post_href:
@@ -1106,6 +1107,16 @@ class DzenStudioPage:
                             extracted_since_progress = 0
             else:
                 group_identities = self._studio_group_identities(groups)
+                for group, group_identity in zip(groups, group_identities):
+                    if group_identity not in comment_nodes_by_group:
+                        comment_nodes_by_group[group_identity] = (
+                            group.query_selector_all(selectors.COMMENT_NODE)
+                        )
+                previous_counts = (
+                    len(groups),
+                    sum(len(nodes) for nodes in comment_nodes_by_group.values()),
+                    previous_counts[2],
+                )
                 for card_index, (group, group_identity) in enumerate(
                     zip(groups, group_identities), start=1
                 ):
@@ -1432,6 +1443,35 @@ class DzenStudioPage:
         comment_nodes_by_group: dict[Any, list[Any]] | None = None,
     ):
         groups = self._page.query_selector_all(selectors.POST_GROUP)
+        page_locator = getattr(self._page, "locator", None)
+        evaluate = getattr(self._page, "evaluate", None)
+        if (
+            callable(page_locator)
+            and callable(evaluate)
+            and type(self._page).__module__.startswith("playwright.")
+        ):
+            counts = evaluate(
+                _STUDIO_FEED_COUNTS_SCRIPT,
+                {
+                    "group": selectors.POST_GROUP,
+                    "comment": selectors.COMMENT_NODE,
+                    "more": selectors.COMMENT_OPEN_MORE,
+                },
+            )
+            if (
+                isinstance(counts, dict)
+                and counts.get("group_count") == len(groups)
+                and isinstance(counts.get("comment_count"), int)
+                and not isinstance(counts.get("comment_count"), bool)
+                and isinstance(counts.get("button_count"), int)
+                and not isinstance(counts.get("button_count"), bool)
+            ):
+                return groups, (
+                    counts["group_count"],
+                    counts["comment_count"],
+                    counts["button_count"],
+                )
+
         if comment_nodes_by_group is None:
             comment_count = sum(
                 len(group.query_selector_all(selectors.COMMENT_NODE))
@@ -1452,22 +1492,6 @@ class DzenStudioPage:
             comment_count = sum(
                 len(nodes) for nodes in comment_nodes_by_group.values()
             )
-        page_locator = getattr(self._page, "locator", None)
-        evaluate = getattr(self._page, "evaluate", None)
-        if callable(page_locator) and callable(evaluate):
-            counts = evaluate(
-                _STUDIO_FEED_COUNTS_SCRIPT,
-                {
-                    "group": selectors.POST_GROUP,
-                    "more": selectors.COMMENT_OPEN_MORE,
-                },
-            )
-            if isinstance(counts, dict) and counts.get("group_count") == len(groups):
-                return groups, (
-                    counts["group_count"],
-                    comment_count,
-                    counts["button_count"],
-                )
         button_count = len(self._page.query_selector_all(selectors.COMMENT_OPEN_MORE))
         return groups, (len(groups), comment_count, button_count)
 

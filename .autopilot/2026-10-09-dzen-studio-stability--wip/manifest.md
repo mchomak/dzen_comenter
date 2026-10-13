@@ -15,3 +15,5 @@
 
 | G01 | «бот шлет кучу ошибок зайди проверь что не так и сиправь» | done | Причины обработаны в T07/T08; ограниченный scan и supervisor recovery прошли ревью и полный набор тестов. | T07, T08; 615 passed, 51 skipped |
 | D01 | Вывод из кода и безопасности публикации | done | Watchdog получает активную пару reply/claim и сохраняет durable `unconfirmed` до завершения; спецификационное ревью чистое. | T08, Решение 16 |
+| D02 | Production-диагностика после проверки ресурсов сервера | done | Kernel logs подтвердили повторные OOM kills `chrome-headless`; live-путь полного снимка удерживал ненужные ElementHandle на все comment nodes. Добавлен ограниченный T09, чтобы убрать это давление памяти и оставить fake-page fallback; без миграций/изменения внешнего поведения. | T09, Решение 18 |
+| D03 | Craft-review T09 | in progress | Review показал, что malformed/mismatched live counts могут перейти к ElementHandle fallback, а одиночный fixture не проверяет разные totals. Добавлен T10 с fail-closed live path и многогрупповой проверкой. | T10, Решение 19 |

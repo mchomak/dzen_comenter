@@ -702,6 +702,20 @@ def test_fetch_comments_uses_one_live_dom_snapshot_for_comment_content(monkeypat
         try:
             page = browser.new_page()
             page.set_content(html)
+            group_type = type(page.query_selector_all(selectors.POST_GROUP)[0])
+            query_selector_all = group_type.query_selector_all
+            comment_handle_queries = []
+
+            def track_group_query_selector_all(group, selector, *args, **kwargs):
+                if selector == selectors.COMMENT_NODE:
+                    comment_handle_queries.append(selector)
+                return query_selector_all(group, selector, *args, **kwargs)
+
+            monkeypatch.setattr(
+                group_type,
+                "query_selector_all",
+                track_group_query_selector_all,
+            )
             evaluate = page.evaluate
             snapshots = []
 
@@ -726,8 +740,73 @@ def test_fetch_comments_uses_one_live_dom_snapshot_for_comment_content(monkeypat
             assert comments[0].posted_at is not None
             assert comments[1].thread_text == "Автор 1: Первый комментарий"
             assert len(snapshots) == 1
+            assert comment_handle_queries == []
         finally:
             browser.close()
+
+
+def test_live_feed_counts_comments_without_collecting_comment_handles(monkeypatch):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comment__block-one">Comment</div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            groups = page.query_selector_all(selectors.POST_GROUP)
+            group_type = type(groups[0])
+            query_selector_all = group_type.query_selector_all
+            comment_handle_queries = []
+
+            def track_query_selector_all(group, selector, *args, **kwargs):
+                if selector == selectors.COMMENT_NODE:
+                    comment_handle_queries.append(selector)
+                return query_selector_all(group, selector, *args, **kwargs)
+
+            monkeypatch.setattr(
+                group_type, "query_selector_all", track_query_selector_all
+            )
+            studio_page = DzenStudioPage(page)
+            processed_ids = set(studio_page._studio_group_identities(groups))
+            comment_nodes_by_group = {}
+
+            _, counts = studio_page._studio_feed_snapshot(
+                processed_group_ids=processed_ids,
+                comment_nodes_by_group=comment_nodes_by_group,
+            )
+
+            assert counts == (1, 1, 0)
+            assert comment_nodes_by_group == {}
+            assert comment_handle_queries == []
+        finally:
+            browser.close()
+
+
+def test_fetch_comments_fallback_still_reads_comment_handles():
+    group = FakeGroup("/a/post1", [make_node(0)])
+    query_selector_all = group.query_selector_all
+    comment_handle_queries = []
+
+    def track_query_selector_all(selector):
+        if selector == selectors.COMMENT_NODE:
+            comment_handle_queries.append(selector)
+        return query_selector_all(selector)
+
+    group.query_selector_all = track_query_selector_all
+
+    comments = DzenStudioPage(FakePage([group])).fetch_comments()
+
+    assert [comment.text for comment in comments] == ["text0"]
+    assert comment_handle_queries
 
 
 @pytest.mark.parametrize(
