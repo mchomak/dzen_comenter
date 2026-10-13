@@ -75,6 +75,7 @@ class OrchestratorLoop:
         self._authorization_not_confirmed_notified = False
         self._active_publication_lock = threading.RLock()
         self._active_publication: tuple[int, str] | None = None
+        self._last_successful_full_scan_at: datetime | None = None
 
     def active_publication_attempt(self) -> tuple[int, str] | None:
         """Return the active durable submit claim without exposing mutable state."""
@@ -119,6 +120,13 @@ class OrchestratorLoop:
         self._drain_generation_queue(runtime_settings, max_jobs=5)
         self._run_publication_cycle(runtime_settings, max_publications=1)
 
+        scan_started_at = moscow_now()
+        full_scan_due = (
+            self._last_successful_full_scan_at is None
+            or scan_started_at - self._last_successful_full_scan_at
+            >= timedelta(minutes=60)
+        )
+
         publication_id = self.repository.upsert_publication(
             Publication(
                 id=None,
@@ -129,7 +137,16 @@ class OrchestratorLoop:
         )
 
         with self._browser_access():
-            comments = self.page.fetch_comments()
+            if full_scan_due:
+                comments = self.page.fetch_comments()
+            else:
+                fetch_recent_comments = getattr(
+                    self.page, "fetch_recent_comments", None
+                )
+                if callable(fetch_recent_comments):
+                    comments = fetch_recent_comments(max_cards=100)
+                else:
+                    comments = self.page.fetch_comments()
         for comment in comments:
             if is_bot_account_author(
                 comment.author, runtime_settings.bot_account_name
@@ -148,6 +165,9 @@ class OrchestratorLoop:
             comment.id = comment_id
             if self.repository.has_published_reply(comment_id):
                 continue
+
+        if full_scan_due:
+            self._last_successful_full_scan_at = moscow_now()
 
     def _drain_generation_queue(self, runtime_settings, *, max_jobs: int) -> int:
         processed = 0

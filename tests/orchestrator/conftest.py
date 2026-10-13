@@ -697,12 +697,19 @@ class FakeDzenPage:
     def __init__(self, comments: list[Comment] | None = None) -> None:
         self.comments = list(comments or [])
         self.fetch_calls = 0
+        self.fetch_scan_limits: list[int | None] = []
         self.publish_calls: list[tuple[Comment, str, bool]] = []
         self.article_text_by_url: dict[str, str | None] = {}
         self.article_text_urls: list[str] = []
 
     def fetch_comments(self) -> list[Comment]:
         self.fetch_calls += 1
+        self.fetch_scan_limits.append(None)
+        return list(self.comments)
+
+    def fetch_recent_comments(self, *, max_cards: int) -> list[Comment]:
+        self.fetch_calls += 1
+        self.fetch_scan_limits.append(max_cards)
         return list(self.comments)
 
     def fetch_article_text(self, post_url: str) -> str | None:

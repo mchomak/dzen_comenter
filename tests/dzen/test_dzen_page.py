@@ -658,6 +658,22 @@ def test_fetch_comments_two_level_parse():
         assert c.text == f"text{i}"
 
 
+def test_fetch_comments_with_card_limit_reads_only_first_hundred_cards():
+    groups = [
+        FakeGroup(f"/a/post{index}", [make_node(index)])
+        for index in range(105)
+    ]
+    fake = FakePage(groups)
+
+    comments = DzenStudioPage(fake).fetch_recent_comments(max_cards=100)
+
+    assert len(comments) == 100
+    assert [comment.text for comment in comments] == [
+        f"text{index}" for index in range(100)
+    ]
+    assert fake.mouse.wheel_calls == []
+
+
 def test_fetch_comments_refreshes_health_progress_for_each_feed_pass():
     progress = []
     groups = [FakeGroup("/a/post1", [make_node(0)])]

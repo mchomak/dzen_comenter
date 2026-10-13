@@ -59,19 +59,33 @@ _STUDIO_FEED_STABLE_PASSES = 3
 _STUDIO_FEED_COUNTS_SCRIPT = """
 (selectors) => {
     const groups = Array.from(document.querySelectorAll(selectors.group));
+    const trackedGroups = Number.isInteger(selectors.maxGroupCount)
+        ? groups.slice(0, selectors.maxGroupCount)
+        : groups;
     return {
         group_count: groups.length,
-        comment_count: groups.reduce(
+        tracked_group_count: trackedGroups.length,
+        comment_count: trackedGroups.reduce(
             (count, group) => count + group.querySelectorAll(selectors.comment).length,
             0
         ),
-        button_count: document.querySelectorAll(selectors.more).length,
+        button_count: Number.isInteger(selectors.maxGroupCount)
+            ? trackedGroups.reduce(
+                (count, group) => count + group.querySelectorAll(selectors.more).length,
+                0
+            )
+            : document.querySelectorAll(selectors.more).length,
     };
 }
 """
 _STUDIO_COMMENT_CONTENT_SNAPSHOT_SCRIPT = """
 /* dzen-studio-comment-content-snapshot */
-(selectors) => Array.from(document.querySelectorAll(selectors.group), group => {
+(selectors) => {
+const groups = Array.from(document.querySelectorAll(selectors.group));
+const trackedGroups = Number.isInteger(selectors.maxGroups)
+    ? groups.slice(0, selectors.maxGroups)
+    : groups;
+return trackedGroups.map(group => {
     const comments = Array.from(
         group.querySelectorAll(selectors.comment)
     ).map(node => {
@@ -103,7 +117,8 @@ _STUDIO_COMMENT_CONTENT_SNAPSHOT_SCRIPT = """
         title: title?.innerText || "",
         comments,
     };
-})
+});
+}
 """
 _STUDIO_FEED_SCROLL_SCRIPT = """
 (selectors) => {
@@ -945,6 +960,12 @@ class DzenStudioPage:
         return any(marker in normalized for marker in _PROMOTIONAL_ARTICLE_MARKERS)
 
     def fetch_comments(self) -> list[Comment]:
+        return self._fetch_comments(max_cards=None)
+
+    def fetch_recent_comments(self, *, max_cards: int) -> list[Comment]:
+        return self._fetch_comments(max_cards=max_cards)
+
+    def _fetch_comments(self, *, max_cards: int | None) -> list[Comment]:
         comments: list[Comment] = []
         started_at = perf_counter()
         now = moscow_now()
@@ -964,11 +985,18 @@ class DzenStudioPage:
             groups, previous_counts = self._studio_feed_snapshot(
                 processed_group_ids=processed_reply_expansion_groups,
                 comment_nodes_by_group=comment_nodes_by_group,
+                max_cards=max_cards,
             )
             for scan_pass_count in range(1, _STUDIO_FEED_MAX_SCAN_PASSES + 1):
-                failure_phase = "scroll_to_last_loaded_item"
-                self._scroll_to_last_loaded_item(groups)
-                groups = self._page.query_selector_all(selectors.POST_GROUP)
+                if max_cards is None or len(groups) < max_cards:
+                    failure_phase = "scroll_to_last_loaded_item"
+                    self._scroll_to_last_loaded_item(groups)
+                loaded_groups = self._page.query_selector_all(selectors.POST_GROUP)
+                groups = (
+                    loaded_groups[:max_cards]
+                    if max_cards is not None
+                    else loaded_groups
+                )
                 failure_phase = "reply_control_group_detection"
                 group_identities = self._studio_group_identities(groups)
                 group_occurrences: dict[str, int] = {}
@@ -1023,6 +1051,7 @@ class DzenStudioPage:
                 groups, current_counts = self._studio_feed_snapshot(
                     processed_group_ids=processed_reply_expansion_groups,
                     comment_nodes_by_group=comment_nodes_by_group,
+                    max_cards=max_cards,
                 )
                 if (
                     current_counts[0] == previous_counts[0]
@@ -1038,7 +1067,9 @@ class DzenStudioPage:
                     break
 
             failure_phase = "comment_extraction"
-            content_snapshot = self._live_comment_content_snapshot(len(groups))
+            content_snapshot = self._live_comment_content_snapshot(
+                len(groups), max_groups=max_cards
+            )
             if content_snapshot is not None:
                 # The live DOM snapshot already contains every comment. Keep the
                 # scan count from evaluate() and avoid retaining ElementHandles.
@@ -1228,7 +1259,7 @@ class DzenStudioPage:
         return comments
 
     def _live_comment_content_snapshot(
-        self, expected_group_count: int
+        self, expected_group_count: int, *, max_groups: int | None = None
     ) -> list[dict[str, Any]] | None:
         evaluate = getattr(self._page, "evaluate", None)
         if (
@@ -1249,6 +1280,7 @@ class DzenStudioPage:
                 "authorText": selectors.COMMENT_AUTHOR_TEXT,
                 "commentText": selectors.COMMENT_TEXT,
                 "commentDate": selectors.COMMENT_DATE_TEXT,
+                "maxGroups": max_groups,
             },
         )
         if (
@@ -1441,8 +1473,10 @@ class DzenStudioPage:
         *,
         processed_group_ids: set[Any] | None = None,
         comment_nodes_by_group: dict[Any, list[Any]] | None = None,
+        max_cards: int | None = None,
     ):
-        groups = self._page.query_selector_all(selectors.POST_GROUP)
+        all_groups = self._page.query_selector_all(selectors.POST_GROUP)
+        groups = all_groups[:max_cards] if max_cards is not None else all_groups
         page_locator = getattr(self._page, "locator", None)
         evaluate = getattr(self._page, "evaluate", None)
         if (
@@ -1456,21 +1490,23 @@ class DzenStudioPage:
                     "group": selectors.POST_GROUP,
                     "comment": selectors.COMMENT_NODE,
                     "more": selectors.COMMENT_OPEN_MORE,
+                    "maxGroupCount": max_cards,
                 },
             )
             count_values = (
                 counts.get("group_count") if isinstance(counts, dict) else None,
+                counts.get("tracked_group_count") if isinstance(counts, dict) else None,
                 counts.get("comment_count") if isinstance(counts, dict) else None,
                 counts.get("button_count") if isinstance(counts, dict) else None,
             )
             if not all(
                 isinstance(value, int) and not isinstance(value, bool) and value >= 0
                 for value in count_values
-            ) or count_values[0] != len(groups):
+            ) or count_values[0] != len(all_groups) or count_values[1] != len(groups):
                 raise StudioFeedScanIncompleteError(
                     "live Studio feed counts did not match the page"
                 )
-            return groups, count_values
+            return groups, (count_values[1], count_values[2], count_values[3])
 
         if comment_nodes_by_group is None:
             comment_count = sum(
@@ -1492,7 +1528,11 @@ class DzenStudioPage:
             comment_count = sum(
                 len(nodes) for nodes in comment_nodes_by_group.values()
             )
-        button_count = len(self._page.query_selector_all(selectors.COMMENT_OPEN_MORE))
+        button_count = (
+            sum(len(group.query_selector_all(selectors.COMMENT_OPEN_MORE)) for group in groups)
+            if max_cards is not None
+            else len(self._page.query_selector_all(selectors.COMMENT_OPEN_MORE))
+        )
         return groups, (len(groups), comment_count, button_count)
 
     def _groups_with_reply_controls(self, groups) -> list[int]:
