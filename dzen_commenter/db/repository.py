@@ -342,11 +342,12 @@ class PostgresCommentRepository:
                 .where(ready)
                 .order_by(
                     func.coalesce(
-                        ReplyGenerationQueueTable.next_attempt_at,
-                        ReplyGenerationQueueTable.created_at,
-                    ),
-                    ReplyGenerationQueueTable.created_at,
-                    ReplyGenerationQueueTable.comment_id,
+                        CommentTable.posted_at, CommentTable.fetched_at
+                    )
+                    .desc()
+                    .nulls_last(),
+                    CommentTable.fetched_at.desc().nulls_last(),
+                    CommentTable.id.asc(),
                 )
                 .limit(1)
                 .with_for_update(skip_locked=True, of=ReplyGenerationQueueTable)

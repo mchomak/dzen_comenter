@@ -42,6 +42,7 @@ def _make_comment(
     post_url="http://post/1",
     publication_title="",
     thread_text="",
+    posted_at: datetime | None = datetime(2026, 1, 1, 12, 0, 0),
     fetched_at=datetime(2026, 1, 1, 12, 5, 0),
 ) -> Comment:
     return Comment(
@@ -51,7 +52,7 @@ def _make_comment(
         author="alice",
         text=text,
         parent_comment_id=None,
-        posted_at=datetime(2026, 1, 1, 12, 0, 0),
+        posted_at=posted_at,
         fetched_at=fetched_at,
         status=status,
         publication_title=publication_title,
@@ -819,6 +820,66 @@ def test_generation_queue_enqueues_once_and_claims_the_earliest_ready_comment(
     assert first_queue == ("claimed", 1, now)
     assert first_status == "generating"
     assert repo.claim_next_generation(now).comment.id == second_id
+
+
+def test_generation_queue_claims_freshest_comments_with_fetched_at_fallback(repo):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    older_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="older-posted",
+            posted_at=now - timedelta(minutes=10),
+            fetched_at=now,
+        )
+    )
+    newer_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="newer-posted",
+            posted_at=now - timedelta(minutes=1),
+            fetched_at=now,
+        )
+    )
+    fallback_recent_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="fallback-recent",
+            posted_at=None,
+            fetched_at=now - timedelta(minutes=2),
+        )
+    )
+    fallback_tie_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="fallback-tie",
+            posted_at=None,
+            fetched_at=now - timedelta(minutes=2),
+        )
+    )
+    fallback_older_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="fallback-older",
+            posted_at=None,
+            fetched_at=now - timedelta(minutes=5),
+        )
+    )
+
+    assert repo.enqueue_generation(older_id, queued_at=now - timedelta(minutes=2))
+    assert repo.enqueue_generation(newer_id, queued_at=now)
+    assert repo.enqueue_generation(fallback_recent_id, queued_at=now - timedelta(minutes=1))
+    assert repo.enqueue_generation(fallback_tie_id, queued_at=now - timedelta(seconds=30))
+    assert repo.enqueue_generation(fallback_older_id, queued_at=now - timedelta(seconds=10))
+
+    claimed = repo.claim_next_generation(now)
+
+    assert claimed is not None
+    assert claimed.comment.id == newer_id
+    assert repo.claim_next_generation(now).comment.id == fallback_recent_id
+    assert repo.claim_next_generation(now).comment.id == fallback_tie_id
+    assert repo.claim_next_generation(now).comment.id == fallback_older_id
+    assert repo.claim_next_generation(now).comment.id == older_id
 
 
 def test_enqueue_pending_generations_recovers_saved_new_comments_without_terminal_reply(
