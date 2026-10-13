@@ -256,57 +256,50 @@ rather than after mistakes, every stage in Obsidian is checked off only after a 
 PASS, every number that gates a PASS was computed by code (not estimated), and 
 
 <!-- autopilot:start -->
-# Dzen Commenter — текущая карта проекта
+# Dzen Commenter — карта текущего кода
 
-Compose запускает PostgreSQL, отдельный синхронный Python-воркер с Playwright и FastAPI/Jinja2 админ-панель для комментариев, настроек, входа в Дзен и доступа VNC. AI-провайдеры и runtime-настройки выбираются в конфигурации; данные и durable-очереди хранятся в PostgreSQL. Python 3.11.
+Сервис на Python 3.11: PostgreSQL, отдельный синхронный Playwright worker и FastAPI/Jinja2 admin. Compose запускает `postgres`, `app` и `admin`; миграции применяются entrypoint, если `RUN_DB_MIGRATIONS` не равно `false`. Админка слушает 8080; БД и браузерные порты не публикуются. `pgdata` сохраняет базу между перезапусками.
 
-## Подготовка и запуск
+## Запуск и проверка
 
-Из корня репозитория в PowerShell:
+Из корня в PowerShell:
 
 ```powershell
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m pytest -q
+python -m pytest -q
+docker compose up --build
 ```
 
-Заполните локальный `.env`; подготовка не перезаписывает существующий файл. `docker compose up --build` поднимает `postgres`, worker `app` и `admin`; entrypoint применяет Alembic migrations, если `RUN_DB_MIGRATIONS` не отключён. Панель доступна на порту 8080; Compose включает headless по умолчанию и не публикует порты PostgreSQL/браузера. Именованный volume `pgdata` сохраняет базу: изменение `POSTGRES_*` не меняет учётные данные уже созданной базы.
+Сначала заполните локальный `.env`. Для DB-интеграционных тестов задавайте `TEST_DATABASE_URL` только на отдельную disposable PostgreSQL: `tests/db/conftest.py` удаляет известные таблицы, применяет миграции и очищает таблицы между тестами. Без переменной DB-интеграционные тесты пропускаются.
 
-Проверки 2026-10-13, подтверждённые оркестратором: `python -m pytest -q` — 615 passed, 51 skipped; Ruff для `main.py` и `tests/test_main.py` прошёл; diff-check чистый.
+Подтверждено исполнителями 13 октября 2026: полный набор — 684 passed на disposable PostgreSQL; `tests/dzen` + `tests/orchestrator` — 214 passed; Ruff на production/orchestrator — passed, один ранее существовавший F841 в тестовом файле был исключён; production Docker build нового commit — passed. Проверка изменения не добавила зависимости и переменные окружения.
 
-## Устройство и границы
+## Архитектура и ключевые границы
 
-- `main.py` собирает зависимости и запускает supervisor с ограниченными повторами, восстановлением Chromium после известных сбоев и watchdog для застрявшего цикла.
-- `dzen_commenter/orchestrator/loop.py` читает и сохраняет комментарии, применяет фильтры/лимиты, ставит generation и publication jobs в durable-очереди и обрабатывает их через repository.
-- `dzen_commenter/db/models.py`, `dzen_commenter/db/repository.py` и `dzen_commenter/db/migrations/` владеют PostgreSQL-моделью, атомарными переходами, lease и claim token; `dzen_commenter/db/__init__.py::create_database_engine` включает `pool_pre_ping` и `pool_recycle=1800`.
-- `dzen_commenter/dzen/page.py` — Playwright-адаптер Studio и публичных статей; он собирает комментарии, раскрывает ветки и проверяет результат публикации, не возвращая неполный список при незавершённом сканировании. Live Playwright извлекает поля одним DOM-снимком и считает элементы без накопления `COMMENT_NODE` `ElementHandle`-списков; некорректные счётчики или несовпадение числа групп завершают scan через `StudioFeedScanIncompleteError`.
-  Query fallback остаётся только для fake/non-live страниц.
-- До отправки ответа repository фиксирует `submitting`; подтверждение ищется в Studio и публичной ветке, а неизвестный результат фиксируется как `publication_unconfirmed` и не повторяется автоматически.
-- `dzen_commenter/browser/session_manager.py` владеет persistent Chromium-контекстом, сохранённой сессией и восстановлением браузера; доступ к браузеру сериализуется.
-- `dzen_commenter/contracts/` задаёт доменные модели и Protocol-интерфейсы; `dzen_commenter/ai/factory.py` выбирает провайдера, а `dzen_commenter/prompt/` строит запрос и классифицирует тип ответа.
-- `dzen_commenter/config/runtime_config.py` хранит несекретные настройки в JSON с атомарной записью и перечитыванием; админ-панель пишет их, воркер перечитывает, секреты задаются окружением.
-- `dzen_commenter/admin/` содержит защищённую сессию, ленту, историю и формы настроек; смена аккаунта и VNC идут через socket-клиенты, а не через прямое управление браузером из панели.
-- `dzen_commenter/monitoring/` содержит структурные логи, Telegram-уведомления и SMTP-fallback; `dzen_commenter/vnc_control.py` и `deploy/install-vnc-control.sh` относятся к host-side контроллеру VNC.
-- `BOT_HEALTH_PATH` указывает на атомарно заменяемый snapshot; свежий heartbeat цикла отдаёт `in_progress`, а supervisor завершает worker при отсутствии progress дольше 35 минут.
-- Активная публикация `{reply_id, claim_token}` становится доступна watchdog только после durable `submitting`; перед завершением он пытается зафиксировать неопределённый результат, а сбой записи не считается подтверждённым переходом и не запускает повторную отправку.
-- Раскрытие ответов Studio имеет общий лимит 30 минут и обновляет heartbeat по ходу работы; тестовый шов — fake page и управляемые часы.
+- `main.py` собирает зависимости и запускает supervisor: ограничивает повторы ошибок цикла/keep-alive, восстанавливает Chromium после renderer crash и следит за heartbeat. При зависшем цикле worker завершается, чтобы Compose перезапустил его; перед остановкой supervisor сохраняет неопределённую публикацию, если был durable submit.
+- `dzen_commenter/orchestrator/loop.py` — порядок обработки: сессия → enqueue новых комментариев → до 5 generation jobs → до 1 publication job → чтение Studio. Лимит генерации — 5 за цикл; `MAX_REPLIES_PER_CYCLE` остаётся в env/settings, но этот drain его не использует. Часовой лимит `max_comments_per_hour` хранится в runtime JSON; перед каждым фактическим вызовом AI, включая shortening retry, repository атомарно резервирует попытку.
+- `dzen_commenter/db/models.py`, `repository.py`, `migrations/` владеют PostgreSQL-моделью и транзакционными переходами очередей. Generation claims используют lease/token и `SKIP LOCKED`; eligible jobs выбираются по `posted_at` (fallback `fetched_at`) от новых к старым с детерминированным tie-break. `reserve_ai_call` считает скользящий час под advisory lock. Миграция `0012_ai_call_reservations.py` добавляет durable-журнал времени вызовов и переносит в него подходящие timestamps за последний час, не копируя тексты.
+- После обработки очередей первый scan после старта и затем scan не реже раза в час — полный; между ними production adapter использует `fetch_recent_comments(max_cards=100)`. Если optional-метода нет, orchestrator вызывает полный `fetch_comments()`. Время последнего полного scan хранится в памяти процесса; после рестарта полный scan выполняется снова.
+- `dzen_commenter/dzen/page.py` — Studio/public-page adapter. Live feed читается DOM-снимком; счётчики и число групп проверяются, нестабильный или неполный scan завершается `StudioFeedScanIncompleteError`, а не возвращает частичный список. Сканирование ограничено 40 проходами; раскрытие ответов имеет общий 30-минутный deadline и обновляет heartbeat. Query fallback оставлен для fake/non-live страниц.
+- Публикация отмечается как `submitting` до клика в Studio. Результат подтверждается в Studio/публичной ветке; неизвестный результат становится `publication_unconfirmed` и не отправляется повторно автоматически. Claim token защищает переходы от устаревшего worker.
+- `dzen_commenter/browser/session_manager.py` владеет persistent Chromium-контекстом, сохранённой сессией и восстановлением; операции с браузером сериализованы. `dzen_commenter/contracts/` задаёт доменные модели и Protocols, `ai/factory.py` выбирает провайдера, `prompt/` собирает и классифицирует ответ.
+- `dzen_commenter/config/runtime_config.py` хранит несекретные prompt/runtime-настройки в JSON с атомарной записью и hot reload; admin пишет этот файл, worker перечитывает. Секреты остаются в окружении.
+- `dzen_commenter/admin/` — защищённая сессия, лента/история и формы настроек. Переключение Dzen-аккаунта и VNC идут через socket-клиенты; host-side VNC controller находится в `dzen_commenter/vnc_control.py` и `deploy/install-vnc-control.sh`.
+- `dzen_commenter/monitoring/` содержит структурные логи, Telegram-уведомления и SMTP fallback; `dzen_commenter/bot_health.py` пишет атомарный health/progress snapshot. Не добавляйте в логи комментарии, авторов, URL публикаций, токены или HTML.
 
 ## Переменные окружения
 
-Имена ниже сверены с `Settings`, `AdminSettings`, `.env.example`, Compose и тестами; значения остаются локальными.
+Ниже только имена из `.env.example`, Compose, `Settings`/`AdminSettings` и test setup.
 
-- PostgreSQL и миграции: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `RUN_DB_MIGRATIONS`; тестовая БД: `TEST_DATABASE_URL`.
+- БД/миграции/тесты: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `RUN_DB_MIGRATIONS`, `TEST_DATABASE_URL`.
 - AI: `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TEMPERATURE`, `AI_MAX_TOKENS`, `AI_PROMPT_LANGUAGE`, `GIGACHAT_AUTH_KEY`, `GIGACHAT_SCOPE`, `GIGACHAT_OAUTH_URL`, `GIGACHAT_BASE_URL`, `GIGACHAT_MODEL`, `GIGACHAT_VERIFY_SSL_CERTS`, `GIGACHAT_CA_BUNDLE`.
-- Дзен, браузер и цикл: `USER_DATA_DIR`, `STORAGE_STATE_PATH`, `HEADLESS`, `COMMENTS_URL`, `DZEN_LOGIN_PHONE`, `DZEN_LOGIN_PASSWORD`, `DZEN_LOGIN_TIMEOUT_MS`, `DZEN_LOGIN_CONTROL_SOCKET`, `POLL_INTERVAL`, `KEEPALIVE_INTERVAL`, `MAX_REPLIES_PER_CYCLE`, `BOT_HEALTH_PATH`.
+- Браузер/Дзен/цикл: `USER_DATA_DIR`, `STORAGE_STATE_PATH`, `HEADLESS`, `COMMENTS_URL`, `DZEN_LOGIN_PHONE`, `DZEN_LOGIN_PASSWORD`, `DZEN_LOGIN_TIMEOUT_MS`, `DZEN_LOGIN_CONTROL_SOCKET`, `POLL_INTERVAL`, `KEEPALIVE_INTERVAL`, `MAX_REPLIES_PER_CYCLE`, `BOT_HEALTH_PATH`.
 - Уведомления: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_PROXY_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
-- Runtime, admin и VNC: `RUNTIME_CONFIG_PATH`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `VNC_HOST`, `VNC_PORT`, `VNC_PASSWORD`, `VNC_CONTROL_SOCKET`, `NOVNC_PORT`.
+- Admin/runtime/VNC: `RUNTIME_CONFIG_PATH`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `VNC_HOST`, `VNC_PORT`, `VNC_PASSWORD`, `VNC_CONTROL_SOCKET`, `NOVNC_PORT`.
 
-## Тесты и подводные камни
+## Тестовые группы и подводные камни
 
-Тесты лежат в `tests/`: корневые проверки и группы `contracts`, `orchestrator`, `db`, `dzen`, `browser`, `auth`, `ai`, `prompt`, `monitoring`, `config` и `admin`.
-
-`tests/db/conftest.py` удаляет известные таблицы и применяет миграции при `TEST_DATABASE_URL`; задавайте только отдельную disposable PostgreSQL. Без неё DB-интеграционные тесты пропускаются.
-
-Изменения схемы оформляйте миграциями; SQL переходов статусов оставляйте в repository. Для проверок используйте fake/injected-клиенты и не запускайте реальную авторизацию или публикацию в Дзене. Не помещайте секреты, тексты комментариев, авторов, URL публикаций, токены или HTML в новые логи; не храните секреты в runtime JSON.
+`tests/` содержит корневые проверки и группы `admin`, `ai`, `auth`, `browser`, `config`, `contracts`, `db`, `dzen`, `monitoring`, `orchestrator`, `prompt`. При смене схемы добавляйте Alembic migration; SQL-переходы очередей держите в repository. Для тестов используйте fake/injected-компоненты: не выполнять реальную авторизацию или публикацию в Дзене. Не направляйте `TEST_DATABASE_URL` на рабочую БД. В Compose изменение `POSTGRES_*` не меняет credentials уже созданной базы в `pgdata`.
 <!-- autopilot:end -->
