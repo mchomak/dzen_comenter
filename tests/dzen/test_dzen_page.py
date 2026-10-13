@@ -750,7 +750,15 @@ def test_live_feed_counts_comments_without_collecting_comment_handles(monkeypatc
 
     html = """
     <div data-testid="comment">
-      <div class="editor--comment__block-one">Comment</div>
+      <div class="editor--comment__block-one">Group one comment</div>
+      <button class="editor--root-comment__openMoreButton-one">More</button>
+      <button class="editor--root-comment__openMoreButton-two">More</button>
+    </div>
+    <div data-testid="comment">
+      <div class="editor--comment__block-two">Group two comment one</div>
+      <div class="editor--comment__block-three">Group two comment two</div>
+      <div class="editor--comment__block-four">Group two comment three</div>
+      <button class="editor--root-comment__openMoreButton-three">More</button>
     </div>
     """
 
@@ -784,8 +792,66 @@ def test_live_feed_counts_comments_without_collecting_comment_handles(monkeypatc
                 comment_nodes_by_group=comment_nodes_by_group,
             )
 
-            assert counts == (1, 1, 0)
+            assert counts == (2, 4, 3)
             assert comment_nodes_by_group == {}
+            assert comment_handle_queries == []
+        finally:
+            browser.close()
+
+
+def test_live_feed_count_mismatch_fails_without_collecting_comment_handles(
+    monkeypatch,
+):
+    from playwright.sync_api import Error as PlaywrightError, sync_playwright
+
+    html = """
+    <div data-testid="comment">
+      <div class="editor--comment__block-one">Comment</div>
+    </div>
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"local Chromium is unavailable: {exc}")
+        try:
+            page = browser.new_page()
+            page.set_content(html)
+            groups = page.query_selector_all(selectors.POST_GROUP)
+            group_type = type(groups[0])
+            query_selector_all = group_type.query_selector_all
+            comment_handle_queries = []
+
+            def track_query_selector_all(group, selector, *args, **kwargs):
+                if selector == selectors.COMMENT_NODE:
+                    comment_handle_queries.append(selector)
+                return query_selector_all(group, selector, *args, **kwargs)
+
+            monkeypatch.setattr(
+                group_type,
+                "query_selector_all",
+                track_query_selector_all,
+            )
+            evaluate = page.evaluate
+
+            def return_mismatched_counts(expression, arg=None):
+                if expression == dzen_page._STUDIO_FEED_COUNTS_SCRIPT:
+                    return {
+                        "group_count": 2,
+                        "comment_count": 1,
+                        "button_count": 0,
+                    }
+                return evaluate(expression, arg)
+
+            monkeypatch.setattr(page, "evaluate", return_mismatched_counts)
+
+            with pytest.raises(
+                dzen_page.StudioFeedScanIncompleteError,
+                match="live Studio feed counts did not match the page",
+            ):
+                DzenStudioPage(page).fetch_comments()
+
             assert comment_handle_queries == []
         finally:
             browser.close()

@@ -4,7 +4,7 @@
 **Blocked by:** 09
 **Зона:** `dzen_commenter/dzen/`, `tests/dzen/`
 **Волна:** 8
-**Status:** pending
+**Status:** done
 
 ## Что должно заработать
 
@@ -21,7 +21,14 @@
 
 ## Критерии приёмки
 
-- [ ] Некорректный или несовпадающий live count result не вызывает Playwright query, который удерживает COMMENT_NODE ElementHandle; scan завершается безопасно или восстанавливается handle-free.
-- [ ] Live regression использует несколько групп и разные значения comments/buttons и проверяет фактические totals без самоподтверждения на единственном нулевом примере.
-- [ ] Fake/non-live fallback сохраняет извлечение комментариев и контекста; целевые тесты, полный набор и lint изменённого модуля проходят.
-- [ ] Проверки не входят в Dzen, не публикуют ответы и не меняют БД.
+- [x] Некорректный или несовпадающий live count result не вызывает Playwright query, который удерживает COMMENT_NODE ElementHandle; scan завершается безопасно или восстанавливается handle-free.
+- [x] Live regression использует несколько групп и разные значения comments/buttons и проверяет фактические totals без самоподтверждения на единственном нулевом примере.
+- [x] Fake/non-live fallback сохраняет извлечение комментариев и контекста; целевые тесты, полный набор и lint изменённого модуля проходят.
+- [x] Проверки не входят в Dzen, не публикуют ответы и не меняют БД.
+
+## Результат
+
+- Целевые тесты: `python -m pytest -q tests/dzen/test_dzen_page.py` — 169 passed.
+- Полный набор: `python -m pytest -q` — 618 passed, 51 skipped (тестовая БД не настроена).
+- `python -m ruff check dzen_commenter/dzen/page.py` — passed; `git diff --check` — passed.
+- Manifest/spec и craft review — clean. Публикация и вход в Dzen не выполнялись.

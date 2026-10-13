@@ -1458,19 +1458,19 @@ class DzenStudioPage:
                     "more": selectors.COMMENT_OPEN_MORE,
                 },
             )
-            if (
-                isinstance(counts, dict)
-                and counts.get("group_count") == len(groups)
-                and isinstance(counts.get("comment_count"), int)
-                and not isinstance(counts.get("comment_count"), bool)
-                and isinstance(counts.get("button_count"), int)
-                and not isinstance(counts.get("button_count"), bool)
-            ):
-                return groups, (
-                    counts["group_count"],
-                    counts["comment_count"],
-                    counts["button_count"],
+            count_values = (
+                counts.get("group_count") if isinstance(counts, dict) else None,
+                counts.get("comment_count") if isinstance(counts, dict) else None,
+                counts.get("button_count") if isinstance(counts, dict) else None,
+            )
+            if not all(
+                isinstance(value, int) and not isinstance(value, bool) and value >= 0
+                for value in count_values
+            ) or count_values[0] != len(groups):
+                raise StudioFeedScanIncompleteError(
+                    "live Studio feed counts did not match the page"
                 )
+            return groups, count_values
 
         if comment_nodes_by_group is None:
             comment_count = sum(

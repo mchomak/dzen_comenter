@@ -65,3 +65,8 @@
 - На live Playwright-пути comment counts берутся без накопления Python-списков `ElementHandle` между scan passes; content extraction остаётся одним сериализованным DOM-снимком.
 - Fake/non-live fallback продолжает собирать `COMMENT_NODE` handles, когда live snapshot API недоступен.
 - Тестовый шов: fake live page с snapshot/counts и non-live page с обычным DOM query; проверяются точность счётчиков, отсутствие live handles и сохранность fallback.
+
+## Из таска 10 — безопасный live count failure
+
+- Некорректный или не совпадающий live count result завершается `StudioFeedScanIncompleteError` до любого `COMMENT_NODE` handle-query; публичные сигнатуры не меняются.
+- Тестовый шов: несколько групп с разными comment/button totals; malformed live result проверяет fail-closed без ElementHandle fallback, а fake/non-live fallback сохраняет прежнее извлечение.
