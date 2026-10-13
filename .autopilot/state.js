@@ -496,7 +496,7 @@ window.STATE =
     "REPORT, non-blocking: dzen_commenter/dzen/page.py has duplicated full-feed and targeted-search reply expansion paths.",
     "REPORT, non-blocking: metric fallback may label unavailable values as counts; separate diagnostics follow-up.",
     "DROP: main.py optional getattr for required recovery contract is defensive and has no observed behavior impact.",
-    "REPORT: full Ruff still finds pre-existing F841 in tests/dzen/test_dzen_page.py:3087 and F401 in .autopilot/sync.py and tests/db/test_repository.py.",
+    "REPORT: full Ruff still finds pre-existing F841 in tests/dzen/test_dzen_page.py and F401 in .autopilot/sync.py and tests/db/test_repository.py.",
     "REPORT, test-quality MEDIUM: T08 retry-boundary tests derive expected call count from _MAX_OPERATION_ATTEMPTS rather than independently pinning three."
   ],
   "reviewers": {
