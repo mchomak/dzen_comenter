@@ -1252,6 +1252,58 @@ def test_saved_publications_fill_window_before_generation_and_wait_for_slots(
     assert waiting_ids == []
 
 
+def test_saved_publication_gets_free_slot_before_generation_retry(repo, engine):
+    publication_id = repo.upsert_publication(_make_publication())
+    now = datetime(2026, 9, 18, 12, 0, 0)
+    retry_comment_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="generation-retry",
+            posted_at=now,
+            fetched_at=now,
+        )
+    )
+    assert repo.enqueue_generation(retry_comment_id, queued_at=now)
+    with engine.begin() as conn:
+        conn.execute(
+            update(ReplyGenerationQueueTable)
+            .where(ReplyGenerationQueueTable.comment_id == retry_comment_id)
+            .values(attempt_count=1, next_attempt_at=now + timedelta(hours=1))
+        )
+
+    saved_comment_id = repo.upsert_comment(
+        _make_comment(
+            publication_id,
+            dzen_id="saved-reply",
+            posted_at=now - timedelta(minutes=1),
+            fetched_at=now,
+        )
+    )
+    reply_id = repo.save_reply(_make_reply(saved_comment_id))
+    assert repo.enqueue_publication(reply_id, created_at=now)
+
+    snapshot = repo.reconcile_work_window(
+        now=now, stale_before=now - timedelta(days=2), limit=1
+    )
+
+    with engine.connect() as conn:
+        generation_state = conn.execute(
+            select(ReplyGenerationQueueTable.state).where(
+                ReplyGenerationQueueTable.comment_id == retry_comment_id
+            )
+        ).scalar_one()
+        publication_state = conn.execute(
+            select(ReplyPublicationQueueTable.state).where(
+                ReplyPublicationQueueTable.reply_id == reply_id
+            )
+        ).scalar_one()
+    assert snapshot.active_generation == 0
+    assert snapshot.active_publication == 1
+    assert snapshot.waiting_generation == 1
+    assert generation_state == "waiting"
+    assert publication_state == "queued"
+
+
 def test_generation_to_publication_transition_keeps_one_unique_window_slot(repo):
     publication_id = repo.upsert_publication(_make_publication())
     now = datetime(2026, 9, 18, 12, 0, 0)

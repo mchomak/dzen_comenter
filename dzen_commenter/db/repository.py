@@ -475,42 +475,6 @@ class PostgresCommentRepository:
                 )
             ).scalars()
         )
-        retry_generation_ids = conn.execute(
-            select(ReplyGenerationQueueTable.comment_id)
-            .join(
-                CommentTable,
-                CommentTable.id == ReplyGenerationQueueTable.comment_id,
-            )
-            .where(
-                ReplyGenerationQueueTable.state == "queued",
-                or_(
-                    ReplyGenerationQueueTable.attempt_count > 0,
-                    ReplyGenerationQueueTable.next_attempt_at.is_not(None),
-                ),
-            )
-            .order_by(
-                func.coalesce(CommentTable.posted_at, CommentTable.fetched_at)
-                .desc()
-                .nulls_last(),
-                CommentTable.dzen_comment_id.asc(),
-                CommentTable.id.asc(),
-            )
-        ).scalars().all()
-        for comment_id in retry_generation_ids:
-            if comment_id in active_ids:
-                continue
-            if len(active_ids) < limit:
-                active_ids.add(comment_id)
-                continue
-            conn.execute(
-                update(ReplyGenerationQueueTable)
-                .where(
-                    ReplyGenerationQueueTable.comment_id == comment_id,
-                    ReplyGenerationQueueTable.state == "queued",
-                )
-                .values(state="waiting", claimed_at=None, claim_token=None)
-            )
-
         publication_candidates = conn.execute(
             select(
                 ReplyTable.comment_id,
@@ -553,6 +517,42 @@ class PostgresCommentRepository:
                     )
                     .values(state="waiting")
                 )
+
+        retry_generation_ids = conn.execute(
+            select(ReplyGenerationQueueTable.comment_id)
+            .join(
+                CommentTable,
+                CommentTable.id == ReplyGenerationQueueTable.comment_id,
+            )
+            .where(
+                ReplyGenerationQueueTable.state == "queued",
+                or_(
+                    ReplyGenerationQueueTable.attempt_count > 0,
+                    ReplyGenerationQueueTable.next_attempt_at.is_not(None),
+                ),
+            )
+            .order_by(
+                func.coalesce(CommentTable.posted_at, CommentTable.fetched_at)
+                .desc()
+                .nulls_last(),
+                CommentTable.dzen_comment_id.asc(),
+                CommentTable.id.asc(),
+            )
+        ).scalars().all()
+        for comment_id in retry_generation_ids:
+            if comment_id in active_ids:
+                continue
+            if len(active_ids) < limit:
+                active_ids.add(comment_id)
+                continue
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "queued",
+                )
+                .values(state="waiting", claimed_at=None, claim_token=None)
+            )
 
         generation_candidates = conn.execute(
             select(ReplyGenerationQueueTable.comment_id)
