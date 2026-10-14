@@ -13,12 +13,19 @@ class OpenAICompatibleProvider:
         api_key: str,
         base_url: str,
         model: str,
+        timeout: float = 90.0,
         client: httpx.Client | None = None,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self._client = client if client is not None else httpx.Client()
+        self._client = (
+            client
+            if client is not None
+            else httpx.Client(
+                timeout=httpx.Timeout(timeout, connect=min(15.0, timeout))
+            )
+        )
 
     def generate(self, prompt: str, *, temperature: float, max_tokens: int) -> str:
         response = self._client.post(

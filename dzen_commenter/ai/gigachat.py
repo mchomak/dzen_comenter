@@ -21,6 +21,7 @@ class GigaChatProvider:
         oauth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
         verify_ssl_certs: bool | str = True,
         token_refresh_margin: float = 60.0,
+        timeout: float = 90.0,
         client: httpx.Client | None = None,
     ) -> None:
         self.api_key = api_key
@@ -31,7 +32,7 @@ class GigaChatProvider:
         self.token_refresh_margin = token_refresh_margin
         self._client = client if client is not None else httpx.Client(
             verify=verify_ssl_certs,
-            timeout=httpx.Timeout(90.0, connect=15.0),
+            timeout=httpx.Timeout(timeout, connect=min(15.0, timeout)),
         )
         self._access_token = ""
         self._token_expires_at = 0.0

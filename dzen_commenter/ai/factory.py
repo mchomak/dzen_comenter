@@ -15,6 +15,7 @@ def create_provider(settings: Settings) -> AIProvider:
             api_key=settings.AI_API_KEY,
             base_url=settings.AI_BASE_URL,
             model=settings.AI_MODEL,
+            timeout=settings.AI_REQUEST_TIMEOUT_SECONDS,
         )
     if name == "gigachat":
         verify_ssl_certs = (
@@ -27,6 +28,7 @@ def create_provider(settings: Settings) -> AIProvider:
             scope=settings.GIGACHAT_SCOPE,
             oauth_url=settings.GIGACHAT_OAUTH_URL,
             verify_ssl_certs=verify_ssl_certs,
+            timeout=settings.AI_REQUEST_TIMEOUT_SECONDS,
         )
     if name == "yandexgpt":
         return YandexGPTProvider(

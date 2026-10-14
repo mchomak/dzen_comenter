@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     AI_TEMPERATURE: float
     AI_MAX_TOKENS: int
     AI_PROMPT_LANGUAGE: str
+    AI_REQUEST_TIMEOUT_SECONDS: float = Field(default=90.0, gt=0)
 
     # GigaChat
     GIGACHAT_AUTH_KEY: str = ""
@@ -39,6 +41,7 @@ class Settings(BaseSettings):
     POLL_INTERVAL: int
     KEEPALIVE_INTERVAL: int
     MAX_REPLIES_PER_CYCLE: int
+    MAX_ACTIVE_WORK_ITEMS: int = Field(default=30, gt=0)
     BOT_HEALTH_PATH: str = "bot_health.json"
 
     # Telegram (авторизация/уведомления)

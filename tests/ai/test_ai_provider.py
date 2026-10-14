@@ -83,6 +83,65 @@ def test_gigachat_factory_uses_custom_ca_bundle(monkeypatch):
     assert captured["verify_ssl_certs"] == "/certs/russian-root.crt"
 
 
+@pytest.mark.parametrize(
+    ("provider_value", "factory_class"),
+    [
+        ("openai", "OpenAICompatibleProvider"),
+        ("gigachat", "GigaChatProvider"),
+    ],
+)
+def test_factory_passes_configured_request_timeout(
+    monkeypatch, provider_value, factory_class
+):
+    captured = {}
+
+    class FakeProvider:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        f"dzen_commenter.ai.factory.{factory_class}", FakeProvider
+    )
+    settings = make_settings(
+        AI_PROVIDER=provider_value,
+        AI_REQUEST_TIMEOUT_SECONDS=12.5,
+    )
+
+    create_provider(settings)
+
+    assert captured["timeout"] == 12.5
+
+
+@pytest.mark.parametrize(
+    ("adapter", "module_path"),
+    [
+        (OpenAICompatibleProvider, "dzen_commenter.ai.openai_compatible"),
+        (GigaChatProvider, "dzen_commenter.ai.gigachat"),
+    ],
+)
+def test_provider_http_timeout_uses_configured_limit(
+    monkeypatch, adapter, module_path
+):
+    captured = {}
+
+    def fake_client(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(f"{module_path}.httpx.Client", fake_client)
+
+    adapter(
+        api_key="test-key",
+        base_url="https://example.test/v1",
+        model="test-model",
+        timeout=2.5,
+    )
+
+    timeout = captured["timeout"]
+    assert timeout.read == 2.5
+    assert timeout.connect <= 2.5
+
+
 # 4
 @pytest.mark.parametrize("adapter", ADAPTERS)
 def test_generate_signature(adapter):

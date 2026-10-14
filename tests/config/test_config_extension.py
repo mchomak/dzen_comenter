@@ -1,5 +1,7 @@
 import pathlib
 
+import pytest
+
 from dzen_commenter.config.settings import Settings
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -23,8 +25,10 @@ NEW_INT_FIELDS = {
     "SMTP_PORT",
     "VNC_PORT",
     "DZEN_LOGIN_TIMEOUT_MS",
+    "MAX_ACTIVE_WORK_ITEMS",
 }
-NEW_FIELDS = NEW_STR_FIELDS | NEW_INT_FIELDS
+NEW_FLOAT_FIELDS = {"AI_REQUEST_TIMEOUT_SECONDS"}
+NEW_FIELDS = NEW_STR_FIELDS | NEW_INT_FIELDS | NEW_FLOAT_FIELDS
 
 
 def _load_settings(monkeypatch) -> Settings:
@@ -49,6 +53,51 @@ def test_settings_reads_new_fields_with_types(monkeypatch):
         assert isinstance(value, int) and not isinstance(value, bool), (
             f"{field} must be int"
         )
+    for field in NEW_FLOAT_FIELDS:
+        assert isinstance(getattr(s, field), float), f"{field} must be float"
+
+
+def _settings_without_env_file(**overrides) -> Settings:
+    values = {
+        "DATABASE_URL": "postgresql://example",
+        "AI_PROVIDER": "openai",
+        "AI_MODEL": "test-model",
+        "AI_API_KEY": "test-key",
+        "AI_BASE_URL": "https://example.test/v1",
+        "AI_TEMPERATURE": 0.3,
+        "AI_MAX_TOKENS": 32,
+        "AI_PROMPT_LANGUAGE": "ru",
+        "USER_DATA_DIR": "/tmp/user-data",
+        "STORAGE_STATE_PATH": "/tmp/state.json",
+        "HEADLESS": True,
+        "COMMENTS_URL": "https://dzen.ru/",
+        "POLL_INTERVAL": 60,
+        "KEEPALIVE_INTERVAL": 300,
+        "MAX_REPLIES_PER_CYCLE": 10,
+    }
+    values.update(overrides)
+    return Settings(_env_file=None, **values)
+
+
+def test_ai_timeout_and_work_window_settings_defaults():
+    settings = _settings_without_env_file()
+
+    assert settings.AI_REQUEST_TIMEOUT_SECONDS == 90
+    assert settings.MAX_ACTIVE_WORK_ITEMS == 30
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("AI_REQUEST_TIMEOUT_SECONDS", 0),
+        ("AI_REQUEST_TIMEOUT_SECONDS", -1),
+        ("MAX_ACTIVE_WORK_ITEMS", 0),
+        ("MAX_ACTIVE_WORK_ITEMS", -1),
+    ],
+)
+def test_ai_timeout_and_work_window_settings_must_be_positive(field, value):
+    with pytest.raises(ValueError):
+        _settings_without_env_file(**{field: value})
 
 
 def _parse_env_keys(path: pathlib.Path) -> set[str]:
