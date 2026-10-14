@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-13T16:40:51+03:00",
-  "updatedAt": "2026-10-14T11:59:50+00:00",
+  "updatedAt": "2026-10-14T12:11:44+00:00",
   "finishedAt": null,
   "stages": [
     {
@@ -55,7 +55,7 @@ window.STATE =
       "id": "review",
       "status": "active",
       "startedAt": "2026-10-14T11:33:38+00:00",
-      "note": "Ticket 09 PASS; Ticket 08 production evidence sent for independent verification"
+      "note": "Ticket 09 PASS; Ticket 08 sanitized production evidence persisted; independent re-review pending"
     },
     {
       "id": "final",
@@ -383,21 +383,24 @@ window.STATE =
       ],
       "status": "review",
       "retries": 0,
-      "repairs": 0,
-      "repairFindings": [],
+      "repairs": 1,
+      "repairFindings": [
+        "Первый независимый тестер не смог перепроверить production backup/container/SQL: результаты были только сводным текстом, а SSH banner timeout не дал доступа. Добавлен durable sanitized evidence report с точным определением active window и повторной read-only проверкой."
+      ],
       "handoffs": 0,
       "startedAt": "2026-10-14T10:48:56+00:00",
       "commit": "4cd5534",
       "files": [
-        ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/tickets/08-push-deploy-and-production-check.md"
+        ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/tickets/08-push-deploy-and-production-check.md",
+        ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/production-evidence-2026-10-14.md"
       ],
       "tests": {
         "passed": 0,
         "failed": 0,
         "skipped": 0,
-        "scope": "read-only production checks: backup, container/schema/health, queue and latency metrics; awaiting independent tester"
+        "scope": "read-only production evidence persisted; corrected active-window query excludes waiting; awaiting independent tester re-review"
       },
-      "note": "Первый rollout выполнен; Ticket 08 telemetry показала production D01. Повторная production-проверка после Ticket 09."
+      "note": "First tester could not independently verify summary-only production claims; sanitized evidence saved and read-only checks repeated. Awaiting re-review."
     },
     {
       "id": "09",
