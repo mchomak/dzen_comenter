@@ -1,5 +1,7 @@
 # 0014 — Distinguish Search Exhaustion from an Unconfirmed Send
-- Status: Accepted
+- Status: Partially superseded by ADR-0026
+
+The public-source prerequisite below is superseded by ADR-0026. A source found in Studio permits one unconfirmed submission when public source search is exhausted; the durable marker and prohibition on automatic repeats remain in force.
 
 ## Context
 
