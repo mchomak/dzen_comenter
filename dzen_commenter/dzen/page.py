@@ -539,6 +539,14 @@ class _ReplyExpansionDeadlineExceeded(RuntimeError):
     """The shared hidden-reply expansion budget has expired."""
 
 
+class _PublicSourceUnavailableError(RuntimeError):
+    """Public source search exhausted; a Studio submit may remain possible."""
+
+    def __init__(self, message: str, reason_code: str = "source_comment_not_found") -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
 _REPLY_CONTROL_VALIDATION_REASONS = frozenset(
     {
         "button_selector_mismatch",
@@ -710,6 +718,8 @@ def _publication_failure_location(exc: Exception) -> tuple[str, str]:
         return _publication_failure_location(exc.__cause__)
     if isinstance(exc, _ReplyExpansionDeadlineExceeded):
         return "studio_source_comment_search", "reply_expansion_time_limit_reached"
+    if isinstance(exc, _PublicSourceUnavailableError):
+        return "public_source_comment_search", exc.reason_code
     if isinstance(exc, SourceCommentUnavailableError):
         return "studio_source_comment_search", "source_comment_not_found"
     try:
@@ -2764,6 +2774,11 @@ class DzenStudioPage:
                 public_visible = self._verify_public_reply(
                     comment, text, source_author_href, comment.author, reply_id=reply_id
                 )
+            except _PublicSourceUnavailableError as exc:
+                raise PublicationUnconfirmedError(
+                    "existing Studio reply not confirmed in public article; "
+                    f"failure_stage=public_source_comment_search; failure_reason={exc.reason_code}"
+                ) from exc
             except Exception as exc:
                 failure_stage, failure_reason = _publication_failure_location(exc)
                 logger.info(
@@ -2796,6 +2811,7 @@ class DzenStudioPage:
             )
             return
 
+        public_source_unavailable = None
         if auto_publish:
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
             source_author_href = author_link.get_attribute("href") or "" if author_link else ""
@@ -2808,6 +2824,18 @@ class DzenStudioPage:
                     comment, text, source_author_href, comment.author,
                     wait_for_reply=False,
                     reply_id=reply_id,
+                )
+            except _PublicSourceUnavailableError as exc:
+                public_source_unavailable = exc
+                already_public = False
+                logger.info(
+                    "Public source search exhausted; submitting through Studio without public confirmation",
+                    extra={
+                        "event": "publication_studio_fallback_started",
+                        **correlation,
+                        "failure_stage": "public_source_comment_search",
+                        "failure_reason": exc.reason_code,
+                    },
                 )
             except Exception as exc:
                 failure_stage, failure_reason = _publication_failure_location(exc)
@@ -3002,6 +3030,9 @@ class DzenStudioPage:
                     f"truncated={str(truncated).lower()}"
                 )
 
+            if public_source_unavailable is not None:
+                raise public_source_unavailable
+
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
             source_author_href = author_link.get_attribute("href") or "" if author_link else ""
             logger.info(
@@ -3078,8 +3109,13 @@ class DzenStudioPage:
 
         deadline = monotonic() + _PUBLIC_VERIFICATION_TIMEOUT_MS / 1_000
 
-        def ensure_time_budget() -> None:
+        def ensure_time_budget(*, source_search: bool = False) -> None:
             if monotonic() >= deadline:
+                if source_search:
+                    raise _PublicSourceUnavailableError(
+                        "public article source comment search time limit reached",
+                        "source_search_timeout",
+                    )
                 raise RuntimeError("public article verification time limit reached")
 
         article_page = self._page.context.new_page()
@@ -3246,11 +3282,11 @@ class DzenStudioPage:
             branch_expansion_wait_count = 0
             reply_confirmation_wait_count = 0
             while True:
-                ensure_time_budget()
+                ensure_time_budget(source_search=True)
                 roots = article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)
                 roots_checked += len(roots)
                 for index, root in enumerate(roots):
-                    ensure_time_budget()
+                    ensure_time_budget(source_search=True)
                     try:
                         data = self._read_public_comment(root)
                     except Exception:
@@ -3269,16 +3305,18 @@ class DzenStudioPage:
                         ),
                         None,
                     )
-                    if source is None:
+                    while source is None:
                         try:
-                            expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
-                            if expand is not None and "Свернуть" not in expand.inner_text():
+                            ensure_time_budget(source_search=True)
+                            expand = self._public_reply_control(root)
+                            if expand is not None:
                                 previous_reply_count = len(data["replies"])
                                 branch_expansion_attempt_count += 1
                                 expand.click()
                                 branch_expansion_click_count += 1
                                 expansion_observed = False
                                 for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
+                                    ensure_time_budget(source_search=True)
                                     branch_expansion_wait_count += 1
                                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                                     current_roots = article_page.query_selector_all(
@@ -3286,7 +3324,8 @@ class DzenStudioPage:
                                     )
                                     if index >= len(current_roots):
                                         continue
-                                    data = self._read_public_comment(current_roots[index])
+                                    root = current_roots[index]
+                                    data = self._read_public_comment(root)
                                     if data is None:
                                         continue
                                     source = next(
@@ -3319,6 +3358,11 @@ class DzenStudioPage:
                                             "wait_count": _PUBLIC_COMMENT_POLL_LIMIT,
                                         },
                                     )
+                                    break
+                            else:
+                                break
+                        except _PublicSourceUnavailableError:
+                            raise
                         except Exception as exc:
                             logger.info(
                                 "Public article comment branch expansion failed",
@@ -3334,7 +3378,7 @@ class DzenStudioPage:
                                     "wait_count": branch_expansion_wait_count,
                                 },
                             )
-                            article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
+                            raise
                     if source is None:
                         continue
                     logger.info(
@@ -3397,8 +3441,8 @@ class DzenStudioPage:
                             )
                             return True
                         try:
-                            expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
-                            if expand is not None and "Свернуть" not in expand.inner_text():
+                            expand = self._public_reply_control(root)
+                            if expand is not None:
                                 branch_expansion_attempt_count += 1
                                 expand.click()
                                 branch_expansion_click_count += 1
@@ -3422,8 +3466,8 @@ class DzenStudioPage:
                         if poll < poll_limit:
                             reply_confirmation_wait_count += 1
                             article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
-                    expand = root.query_selector(selectors.ARTICLE_OPEN_REPLIES)
-                    if expand is not None and "Свернуть" not in expand.inner_text():
+                    expand = self._public_reply_control(root)
+                    if expand is not None:
                         logger.info(
                             "Public article reply branch did not expand",
                             extra={
@@ -3477,7 +3521,9 @@ class DzenStudioPage:
                     continue
                 previous_count = len(roots)
                 if load >= _PUBLIC_MAX_LOAD_MORE_CLICKS:
-                    raise RuntimeError("public article source comment search limit reached")
+                    raise _PublicSourceUnavailableError(
+                        "public article source comment search limit reached", "source_search_limit"
+                    )
                 load_more_click_attempt_count += 1
                 try:
                     more.click()
@@ -3555,9 +3601,25 @@ class DzenStudioPage:
                     "wait_count": empty_polls,
                 },
             )
-            raise RuntimeError("source comment not found in public article")
+            if candidate_read_failure_count:
+                raise RuntimeError("public article source comment read failed")
+            raise _PublicSourceUnavailableError("source comment not found in public article")
+        except _PublicSourceUnavailableError:
+            if navigation_status is not None and navigation_status >= 400:
+                raise RuntimeError("public article navigation failed")
+            raise
         finally:
             article_page.close()
+
+    @staticmethod
+    def _public_reply_control(root: Any) -> Any | None:
+        return next(
+            (
+                button for button in root.query_selector_all(selectors.ARTICLE_OPEN_REPLIES)
+                if button.is_visible() and "свернуть" not in button.inner_text().casefold()
+            ),
+            None,
+        )
 
     @staticmethod
     def _public_source_matches(

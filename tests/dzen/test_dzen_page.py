@@ -415,6 +415,42 @@ class FakePublicRoot:
             return self.expand_button
         return None
 
+    def query_selector_all(self, selector: str):
+        button = self.query_selector(selector)
+        return [button] if button is not None else []
+
+
+class FakePagedPublicRoot(FakePublicRoot):
+    """A subtree with replacement load-more controls and a preceding collapse button."""
+
+    def __init__(self, batches, *, replies=None, trace=None):
+        super().__init__(author="parent", author_href="/user/parent", text="parent", replies=replies)
+        self.batches = list(batches)
+        self.trace = trace if trace is not None else {"clicks": [], "reads": []}
+        self.collapse = FakeButton(text="Свернуть ответы")
+        remaining = sum(len(batch) for batch in self.batches)
+        prefix = "Ещё " if self.replies else ""
+        self.expand_button = FakeButton(self._expand, text=f"{prefix}{remaining} ответ")
+        self.on_replace = None
+
+    def _expand(self):
+        self.trace["clicks"].append(self.expand_button.inner_text())
+        self.replies.extend(self.batches.pop(0))
+        if self.on_replace is not None:
+            self.on_replace(FakePagedPublicRoot(self.batches, replies=self.replies, trace=self.trace))
+        else:
+            remaining = sum(len(batch) for batch in self.batches)
+            self.expand_button = FakeButton(self._expand, text=f"Ещё {remaining} ответ")
+
+    def evaluate(self, script):
+        self.trace["reads"].append(len(self.replies))
+        return super().evaluate(script)
+
+    def query_selector_all(self, selector):
+        if selector == selectors.ARTICLE_OPEN_REPLIES:
+            return [self.collapse, *([self.expand_button] if self.batches else [])]
+        return []
+
 
 def public_root_for(node: FakeCommentNode, *, reply_text: str = "мой ответ", reply_author: str = "Configured Bot") -> FakePublicRoot:
     return FakePublicRoot(
@@ -423,6 +459,159 @@ def public_root_for(node: FakeCommentNode, *, reply_text: str = "мой отве
         text=node._children[selectors.COMMENT_TEXT].inner_text(),
         replies=[{"author": reply_author, "text": reply_text}],
     )
+
+
+@pytest.mark.parametrize("replace_root", [False, True])
+@pytest.mark.parametrize("source_page", [0, 2, None])
+def test_public_source_search_reads_every_reply_page(replace_root, source_page):
+    batches = [
+        [{"author": "other", "text": f"page{page}-reply{item}"} for item in range(size)]
+        for page, size in enumerate((20, 20, 1))
+    ]
+    batches[0][0] = {"author": "Configured Bot", "text": "reply", "addressee": "author0"}
+    if source_page is not None:
+        batches[source_page][-1] = {
+            "author": "author0", "authorHref": "/user/u0", "text": "text0"
+        }
+    root = FakePagedPublicRoot(batches)
+    article = FakeArticlePage(public_roots=[root])
+    if replace_root:
+        def replace(new_root):
+            article.public_roots[0] = new_root
+            new_root.on_replace = replace
+
+        root.on_replace = replace
+    fake = FakePage([FakeGroup("/a/post1", [make_node(0)])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    comment = page.fetch_comments()[0]
+    if source_page is None:
+        with pytest.raises(dzen_page._PublicSourceUnavailableError):
+            page._verify_public_reply(comment, "reply", "/user/u0", "author0", wait_for_reply=False)
+    else:
+        assert page._verify_public_reply(comment, "reply", "/user/u0", "author0", wait_for_reply=False)
+    expected_clicks = 3 if source_page is None else source_page + 1
+    assert len(root.trace["clicks"]) == expected_clicks
+    assert root.trace["clicks"] == ["41 ответ", "Ещё 21 ответ", "Ещё 1 ответ"][:expected_clicks]
+    assert {0, *([20, 40, 41][:expected_clicks])} <= set(root.trace["reads"])
+    assert root.collapse.clicks == 0
+    assert article.public_roots[0].collapse.clicks == 0
+    assert article.close_calls == 1
+
+
+def test_existing_public_reply_search_skips_collapse_and_uses_new_nested_controls():
+    root = FakePagedPublicRoot([
+        [{"author": "other", "text": "first child"}],
+        [{"author": "Configured Bot", "text": "reply"}],
+    ])
+    root.author, root.author_href, root.text = "author0", "/user/u0", "text0"
+    article = FakeArticlePage(public_roots=[root])
+    fake = FakePage([FakeGroup("/a/post1", [make_node(0)])])
+    fake.context.article_pages = [article]
+    page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
+    assert page._verify_public_reply(page.fetch_comments()[0], "reply", "/user/u0", "author0")
+    assert len(root.trace["clicks"]) == 2
+    assert root.collapse.clicks == 0
+    assert article.close_calls == 1
+
+
+@pytest.mark.parametrize("missing_kind", ["exhausted", "limit", "deadline"])
+def test_public_source_unavailable_submits_once_with_marker_and_without_rescan(monkeypatch, missing_kind):
+    node = make_node(0)
+    root = FakePublicRoot(author="other", author_href="/user/other", text="other")
+    article = FakeArticlePage(public_roots=[root])
+    if missing_kind == "limit":
+        article.hidden_roots = [root]
+        monkeypatch.setattr(dzen_page, "_PUBLIC_MAX_LOAD_MORE_CLICKS", 0)
+    elif missing_kind == "deadline":
+        root.hidden_replies = [{"author": "other", "text": "child"}]
+        clock = [0.0]
+        monkeypatch.setattr(dzen_page, "monotonic", lambda: clock[0])
+        monkeypatch.setattr(dzen_page, "_PUBLIC_VERIFICATION_TIMEOUT_MS", dzen_page._PUBLIC_COMMENT_WAIT_MS)
+        article.wait_for_timeout = lambda ms: clock.__setitem__(0, clock[0] + ms / 1_000)
+    fake, page, unused = make_publication_page(node)
+    fake.context.article_pages = [article, unused]
+    events = []
+
+    def submit():
+        events.append("send")
+        node.published_replies.append({"author": "Configured Bot", "text": "reply"})
+
+    node.reply_submit.on_click = submit
+    comment = page.fetch_comments()[0]
+    with pytest.raises(PublicationUnconfirmedError, match="public_source_comment_search"):
+        page.publish_reply(comment, "reply", auto_publish=True, before_submit=lambda: events.append("marker"))
+    assert events == ["marker", "send"]
+    assert node.reply_submit.clicks == 1
+    assert fake.context.new_page_calls == 1
+    assert unused.goto_calls == []
+    assert article.close_calls == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+
+def test_preexisting_studio_reply_with_missing_public_source_is_unconfirmed_without_send():
+    node = make_node(0)
+    node.published_replies.append({"author": "Configured Bot", "text": "reply"})
+    fake, page, _ = make_publication_page(node)
+    article = FakeArticlePage(public_roots=[FakePublicRoot(author="other", author_href="/user/other", text="other")])
+    fake.context.article_pages = [article]
+    markers = []
+    with pytest.raises(PublicationUnconfirmedError, match="source_comment_not_found"):
+        page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=lambda: markers.append(True))
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert markers == []
+    assert article.close_calls == 1
+
+
+def test_public_source_fallback_marker_failure_prevents_send():
+    node = make_node(0)
+    fake, page, _ = make_publication_page(node)
+    article = FakeArticlePage(public_roots=[FakePublicRoot(author="other", author_href="/user/other", text="other")])
+    fake.context.article_pages = [article]
+
+    def fail_marker():
+        raise RuntimeError("marker unavailable")
+
+    with pytest.raises(RuntimeError, match="marker unavailable"):
+        page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=fail_marker)
+    assert node.reply_submit.clicks == 0
+    assert article.close_calls == 1
+
+
+@pytest.mark.parametrize("failure", ["http", "branch_click", "loading_deadline", "source_read"])
+def test_technical_public_preflight_failures_do_not_allow_fallback(monkeypatch, failure):
+    node = make_node(0)
+    root = FakePublicRoot(author="other", author_href="/user/other", text="other")
+    article = FakeArticlePage(public_roots=[root])
+    if failure == "http":
+        article.goto_status = 503
+    elif failure == "branch_click":
+        root.hidden_replies = [{"author": "other", "text": "child"}]
+
+        def fail_click():
+            raise RuntimeError("reply branch click failed")
+
+        root.expand_button.on_click = fail_click
+    elif failure == "source_read":
+        def fail_read(_script):
+            raise RuntimeError("source read failed")
+
+        root.evaluate = fail_read
+    else:
+        article.comments_available = False
+        clock = [0.0]
+        monkeypatch.setattr(dzen_page, "monotonic", lambda: clock[0])
+        monkeypatch.setattr(dzen_page, "_PUBLIC_VERIFICATION_TIMEOUT_MS", dzen_page._PUBLIC_COMMENT_WAIT_MS)
+        article.wait_for_timeout = lambda ms: clock.__setitem__(0, clock[0] + ms / 1_000)
+    fake, page, _ = make_publication_page(node)
+    fake.context.article_pages = [article]
+    markers = []
+    with pytest.raises(RuntimeError) as exc_info:
+        page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=lambda: markers.append(True))
+    assert not isinstance(exc_info.value, (PublicationUnconfirmedError, dzen_page._PublicSourceUnavailableError))
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert markers == []
+    assert article.close_calls == 1
 
 
 def make_node(i: int, date: str | None = None) -> FakeCommentNode:
@@ -4464,9 +4653,12 @@ def test_public_reply_preflight_logs_missing_source_comment(caplog):
     fake.context.article_pages = [article]
     page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
     comment = page.fetch_comments()[0]
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "private reply text"}
+    )
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="source comment not found in public article"):
+        with pytest.raises(PublicationUnconfirmedError, match="source_comment_not_found"):
             page.publish_reply(comment, "private reply text", auto_publish=True, reply_id=73, before_submit=lambda: None)
 
     record = next(
@@ -4506,9 +4698,12 @@ def test_public_reply_preflight_logs_collapsed_branch_timeout(caplog):
     fake.context.article_pages = [article]
     page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
     comment = page.fetch_comments()[0]
+    node.reply_submit.on_click = lambda: node.published_replies.append(
+        {"author": "Configured Bot", "text": "мой ответ"}
+    )
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="source comment not found in public article"):
+        with pytest.raises(PublicationUnconfirmedError, match="source_comment_not_found"):
             page.publish_reply(comment, "мой ответ", auto_publish=True, before_submit=lambda: None)
 
     record = next(
@@ -4521,6 +4716,8 @@ def test_public_reply_preflight_logs_collapsed_branch_timeout(caplog):
     assert record.branch_expansion_attempt_count == 1
     assert record.branch_expansion_count == 0
     assert record.wait_count == dzen_page._PUBLIC_COMMENT_POLL_LIMIT
+    assert root.expand_button.clicks == 1
+    assert len(article.waited_ms) == dzen_page._PUBLIC_COMMENT_POLL_LIMIT
     serialized = "\n".join(
         StructuredFormatter().format(record)
         for record in caplog.records
