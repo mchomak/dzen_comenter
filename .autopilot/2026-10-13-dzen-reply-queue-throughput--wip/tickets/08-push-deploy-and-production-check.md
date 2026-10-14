@@ -4,7 +4,7 @@
 **Blocked by:** 05, 06, 07, 09
 **Зона:** production host / release operations
 **Волна:** 5
-**Status:** review
+**Status:** in progress
 
 ## Что должно заработать
 
@@ -22,20 +22,20 @@
 
 ## Критерии приёмки
 
-- [ ] Все code ticket commits и run artifacts опубликованы fast-forward push в текущую ветку; история не переписывается, существующие посторонние untracked artifacts не стадируются.
-- [ ] Перед изменением production сделан timestamped PostgreSQL backup; `pg_restore --list` подтверждает читаемость архива. Секреты и пользовательские тексты не попадают в вывод отчёта.
-- [ ] Старый app worker остановлен до сборки/миграции; `postgres` volume, session/config/browser volumes и rollback images сохранены. Одновременно работает только один worker.
-- [ ] Новая версия стартует на pushed commit, миграции (если есть) применяются успешно; app health/heartbeat, admin HTTP и активная schema revision подтверждены.
-- [ ] После старта saved Reply `generated` имеют publication jobs без новой генерации; snapshot подтверждает active generation + publication ≤30; просроченные записи имеют terminal status и причину; данные комментариев и PostgreSQL volume сохранены.
-- [ ] Read-only production queries после запуска сообщают среднее/медиану discovery→confirmed publication с периодом и размером выборки, count generated Reply со статусом pending publication и stale completions. При менее 30 публикациях или периоде менее 24 часов оценка лимита 30 помечена предварительной.
-- [ ] Кэш и swap повторно не меняются: эти действия уже завершены предыдущей выкладкой; production server не очищается и volumes не удаляются.
+- [x] Все code ticket commits и run artifacts опубликованы fast-forward push в текущую ветку; история не переписывается, существующие посторонние untracked artifacts не стадируются.
+- [x] Перед изменением production сделан timestamped PostgreSQL backup; `pg_restore --list` подтверждает читаемость архива. Секреты и пользовательские тексты не попадают в вывод отчёта.
+- [x] Старый app worker остановлен до сборки/миграции; `postgres` volume, session/config/browser volumes и rollback images сохранены. Одновременно работает только один worker.
+- [x] Новая версия стартует на pushed commit, миграции (если есть) применяются успешно; app health/heartbeat, admin HTTP и активная schema revision подтверждены.
+- [x] После старта saved Reply `generated` имеют publication jobs без новой генерации; snapshot подтверждает active generation + publication ≤30; просроченные записи имеют terminal status и причину; данные комментариев и PostgreSQL volume сохранены.
+- [x] Read-only production queries после запуска сообщают среднее/медиану discovery→confirmed publication с периодом и размером выборки, count generated Reply со статусом pending publication и stale completions. При менее 30 публикациях или периоде менее 24 часов оценка лимита 30 помечена предварительной.
+- [x] Кэш и swap повторно не меняются: эти действия уже завершены предыдущей выкладкой; production server не очищается и volumes не удаляются.
 
 ## Production evidence for independent verification
 
 The first tester could verify only the pushed branch and HTTP responses because SSH timed out and the production checks were described only in this note. The sanitized command outputs, aggregate SQL results, and explicit active-window definition are now persisted in [production-evidence-2026-10-14.md](../production-evidence-2026-10-14.md). The report also records the rollout command order (old app stop → backup → image build → app start), timestamped backup/image/container metadata, the identical pre/post PostgreSQL container ID, and the pre-existing volume creation times. Shell history has no timestamp for the exact stop second; this limitation is stated explicitly. No comment text, author, URL, credentials, row identifiers, or HTML is included.
 
-Latest snapshot (`2026-10-14T12:07:41Z`): app image `dzen_commenter-app:4cd5534` is healthy and runs exact pushed SHA `4cd553439874c51b4da13a1c48738bf9346b6f54`; admin `/login` returns 200; PostgreSQL is healthy on the preserved volume and schema is at `0012_ai_call_reservations`. The backup is readable by `pg_restore --list`, the rollback image remains available, and one app worker is running.
+The snapshot at `2026-10-14T12:07:41Z` is historical, not the latest. Its database cohort was corrected after identifying that the timestamp columns are naive Moscow wall-clock values: the correct interval contains 13 confirmed publications and 0 newly fetched comments (not 21 and 16). The production evidence report records the corrected counts, the withdrawn status breakdown, and the query cutoffs.
 
-Queue counts are `queued=28`, `claimed=2`, `waiting=21`; only queued and claimed work occupies the 30 active slots, so 21 waiting items are outside the window. There are 51 generated replies pending publication and none without a publication job. Since release, 16 comments were fetched (15 generated and one skipped); the 15 new publication jobs are persisted in `waiting` while prior publication work fills the active window. There have been 21 confirmed publications after release, all for comments fetched before release; average discovery-to-publication is 21,304 seconds and median is 20,688 seconds. The 25 min 37 sec observation and 21-publication sample make the throughput estimate preliminary.
+The later Ticket 10 snapshot (`2026-10-14T13:32:44Z`) is the latest production evidence: app/admin run image `dzen_commenter-app:44c29b8`, app is healthy, admin `/login` returns 200, PostgreSQL remains healthy with the same container ID and named volumes, schema remains `0012_ai_call_reservations`, and exactly one authenticated worker is healthy. It reports 26 generated replies waiting for publication, 0 without a publication job, 11 comments fetched since the queue rollout, and 501 stale completions with an explicit age reason. Since rollout there were 31 confirmed publications; discovery-to-publication averaged 13,191 seconds and had a 14,055-second median. The observation lasted 1 h 50 min 40 sec, so the sample meets 30 publications but remains preliminary until 24 hours have elapsed. See [production-evidence-2026-10-14.md](../production-evidence-2026-10-14.md) for the backup checksum, deployment details, and query definitions.
 
-The first reconciliation completed 501 stale records with explicit reasons. The earlier sanitized Studio telemetry and the current full backup/queue/latency evidence are recorded in the linked report. No cache cleanup, swap change, data-volume removal, restore, or PostgreSQL recreation was performed during this redeploy.
+No cache cleanup, swap change, data-volume removal, restore, or PostgreSQL recreation was performed during these redeploys; cache cleanup and the 2 GiB additional swap were completed earlier in the run.

@@ -256,50 +256,60 @@ rather than after mistakes, every stage in Obsidian is checked off only after a 
 PASS, every number that gates a PASS was computed by code (not estimated), and 
 
 <!-- autopilot:start -->
-# Dzen Commenter — карта текущего кода
+# Dzen Commenter — карта текущего состояния
 
-Сервис на Python 3.11: PostgreSQL, отдельный синхронный Playwright worker и FastAPI/Jinja2 admin. Compose запускает `postgres`, `app` и `admin`; миграции применяются entrypoint, если `RUN_DB_MIGRATIONS` не равно `false`. Админка слушает 8080; БД и браузерные порты не публикуются. `pgdata` сохраняет базу между перезапусками.
+Python 3.11+, синхронный Playwright, FastAPI/Jinja2 и PostgreSQL. `docker-compose.yml` запускает `app` (worker), `admin` и PostgreSQL 16; наружу Compose публикует только `8080:8080`. Именованные тома хранят БД, Chromium profile/session и runtime config. `docker/entrypoint.sh` запускает Alembic до приложения, если `RUN_DB_MIGRATIONS` не равно точному `false`; при `HEADLESS=false` entrypoint поднимает Xvfb, x11vnc и noVNC. VNC доступ управляется отдельным host-side socket controller.
 
-## Запуск и проверка
+## Команды
 
-Из корня в PowerShell:
+PowerShell, из корня репозитория; локальные Python-команды требуют настроенного Python 3.11 и зависимостей проекта. Перед запуском приложения или Compose заполните `.env`:
 
 ```powershell
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 python -m pytest -q
+python -m pytest -q tests/dzen/test_dzen_page.py
+python -m pytest -q tests/orchestrator/test_loop.py tests/orchestrator/test_generation_queue.py
+python main.py
+python -m uvicorn dzen_commenter.admin.app:app --host 0.0.0.0 --port 8080
 docker compose up --build
 ```
 
-Сначала заполните локальный `.env`. Для DB-интеграционных тестов задавайте `TEST_DATABASE_URL` только на отдельную disposable PostgreSQL: `tests/db/conftest.py` удаляет известные таблицы, применяет миграции и очищает таблицы между тестами. Без переменной DB-интеграционные тесты пропускаются.
+Последняя сообщённая проверка в основной checkout: полный набор — `647 passed, 64 skipped`, одно известное предупреждение Starlette/httpx deprecation при unset `TEST_DATABASE_URL`; `tests/dzen/test_dzen_page.py` — `170 passed`. DB-интеграционные тесты пропускаются без `TEST_DATABASE_URL`.
 
-Подтверждено исполнителями 13 октября 2026: полный набор — 684 passed на disposable PostgreSQL; `tests/dzen` + `tests/orchestrator` — 214 passed; Ruff на production/orchestrator — passed, один ранее существовавший F841 в тестовом файле был исключён; production Docker build нового commit — passed. Проверка изменения не добавила зависимости и переменные окружения.
+## Структура и ключевые файлы
 
-## Архитектура и ключевые границы
+- `main.py` собирает БД, AI provider, live runtime config, prompt builder, browser session, Studio adapter, notifier и account-login socket; `run_supervised` ведёт worker, heartbeat/watchdog, ограниченные повторы и восстановление Chromium после renderer crash.
+- `dzen_commenter/orchestrator/loop.py` задаёт порядок цикла и обработки очередей. `dzen_commenter/db/repository.py` — транзакционные SQL-переходы, admission, leases/retries и quota; модели/transport-типы — в `dzen_commenter/db/models.py` и `dzen_commenter/contracts/`. Текущий migration head — `dzen_commenter/db/migrations/versions/0012_ai_call_reservations.py`.
+- `dzen_commenter/dzen/page.py` — адаптер Studio/public comments и публикации; `dzen_commenter/browser/session_manager.py` владеет persistent Playwright session и восстановлением браузера. Селекторы находятся в `dzen_commenter/dzen/selectors.py`.
+- `dzen_commenter/config/settings.py` — process environment; `dzen_commenter/config/runtime_config.py` — hot-reload JSON. `dzen_commenter/ai/factory.py` выбирает OpenAI-compatible, GigaChat или YandexGPT adapter; YandexGPT пока заглушка. `dzen_commenter/prompt/` собирает брендовый prompt и выбирает reply type/CTA candidate.
+- `dzen_commenter/admin/app.py`, `dzen_commenter/admin/queries.py`, `dzen_commenter/admin/validation.py` — защищённая панель, лента/история и запись настроек. Смена аккаунта идёт через `dzen_commenter/auth/dzen_login_control.py`; VNC — через `dzen_commenter/admin/vnc_access.py` и host controller `dzen_commenter/vnc_control.py`.
+- `dzen_commenter/bot_health.py` пишет атомарный snapshot worker heartbeat/status; `dzen_commenter/monitoring/` содержит JSON logging, Telegram и SMTP fallback. Не логировать тексты комментариев, авторов, URL, HTML и секреты.
 
-- `main.py` собирает зависимости и запускает supervisor: ограничивает повторы ошибок цикла/keep-alive, восстанавливает Chromium после renderer crash и следит за heartbeat. При зависшем цикле worker завершается, чтобы Compose перезапустил его; перед остановкой supervisor сохраняет неопределённую публикацию, если был durable submit.
-- `dzen_commenter/orchestrator/loop.py` — порядок обработки: сессия → enqueue новых комментариев → до 5 generation jobs → до 1 publication job → чтение Studio. Лимит генерации — 5 за цикл; `MAX_REPLIES_PER_CYCLE` остаётся в env/settings, но этот drain его не использует. Часовой лимит `max_comments_per_hour` хранится в runtime JSON; перед каждым фактическим вызовом AI, включая shortening retry, repository атомарно резервирует попытку.
-- `dzen_commenter/db/models.py`, `repository.py`, `migrations/` владеют PostgreSQL-моделью и транзакционными переходами очередей. Generation claims используют lease/token и `SKIP LOCKED`; eligible jobs выбираются по `posted_at` (fallback `fetched_at`) от новых к старым с детерминированным tie-break. `reserve_ai_call` считает скользящий час под advisory lock. Миграция `0012_ai_call_reservations.py` добавляет durable-журнал времени вызовов и переносит в него подходящие timestamps за последний час, не копируя тексты.
-- После обработки очередей первый scan после старта и затем scan не реже раза в час — полный; между ними production adapter использует `fetch_recent_comments(max_cards=100)`. Если optional-метода нет, orchestrator вызывает полный `fetch_comments()`. Время последнего полного scan хранится в памяти процесса; после рестарта полный scan выполняется снова.
-- `dzen_commenter/dzen/page.py` — Studio/public-page adapter. Live feed читается DOM-снимком; счётчики и число групп проверяются, нестабильный или неполный scan завершается `StudioFeedScanIncompleteError`, а не возвращает частичный список. Сканирование ограничено 40 проходами; раскрытие ответов имеет общий 30-минутный deadline и обновляет heartbeat. Query fallback оставлен для fake/non-live страниц.
-- Публикация отмечается как `submitting` до клика в Studio. Результат подтверждается в Studio/публичной ветке; неизвестный результат становится `publication_unconfirmed` и не отправляется повторно автоматически. Claim token защищает переходы от устаревшего worker.
-- `dzen_commenter/browser/session_manager.py` владеет persistent Chromium-контекстом, сохранённой сессией и восстановлением; операции с браузером сериализованы. `dzen_commenter/contracts/` задаёт доменные модели и Protocols, `ai/factory.py` выбирает провайдера, `prompt/` собирает и классифицирует ответ.
-- `dzen_commenter/config/runtime_config.py` хранит несекретные prompt/runtime-настройки в JSON с атомарной записью и hot reload; admin пишет этот файл, worker перечитывает. Секреты остаются в окружении.
-- `dzen_commenter/admin/` — защищённая сессия, лента/история и формы настроек. Переключение Dzen-аккаунта и VNC идут через socket-клиенты; host-side VNC controller находится в `dzen_commenter/vnc_control.py` и `deploy/install-vnc-control.sh`.
-- `dzen_commenter/monitoring/` содержит структурные логи, Telegram-уведомления и SMTP fallback; `dzen_commenter/bot_health.py` пишет атомарный health/progress snapshot. Не добавляйте в логи комментарии, авторов, URL публикаций, токены или HTML.
+## Обработка комментария и границы очередей
+
+1. `run_cycle()` проверяет сессию, вызывает `reconcile_work_window()` с лимитом `MAX_ACTIVE_WORK_ITEMS`, затем использует общий лимит `MAX_REPLIES_PER_CYCLE`. Repository ограничивает активную работу уникальными comment IDs в `reply_generation_queue` и `reply_publication_queue`, переводит лишние queued rows в `waiting` и в reconciliation завершает просроченную pending work по `posted_at` (fallback `fetched_at`); переходы очередей и Comment/Reply фиксируются транзакционно.
+2. Сначала берётся due publication job, затем generation. Успешная генерация сохраняет Reply и publication row; первая попытка публикации относится к тому же work item. Publication retry использует сохранённый текст и не запускает генерацию повторно. Claims используют `FOR UPDATE SKIP LOCKED` и claim token; устаревший worker не может завершить job, уже взятый новым claim.
+3. Перед каждым фактическим вызовом AI repository атомарно резервирует слот в скользящем часовом лимите, включая единственный shortening retry. Строки reservations хранятся в `ai_call_reservations`; provider timeout (`AI_REQUEST_TIMEOUT_SECONDS`) для OpenAI-compatible/GigaChat превращается в generation retry. `MAX_ACTIVE_WORK_ITEMS` имеет положительный default 30; `MAX_REPLIES_PER_CYCLE` обязателен в `Settings`.
+4. Успешная generation добавляет публикацию в durable очередь. Перед Studio submit сначала сохраняется `submitting`; если submit был, но результат нельзя подтвердить, состояние становится `publication_unconfirmed` и автоматически не отправляется повторно. До durable submit обычные ошибки публикации используют собственные cooldown/attempt limits.
+5. После drain выполняется `fetch_recent_comments(max_cards=100)`: первый short scan после старта, затем обычно каждые пять минут; пустое окно допускает более раннюю проверку через минуту. Admission фильтрует настроенный bot account, собственные ответы и слишком старые комментарии, сортирует новые по времени и помещает в свободные слоты. При наличии остатка budget добавленные jobs обрабатываются в том же цикле. Ошибка scan логируется и не отменяет уже обслуженную очередь.
+6. Worker cycle не вызывает полный `fetch_comments()` как fallback: отсутствие `fetch_recent_comments` завершает scan ошибкой. Live Studio scan сверяет DOM snapshot со счётчиками. В каждом short intake и Studio source lookup раскрытие ответов использует единый 60s deadline на операцию, общий для групп и не перезапускаемый на каждую карточку. При timeout short intake извлекает доступные в DOM комментарии, возвращает их и пишет `studio_comments_read_incomplete` с `failure_reason=reply_expansion_time_limit_reached`; следующий scan может забрать раскрытые позже ответы. Source lookup проверяет максимум первые 100 Studio groups и при известном `post_url` раскрывает нужную публикацию; timeout выходит до `before_submit`, поэтому публикационный job уходит в обычный retry без submit. Полный `fetch_comments()` сохраняет 30m cap и распространяет timeout вместо возврата неполного полного списка. Feed passes и expansion продолжают обновлять heartbeat.
+
+Runtime JSON содержит несекретные настройки публикации, возраста/длины ответа, часового AI лимита, CTA, generation/publication retry, bot account, получателей уведомлений и поля prompt. Admin атомарно записывает файл, worker перечитывает его по mtime и сохраняет последние валидные данные при ошибке чтения. Пароли и ключи задаются окружением, не runtime JSON.
 
 ## Переменные окружения
 
-Ниже только имена из `.env.example`, Compose, `Settings`/`AdminSettings` и test setup.
+Только имена, собранные из `Settings`, `AdminSettings`, Compose, entrypoint и DB test setup:
 
-- БД/миграции/тесты: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `RUN_DB_MIGRATIONS`, `TEST_DATABASE_URL`.
-- AI: `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TEMPERATURE`, `AI_MAX_TOKENS`, `AI_PROMPT_LANGUAGE`, `GIGACHAT_AUTH_KEY`, `GIGACHAT_SCOPE`, `GIGACHAT_OAUTH_URL`, `GIGACHAT_BASE_URL`, `GIGACHAT_MODEL`, `GIGACHAT_VERIFY_SSL_CERTS`, `GIGACHAT_CA_BUNDLE`.
-- Браузер/Дзен/цикл: `USER_DATA_DIR`, `STORAGE_STATE_PATH`, `HEADLESS`, `COMMENTS_URL`, `DZEN_LOGIN_PHONE`, `DZEN_LOGIN_PASSWORD`, `DZEN_LOGIN_TIMEOUT_MS`, `DZEN_LOGIN_CONTROL_SOCKET`, `POLL_INTERVAL`, `KEEPALIVE_INTERVAL`, `MAX_REPLIES_PER_CYCLE`, `BOT_HEALTH_PATH`.
-- Уведомления: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_PROXY_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
-- Admin/runtime/VNC: `RUNTIME_CONFIG_PATH`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `VNC_HOST`, `VNC_PORT`, `VNC_PASSWORD`, `VNC_CONTROL_SOCKET`, `NOVNC_PORT`.
+- PostgreSQL / миграции / тесты: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `RUN_DB_MIGRATIONS`, `TEST_DATABASE_URL`.
+- AI: `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TEMPERATURE`, `AI_MAX_TOKENS`, `AI_PROMPT_LANGUAGE`, `AI_REQUEST_TIMEOUT_SECONDS`, `GIGACHAT_AUTH_KEY`, `GIGACHAT_SCOPE`, `GIGACHAT_OAUTH_URL`, `GIGACHAT_BASE_URL`, `GIGACHAT_MODEL`, `GIGACHAT_VERIFY_SSL_CERTS`, `GIGACHAT_CA_BUNDLE`.
+- Дзен / browser / цикл: `USER_DATA_DIR`, `STORAGE_STATE_PATH`, `HEADLESS`, `COMMENTS_URL`, `DZEN_LOGIN_PHONE`, `DZEN_LOGIN_PASSWORD`, `DZEN_LOGIN_TIMEOUT_MS`, `DZEN_LOGIN_CONTROL_SOCKET`, `POLL_INTERVAL`, `KEEPALIVE_INTERVAL`, `MAX_REPLIES_PER_CYCLE`, `MAX_ACTIVE_WORK_ITEMS`, `BOT_HEALTH_PATH`.
+- Telegram / SMTP: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_PROXY_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
+- Admin / runtime / VNC: `RUNTIME_CONFIG_PATH`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `VNC_HOST`, `VNC_PORT`, `VNC_PASSWORD`, `VNC_CONTROL_SOCKET`, `NOVNC_PORT`.
 
-## Тестовые группы и подводные камни
+## Тесты и реальные подводные камни
 
-`tests/` содержит корневые проверки и группы `admin`, `ai`, `auth`, `browser`, `config`, `contracts`, `db`, `dzen`, `monitoring`, `orchestrator`, `prompt`. При смене схемы добавляйте Alembic migration; SQL-переходы очередей держите в repository. Для тестов используйте fake/injected-компоненты: не выполнять реальную авторизацию или публикацию в Дзене. Не направляйте `TEST_DATABASE_URL` на рабочую БД. В Compose изменение `POSTGRES_*` не меняет credentials уже созданной базы в `pgdata`.
+- `tests/` разбит на `admin`, `ai`, `auth`, `browser`, `config`, `contracts`, `db`, `dzen`, `monitoring`, `orchestrator`, `prompt` и корневые integration/regression tests. Ключевые очереди: `tests/orchestrator/test_loop.py`, `tests/orchestrator/test_generation_queue.py`, `tests/db/test_repository.py`; Studio: `tests/dzen/test_dzen_page.py` (включает regression cases на возврат видимых комментариев при timeout intake и retry source lookup до submit); схема: `tests/test_migrations.py`.
+- `tests/db/conftest.py` удаляет известные таблицы, применяет миграции и очищает таблицы. Указывайте `TEST_DATABASE_URL` только на отдельную disposable PostgreSQL; на обычной БД этот setup разрушителен. Без переменной DB integration tests skip.
+- Тесты используют fake/injected page/provider; не проверять изменения реальной авторизацией или публикацией в Дзене и не обращаться к живому Studio.
+- Compose требует настроенные PostgreSQL-переменные; смена значений не публикует VNC ports через Compose — admin управляет ими отдельным host socket. `MAX_REPLIES_PER_CYCLE` остаётся обязательной process setting; не путать его с capacity активного окна `MAX_ACTIVE_WORK_ITEMS`.
 <!-- autopilot:end -->

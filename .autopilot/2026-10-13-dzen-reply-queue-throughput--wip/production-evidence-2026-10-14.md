@@ -2,6 +2,8 @@
 
 All evidence below is from read-only checks. No comment text, author names, URLs, HTML, credentials, or row identifiers are included. Times are UTC.
 
+`comments.fetched_at`, `replies.created_at`, and `replies.published_at` are PostgreSQL `timestamp without time zone` columns. The application writes these as naive Moscow wall-clock values via `moscow_now()`. Convert UTC release/snapshot cutoffs to Europe/Moscow before filtering those columns; latency differences between fetched and published timestamps use the same local representation.
+
 ## Deployment and preservation
 
 Snapshot: `2026-10-14T12:07:41Z`.
@@ -64,14 +66,16 @@ generation_states=completed:4049
 publication_states=claimed:2,completed:3307,queued:28,waiting:21
 pending_generated_replies=51
 generated_without_publication_job=0
-comments_fetched_since_release=16
-new_comment_statuses=generated:15,skipped:1
-new_comment_generation_queue=completed:16
-new_comment_publication_queue=waiting:15
+comments_fetched_since_release=0 (corrected with Moscow-local cutoff)
+new_comment_statuses=none
+new_comment_generation_queue=none
+new_comment_publication_queue=none
 published_replies_total=2078
 ```
 
-For the `MAX_ACTIVE_WORK_ITEMS=30` criterion, `queued` and `claimed` occupy slots; `waiting` is explicitly outside the active window. Therefore the current active publication set is `28 + 2 = 30`; 21 additional publication jobs are waiting outside the window. The earlier count of 51 combined active and waiting states and was not the active-window count. No generated reply is missing its publication job. Sixteen newly fetched comments are stored; fifteen generated replies have persisted publication jobs waiting for slots while the older active publication work drains, and one was skipped.
+For the `MAX_ACTIVE_WORK_ITEMS=30` criterion, `queued` and `claimed` occupy slots; `waiting` is explicitly outside the active window. Therefore the active publication set was `28 + 2 = 30`; 21 additional publication jobs were waiting outside the window. The count of 51 combined active and waiting states and was not the active-window count. No generated reply was missing its publication job.
+
+**Correction to the first report:** its UTC cutoff was compared directly with Moscow-local naive database timestamps, shifting the selected period. The 16 comments previously called “new since release” were fetched before the release; their present statuses are not evidence of release admission. With the correct Moscow-local window (`14:42:04`–`15:07:41`), zero comments were fetched between the first worker event and this snapshot. The `new_comment_statuses` and `new_comment_*_queue` values from that first report are withdrawn.
 
 Read-only aggregate queries used these definitions:
 
@@ -84,15 +88,48 @@ SELECT count(*) FROM replies r
 LEFT JOIN reply_publication_queue q ON q.reply_id = r.id
 WHERE r.status = 'generated' AND q.reply_id IS NULL;
 SELECT count(*) FROM comments
-WHERE fetched_at >= TIMESTAMPTZ '2026-10-14 11:42:04+00';
+WHERE fetched_at >= TIMESTAMP '2026-10-14 14:42:04'
+  AND fetched_at < TIMESTAMP '2026-10-14 15:07:41';
 ```
 
 ## Publication and stale-work metrics
 
-From release time `2026-10-14T11:42:04Z` through the snapshot, 21 replies were confirmed published; all 21 were for comments already present before release. No newly fetched comment had a confirmed publication yet. For the 21 confirmed publications with a non-null `comments.fetched_at`, `published_at - fetched_at` averaged `21,304` seconds (computed display: **5 h 55 min**) and had a median of `20,688` seconds (**5 h 45 min**). Observation duration was `1,537` seconds (25 min 37 sec); both the duration (<24 h) and sample (<30) make this preliminary.
+From release time `2026-10-14T11:42:04Z` through the snapshot, **13** replies were confirmed published; all 13 were for comments present before release. The UTC-filtered count of 21 in the first report was incorrect. For these 13 replies with a non-null `comments.fetched_at`, `published_at - fetched_at` averaged **17,807 seconds (4 h 56 min 47 sec)** and had a median of **18,043 seconds (5 h 00 min 43 sec)**. Observation duration was **1,537 seconds (25 min 37 sec)**; both duration (<24 h) and sample (<30) made this preliminary.
 
 At the first reconciliation in this run, skipped replies with explicit reasons rose from `2,354` to `2,855`: `2,855 - 2,354 = 501` newly completed stale records, all with reasons. Current totals are `1,511` skipped replies with a reason and `1,344` historical skipped replies without a reason. The 501 delta occurred during the first rollout, before the Ticket 09 redeploy.
 
 Earlier sanitized telemetry for `11:42–11:59Z` contained 31 source-search events, a maximum of 100 post groups scanned, median duration `1,719.13 ms`, maximum `3,813.81 ms`, 13 retryable `source_comment_not_found` results, and 11 confirmed/completed publications by that earlier snapshot. No deep-search fallback event was observed.
 
 No cache cleanup, swap change, volume removal, PostgreSQL recreation, or database restore occurred during this redeploy.
+
+## Ticket 10 short-scan redeploy
+
+Snapshot: `2026-10-14T13:32:44Z`.
+
+```text
+app: dzen_commenter-app:44c29b8, Up 8 minutes (healthy)
+admin: dzen_commenter-app:44c29b8, HTTP /login=200
+postgres: healthy; same container ID 82bfa98ec907e2fbb30614b309757d6e936c5768f1fa77b78524f3a952492e17
+schema: 0012_ai_call_reservations (head)
+active app worker containers: 1
+worker heartbeat: 2026-10-14T13:32:10.203725+00:00; authenticated=true; cycle_in_progress=false; cycle_succeeded=true
+error/critical log lines in the last 10 minutes: 0
+app volumes: dzen_commenter_browser_data, dzen_commenter_session_state,
+             dzen_commenter_config_data, dzen_commenter_dzen_login_control
+postgres volume: dzen_commenter_pgdata -> /var/lib/postgresql/data
+```
+
+Before this redeploy, the idle worker was stopped, then a PostgreSQL archive was created and verified with `pg_restore --list`. Backup: `/root/backups/dzen_commenter-20261014-ticket10-before-redeploy.dump`; 3,154,151 bytes, mode `600`, SHA-256 `b07a27a5d9e0a3222479a8ccf360e3edbbe9e31a4fe987cd40997e004135723d`. Existing PostgreSQL container and named volumes were preserved. No migration was added by this ticket.
+
+The read-only database snapshot at `13:32:44Z` returned:
+
+```text
+generation_states=completed:4060
+publication_states=completed:3341,queued:26
+generated_replies_waiting_for_publication=26
+generated_replies_missing_publication_job=0
+comments_fetched_since_queue_rollout=11
+stale_completions_with_age_reason=501
+```
+
+There were 26 active publication jobs of the 30-item window; no other active or waiting queue state was present in this snapshot. **31** replies had been confirmed published since the first queue rollout at `11:42:04Z`; `published_at - fetched_at` averaged **13,191 seconds (3 h 39 min 51 sec)** and had a median of **14,055 seconds (3 h 54 min 15 sec)**. The sample reached 30, but the observation lasted only **6,640 seconds (1 h 50 min 40 sec)**, short of the 24-hour evaluation window, so the capacity result remains preliminary. Since the Ticket 10 image started at `13:24:13Z`, 4 replies were confirmed published by this snapshot (8 min 31 sec). These are early observations, not a forecast of sustained daily throughput.

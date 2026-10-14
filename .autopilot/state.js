@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-13T16:40:51+03:00",
-  "updatedAt": "2026-10-14T12:20:43+00:00",
+  "updatedAt": "2026-10-14T13:43:15+00:00",
   "finishedAt": null,
   "stages": [
     {
@@ -47,15 +47,16 @@ window.STATE =
     },
     {
       "id": "build",
-      "status": "active",
-      "startedAt": "2026-10-13T22:36:03.565+00:00",
-      "note": "8 из 9 тасков готовы; повторная выкладка и production-проверка — в Ticket 08"
+      "status": "done",
+      "startedAt": "2026-10-14T12:33:22+00:00",
+      "finishedAt": "2026-10-14T13:08:36+00:00",
+      "note": "Ticket 10 прошёл независимую проверку"
     },
     {
       "id": "review",
       "status": "active",
       "startedAt": "2026-10-14T11:33:38+00:00",
-      "note": "Ticket 09 PASS; Ticket 08 sanitized production evidence persisted; independent re-review pending"
+      "note": "Tickets 09–10 and craft review PASS; blind acceptance PASS; Ticket 08 evidence push/re-review in progress."
     },
     {
       "id": "final",
@@ -64,8 +65,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 14,
-    "done": 6,
-    "inTicket": 8,
+    "done": 14,
+    "inTicket": 0,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -381,15 +382,17 @@ window.STATE =
       "zone": [
         "production host / release operations"
       ],
-      "status": "review",
-      "retries": 0,
-      "repairs": 1,
+      "status": "in-progress",
+      "retries": 1,
+      "repairs": 3,
       "repairFindings": [
         "Первый независимый тестер не смог перепроверить production backup/container/SQL: результаты были только сводным текстом, а SSH banner timeout не дал доступа. Добавлен durable sanitized evidence report с точным определением active window и повторной read-only проверкой.",
-        "Повторный тестер не нашёл доказательства остановки старого worker до build и сравнения volumes. Добавлена обезличенная последовательность shell-history операций, timestamped backup/image/container metadata, прежний pre/post PostgreSQL ID и creation times существующих volumes; история не хранит точную секунду stop."
+        "Повторный тестер не нашёл доказательства остановки старого worker до build и сравнения volumes. Добавлена обезличенная последовательность shell-history операций, timestamped backup/image/container metadata, прежний pre/post PostgreSQL ID и creation times существующих volumes; история не хранит точную секунду stop.",
+        "Final independent re-review found the corrected production evidence/ticket report were uncommitted; committing and pushing them before re-review."
       ],
       "handoffs": 0,
       "startedAt": "2026-10-14T10:48:56+00:00",
+      "finishedAt": null,
       "commit": "4cd5534",
       "files": [
         ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/tickets/08-push-deploy-and-production-check.md",
@@ -397,11 +400,11 @@ window.STATE =
       ],
       "tests": {
         "passed": 0,
-        "failed": 0,
+        "failed": 1,
         "skipped": 0,
-        "scope": "read-only production evidence persisted including rollout order and volume preservation; awaiting independent tester re-review"
+        "scope": "Final evidence re-review: FAIL only because updated production evidence and ticket artifact were not pushed yet."
       },
-      "note": "Two evidence repairs recorded; rollout sequence and volume age added; exact old-worker stop second is unavailable. Awaiting independent re-review."
+      "note": "Final production evidence is corrected for Moscow-local timestamps; push the updated run artifacts and rerun the independent check."
     },
     {
       "id": "09",
@@ -441,10 +444,52 @@ window.STATE =
       "concerns": [
         "tests/dzen/test_dzen_page.py:4906 — nested-reply test calls private finder instead of exercising full publish_reply path."
       ]
+    },
+    {
+      "id": "10",
+      "title": "Ограничить время раскрытия скрытых ответов",
+      "requirements": [
+        "G01",
+        "D02",
+        "A17"
+      ],
+      "blockedBy": [
+        "03",
+        "09"
+      ],
+      "wave": 6,
+      "zone": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/"
+      ],
+      "status": "done",
+      "startedAt": "2026-10-14T12:33:22+00:00",
+      "finishedAt": "2026-10-14T13:08:36+00:00",
+      "commit": "44c29b8",
+      "files": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/test_dzen_page.py"
+      ],
+      "tests": {
+        "passed": 649,
+        "failed": 0,
+        "skipped": 64,
+        "scope": "Final full pytest 649 passed/64 skipped; Dzen page 172 passed; ticket tester PASS; deployed as image 44c29b8."
+      },
+      "retries": 0,
+      "repairs": 0,
+      "repairFindings": [],
+      "handoffs": 0,
+      "note": "Независимая проверка: PASS"
     }
   ],
   "singlePass": null,
-  "tests": null,
+  "tests": {
+    "passed": 649,
+    "failed": 0,
+    "skipped": 64,
+    "scope": "Final full pytest suite from the active worktree: 649 passed, 64 skipped, one existing Starlette/httpx deprecation warning; DB integration tests skipped without TEST_DATABASE_URL."
+  },
   "debt": {
     "placeholders": [],
     "assumptions": [
@@ -475,7 +520,23 @@ window.STATE =
   ],
   "reviewers": {
     "manifestSpec": "/root/g2_ship",
-    "craft": "/root/review_craft"
+    "craft": "/root/review_craft",
+    "blindAcceptance": "/root/final_blind_acceptance",
+    "ticket08Final": "/root/ticket_08_final"
   },
-  "blind": null
-}
+  "blind": {
+    "status": "pass",
+    "matched": 7,
+    "checked": 7,
+    "mismatches": [],
+    "findings": [
+      "Independent brief-only acceptance passed the seven user-facing criteria, including the bounded 60-second hidden-reply expansion behavior and safe retry before publication submit.",
+      "Production sample: 31 confirmed publications; discovery-to-publication average 13,191 seconds and median 14,055 seconds; 26 generated replies waiting; 0 missing publication jobs; 501 stale backlog records terminalized with an age-limit reason; 11 comments fetched since queue rollout.",
+      "The active limit of 30 remains preliminary because the observation was 1 h 50 min 40 sec, under the 24-hour evaluation period. Generic feed/DOM exceptions still propagate; no live Dzen publication was exercised."
+    ],
+    "manual": {
+      "commands": "Final local run from the active worktree: pytest -q → 649 passed, 64 skipped, one Starlette/httpx deprecation warning; focused Dzen page suite → 172 passed.",
+      "external": "Commit 44c29b8 pushed and deployed for app/admin; app healthy, admin /login HTTP 200, PostgreSQL container and named volumes preserved; pre-deploy PostgreSQL dump verified with pg_restore --list and stored mode 600."
+    }
+  }
+};
