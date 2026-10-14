@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-13T16:40:51+03:00",
-  "updatedAt": "2026-10-14T09:49:23.552+00:00",
+  "updatedAt": "2026-10-14T11:59:50+00:00",
   "finishedAt": null,
   "stages": [
     {
@@ -48,11 +48,14 @@ window.STATE =
     {
       "id": "build",
       "status": "active",
-      "startedAt": "2026-10-13T22:36:03.565+00:00"
+      "startedAt": "2026-10-13T22:36:03.565+00:00",
+      "note": "8 из 9 тасков готовы; повторная выкладка и production-проверка — в Ticket 08"
     },
     {
       "id": "review",
-      "status": "pending"
+      "status": "active",
+      "startedAt": "2026-10-14T11:33:38+00:00",
+      "note": "Ticket 09 PASS; Ticket 08 production evidence sent for independent verification"
     },
     {
       "id": "final",
@@ -61,8 +64,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 14,
-    "done": 2,
-    "inTicket": 12,
+    "done": 6,
+    "inTicket": 8,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -371,18 +374,69 @@ window.STATE =
       "blockedBy": [
         "05",
         "06",
-        "07"
+        "07",
+        "09"
       ],
       "wave": 5,
       "zone": [
         "production host / release operations"
       ],
-      "status": "in-progress",
+      "status": "review",
       "retries": 0,
       "repairs": 0,
       "repairFindings": [],
       "handoffs": 0,
-      "startedAt": "2026-10-14T10:48:56+00:00"
+      "startedAt": "2026-10-14T10:48:56+00:00",
+      "commit": "4cd5534",
+      "files": [
+        ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/tickets/08-push-deploy-and-production-check.md"
+      ],
+      "tests": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "read-only production checks: backup, container/schema/health, queue and latency metrics; awaiting independent tester"
+      },
+      "note": "Первый rollout выполнен; Ticket 08 telemetry показала production D01. Повторная production-проверка после Ticket 09."
+    },
+    {
+      "id": "09",
+      "title": "Ограниченный поиск источника публикации",
+      "requirements": [
+        "R01",
+        "G01",
+        "G03",
+        "D01"
+      ],
+      "blockedBy": [
+        "07"
+      ],
+      "wave": 5,
+      "zone": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/"
+      ],
+      "status": "done",
+      "retries": 0,
+      "repairs": 0,
+      "repairFindings": [],
+      "handoffs": 0,
+      "startedAt": "2026-10-14T11:19:10+00:00",
+      "finishedAt": "2026-10-14T11:38:18+00:00",
+      "commit": "4cd5534",
+      "files": [
+        "dzen_commenter/dzen/page.py",
+        "tests/dzen/test_dzen_page.py"
+      ],
+      "tests": {
+        "passed": 170,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "Dzen fake DOM suite 170 passed; full suite 647 passed, 64 skipped"
+      },
+      "concerns": [
+        "tests/dzen/test_dzen_page.py:4906 — nested-reply test calls private finder instead of exercising full publish_reply path."
+      ]
     }
   ],
   "singlePass": null,
@@ -392,7 +446,7 @@ window.STATE =
     "assumptions": [
       "Обслуживать свежую очередь прежде долгого сканирования, ограниченно обрабатывать несколько заданий за цикл и отдавать приоритет свежим комментариям.",
       "Сохранить лимит возраста 1 день и неопределённые публикации неретрайными.",
-      "Быстрый поиск свежих карточек дополнить периодическим полным проходом, чтобы продолжать находить комментарии в старых публикациях.",
+      "Поиск исходного комментария публикации ограничить верхними 100 карточками и раскрывать скрытые ответы; при промахе оставить попытку retryable, без глубокого поиска.",
       "Удалить только Docker build cache; существующие образы, volumes и rollback-релизы сохранить.",
       "Добавить отдельный swap-файл 2 ГБ рядом с существующим 256 МБ."
     ],
@@ -405,6 +459,7 @@ window.STATE =
     "deferred": 0
   },
   "concerns": [
+    "Ticket 09, tests/dzen/test_dzen_page.py:4906: nested-reply test calls the private finder; an integration assertion through publish_reply would strengthen coverage.",
     "Снято: равные timestamps имеют одинаковую свежесть; порядок между такими заданиями не влияет на требование приоритета свежих комментариев.",
     "Ticket 06, non-blocking craft concern: tests/ai/test_ai_provider.py:122 inspects configured timeout but does not simulate an HTTP request timing out and reaching generation failure handling.",
     "Ticket 05, non-blocking craft concern: tests/db/test_repository.py:1285 checks a retry stays waiting after first reconciliation; a follow-up test could free a slot, reconcile again, and prove it remains waiting.",
