@@ -11,7 +11,7 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-13T16:40:51+03:00",
-  "updatedAt": "2026-10-14T12:11:44+00:00",
+  "updatedAt": "2026-10-14T12:20:43+00:00",
   "finishedAt": null,
   "stages": [
     {
@@ -385,7 +385,8 @@ window.STATE =
       "retries": 0,
       "repairs": 1,
       "repairFindings": [
-        "Первый независимый тестер не смог перепроверить production backup/container/SQL: результаты были только сводным текстом, а SSH banner timeout не дал доступа. Добавлен durable sanitized evidence report с точным определением active window и повторной read-only проверкой."
+        "Первый независимый тестер не смог перепроверить production backup/container/SQL: результаты были только сводным текстом, а SSH banner timeout не дал доступа. Добавлен durable sanitized evidence report с точным определением active window и повторной read-only проверкой.",
+        "Повторный тестер не нашёл доказательства остановки старого worker до build и сравнения volumes. Добавлена обезличенная последовательность shell-history операций, timestamped backup/image/container metadata, прежний pre/post PostgreSQL ID и creation times существующих volumes; история не хранит точную секунду stop."
       ],
       "handoffs": 0,
       "startedAt": "2026-10-14T10:48:56+00:00",
@@ -398,9 +399,9 @@ window.STATE =
         "passed": 0,
         "failed": 0,
         "skipped": 0,
-        "scope": "read-only production evidence persisted; corrected active-window query excludes waiting; awaiting independent tester re-review"
+        "scope": "read-only production evidence persisted including rollout order and volume preservation; awaiting independent tester re-review"
       },
-      "note": "First tester could not independently verify summary-only production claims; sanitized evidence saved and read-only checks repeated. Awaiting re-review."
+      "note": "Two evidence repairs recorded; rollout sequence and volume age added; exact old-worker stop second is unavailable. Awaiting independent re-review."
     },
     {
       "id": "09",

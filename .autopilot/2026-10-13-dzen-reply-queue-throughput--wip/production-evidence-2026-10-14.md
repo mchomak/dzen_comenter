@@ -35,6 +35,26 @@ pg_restore --list total lines: 81
 
 The backup was listed by `docker exec -i dzen_commenter-postgres-1 pg_restore --list < /root/backups/dzen_commenter-20261014-ticket09-before-redeploy.dump`; it was not restored or modified.
 
+### Rollout order and preserved volumes
+
+Read-only Docker/image metadata and a sanitized extraction of the deployment shell history returned:
+
+```text
+history line 694: stop-old-app
+history lines 705–708: backup operation
+history line 728: build-release-image
+history line 731: compose-up
+backup file modified: 2026-10-14T11:40:20.668Z
+new image created: 2026-10-14T11:41:29.123Z
+new app container created: 2026-10-14T11:41:53.818Z
+new app container started: 2026-10-14T11:41:56.228Z
+first application work event / metric cutoff: 2026-10-14T11:42:04Z
+```
+
+The shell history has no per-command timestamps, so the exact second of the old-worker stop is unavailable. It records the stop command before the backup and build commands; the backup and image metadata timestamp the later steps. Docker's retained event stream and journal returned no lifecycle record for the removed old container. The recorded order therefore establishes stop-before-build, but not a precise stop timestamp. The redeploy applied no migration: the running image reports `0012_ai_call_reservations (head)` and Ticket 09 adds no migration.
+
+The pre-redeploy check recorded PostgreSQL container ID `82bfa98ec907e2fbb30614b309757d6e936c5768f1fa77b78524f3a952492e17`; the post-redeploy inspection returned the same ID. Its Docker `Created` time is `2026-10-04T13:22:55.772650804Z`, before this release. The same inspection returned volume `dzen_commenter_pgdata` mounted at `/var/lib/postgresql/data`. The four app volume names in the deployment snapshot were also created before the release: session/config/browser volumes on `2026-07-22T13:30:36Z` and login-control on `2026-08-21T15:30:48Z`. Their age and current mounts show that the redeploy reused the existing volumes rather than creating replacement volumes.
+
 ## Queue snapshot
 
 The SQL snapshot at `2026-10-14T12:07:41Z` returned:

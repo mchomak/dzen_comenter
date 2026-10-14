@@ -32,7 +32,7 @@
 
 ## Production evidence for independent verification
 
-The first tester could verify only the pushed branch and HTTP responses because SSH timed out and the production checks were described only in this note. The sanitized command outputs, aggregate SQL results, and explicit active-window definition are now persisted in [production-evidence-2026-10-14.md](../production-evidence-2026-10-14.md). No comment text, author, URL, credentials, row identifiers, or HTML is included.
+The first tester could verify only the pushed branch and HTTP responses because SSH timed out and the production checks were described only in this note. The sanitized command outputs, aggregate SQL results, and explicit active-window definition are now persisted in [production-evidence-2026-10-14.md](../production-evidence-2026-10-14.md). The report also records the rollout command order (old app stop → backup → image build → app start), timestamped backup/image/container metadata, the identical pre/post PostgreSQL container ID, and the pre-existing volume creation times. Shell history has no timestamp for the exact stop second; this limitation is stated explicitly. No comment text, author, URL, credentials, row identifiers, or HTML is included.
 
 Latest snapshot (`2026-10-14T12:07:41Z`): app image `dzen_commenter-app:4cd5534` is healthy and runs exact pushed SHA `4cd553439874c51b4da13a1c48738bf9346b6f54`; admin `/login` returns 200; PostgreSQL is healthy on the preserved volume and schema is at `0012_ai_call_reservations`. The backup is readable by `pg_restore --list`, the rollback image remains available, and one app worker is running.
 
