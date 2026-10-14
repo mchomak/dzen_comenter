@@ -68,7 +68,7 @@
   </thead>
   <tbody>
     {% for row in feed %}
-    <tr{% if row.reply_status == "error" or row.reply_status is none %} class="row-attention"{% endif %}>
+    <tr{% if row.reply_status == "error" %} class="row-error"{% elif row.reply_status is none %} class="row-attention"{% endif %}>
       <td>{{ row.author or "" }}</td>
       <td class="dialogue-cell">
         <div class="thread-post">

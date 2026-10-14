@@ -81,6 +81,7 @@ table.feed thead th { text-align: center; position: sticky; top: 0; z-index: 1; 
 table.feed tbody tr:nth-child(even) td { background: #f5f8fc; }
 table.feed tbody tr:hover td { background: #eaf1fb; }
 table.feed tbody tr.row-attention td { background: #fdecec; }
+table.feed tbody tr.row-error td { background: #fff; }
 table.feed tbody tr:last-child td { border-bottom: 0; }
 table.feed th:nth-child(1) { width: 12%; }
 table.feed th:nth-child(2) { width: 42%; }
@@ -119,7 +120,7 @@ table.feed td:nth-child(5) { text-align: center; }
 .status-generated { color: var(--warning-ink); background: var(--warning-bg); }
 .status-error, .status-no-reply { color: var(--danger-ink); background: var(--danger-bg); }
 .status-skipped { color: var(--neutral-ink); background: var(--neutral-bg); }
-.error-reason { display: inline; color: var(--danger-ink); }
+.error-reason { display: inline; color: inherit; }
 
 .home-metrics { display: flex; flex-wrap: wrap; gap: 32px; margin: 8px 0 16px; }
 .metric { display: flex; flex-direction: column; gap: 2px; }
