@@ -22,6 +22,7 @@ from dzen_commenter.contracts.models import (
     Comment,
     Publication,
     Reply,
+    WorkWindowSnapshot,
 )
 from dzen_commenter.orchestrator import OrchestratorLoop
 from dzen_commenter.prompt.config_loader import load_brand_config
@@ -66,6 +67,8 @@ class FakeCommentRepository:
         self.publication_queue: dict[int, dict[str, object]] = {}
         self.enqueue_publication_calls: list[int] = []
         self.expire_stale_publications_calls: list[tuple[datetime, datetime]] = []
+        self.reconcile_work_window_calls: list[tuple[datetime, datetime, int]] = []
+        self.admit_recent_comments_calls: list[tuple[list[Comment], datetime, int]] = []
         self.complete_publication_calls: list[int] = []
         self.fail_publication_calls: list[tuple[int, str]] = []
         self._next_publication_id = 1
@@ -73,6 +76,7 @@ class FakeCommentRepository:
         self._next_reply_id = 1
         self._next_generation_claim_token = 1
         self._next_publication_claim_token = 1
+        self._has_reconciled_work_window = False
 
     def upsert_publication(self, pub: Publication) -> int:
         self.upsert_publication_calls.append(pub)
@@ -119,6 +123,85 @@ class FakeCommentRepository:
             self.enqueue_generation(comment_id, queued_at=queued_at)
             for comment_id in sorted(self.comments)
         )
+
+    def reconcile_work_window(
+        self, *, now: datetime, stale_before: datetime, limit: int
+    ) -> WorkWindowSnapshot:
+        self.reconcile_work_window_calls.append((now, stale_before, limit))
+        if not self._has_reconciled_work_window:
+            self.enqueue_pending_generations(queued_at=now)
+            self._has_reconciled_work_window = True
+        for reply_id, reply in self.replies.items():
+            if reply.status is ReplyStatus.GENERATED and reply_id not in self.publication_queue:
+                self.enqueue_publication(reply_id, created_at=now)
+
+        publication_comment_ids = [
+            self.replies[reply_id].comment_id
+            for reply_id, row in self.publication_queue.items()
+            if row["state"] in {"queued", "claimed", "submitting"}
+        ]
+        generation_comment_ids = [
+            comment_id
+            for comment_id, row in self.generation_queue.items()
+            if row["state"] in {"queued", "claimed"}
+        ]
+        return WorkWindowSnapshot(
+            active_generation=len(set(generation_comment_ids)),
+            active_publication=len(set(publication_comment_ids)),
+            waiting_generation=sum(
+                row["state"] == "waiting" for row in self.generation_queue.values()
+            ),
+            waiting_publication=sum(
+                row["state"] == "waiting" for row in self.publication_queue.values()
+            ),
+            generated_waiting_publication=sum(
+                reply.status is ReplyStatus.GENERATED
+                and self.publication_queue.get(reply_id, {}).get("state")
+                in {"queued", "waiting", "claimed", "submitting"}
+                for reply_id, reply in self.replies.items()
+            ),
+            expired_generation=0,
+            expired_publication=0,
+        )
+
+    def admit_recent_comments(
+        self, comments: list[Comment], *, queued_at: datetime, limit: int
+    ) -> int:
+        self.admit_recent_comments_calls.append((list(comments), queued_at, limit))
+        active_ids = {
+            comment_id
+            for comment_id, row in self.generation_queue.items()
+            if row["state"] in {"queued", "claimed"}
+        }
+        active_ids.update(
+            self.replies[reply_id].comment_id
+            for reply_id, row in self.publication_queue.items()
+            if row["state"] in {"queued", "claimed", "submitting"}
+        )
+        slots = max(0, limit - len(active_ids))
+        ordered = sorted(
+            comments,
+            key=lambda comment: (
+                comment.posted_at or comment.fetched_at or datetime.min,
+                comment.dzen_comment_id,
+            ),
+            reverse=True,
+        )
+        admitted = 0
+        seen_ids: set[str] = set()
+        for comment in ordered:
+            if slots <= 0:
+                break
+            if comment.dzen_comment_id in seen_ids:
+                continue
+            seen_ids.add(comment.dzen_comment_id)
+            if comment.dzen_comment_id in self.comment_ids_by_dzen_id:
+                continue
+            comment_id = self.upsert_eligible_comment(comment, queued_at=queued_at)
+            active_ids.add(comment_id)
+            slots -= 1
+            admitted += 1
+        return admitted
 
     def save_reply(self, reply: Reply) -> int:
         reply_id = self._next_reply_id

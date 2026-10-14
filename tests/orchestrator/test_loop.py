@@ -126,7 +126,173 @@ def test_run_cycle_finishes_ready_generation_and_publication_before_studio_scan(
     assert len(harness.page.publish_calls) == 1
 
 
-def test_run_cycle_uses_full_scan_at_startup_then_after_sixty_minutes(
+def test_run_cycle_publishes_saved_reply_before_starting_generation(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(
+        ai_responses=["Новый ответ"],
+        settings_overrides={"AUTO_PUBLISH": True, "MAX_REPLIES_PER_CYCLE": 1},
+    )
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    saved_comment = comment_factory(1)
+    saved_comment.publication_id = publication_id
+    saved_comment_id = harness.repository.upsert_comment(saved_comment)
+    saved_reply_id = harness.repository.save_reply(
+        Reply(
+            id=None,
+            comment_id=saved_comment_id,
+            generated_text="Сохранённый ответ",
+            ai_provider="fake-ai",
+            ai_model="fake-model",
+            status=ReplyStatus.GENERATED,
+            published_at=None,
+            error_reason=None,
+            created_at=datetime(2026, 10, 13, 12, 0, 0),
+        )
+    )
+    harness.repository.enqueue_publication(
+        saved_reply_id, created_at=datetime(2026, 10, 13, 12, 0, 0)
+    )
+
+    next_comment = comment_factory(2)
+    next_comment.publication_id = publication_id
+    harness.repository.upsert_eligible_comment(
+        next_comment, queued_at=datetime(2026, 10, 13, 12, 0, 0)
+    )
+
+    harness.loop.run_cycle()
+
+    assert [text for _, text, _ in harness.page.publish_calls] == ["Сохранённый ответ"]
+    assert harness.ai_provider.calls == []
+
+
+def test_short_scan_admits_only_window_capacity_and_uses_remaining_cycle_budget(
+    loop_factory, comment_factory
+):
+    comments = [comment_factory(index) for index in range(1, 4)]
+    harness = loop_factory(
+        comments=comments,
+        ai_responses=["Ответ 1", "Ответ 2", "Лишний ответ"],
+        settings_overrides={
+            "AUTO_PUBLISH": True,
+            "MAX_ACTIVE_WORK_ITEMS": 2,
+            "MAX_REPLIES_PER_CYCLE": 2,
+        },
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.page.fetch_scan_limits == [100]
+    assert len(harness.ai_provider.calls) == 2
+    assert len(harness.page.publish_calls) == 2
+    assert len(harness.repository.comments) == 2
+    assert harness.repository.reconcile_work_window_calls[0][2] == 2
+    assert harness.repository.admit_recent_comments_calls[0][2] == 2
+
+
+def test_article_context_fetch_error_retries_generation_without_calling_model(
+    loop_factory, comment_factory
+):
+    harness = loop_factory(ai_responses=["Ответ не должен генерироваться"])
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comment = comment_factory(1)
+    comment.publication_id = publication_id
+    comment.post_url = "https://dzen.example.test/article"
+    comment_id = harness.repository.upsert_eligible_comment(
+        comment, queued_at=datetime(2026, 10, 13, 12, 0, 0)
+    )
+
+    def fail_article_fetch(_post_url):
+        raise RuntimeError("article context unavailable")
+
+    harness.page.fetch_article_text = fail_article_fetch
+
+    harness.loop.run_cycle()
+
+    assert harness.ai_provider.calls == []
+    assert harness.repository.generation_queue[comment_id]["state"] == "queued"
+    assert harness.repository.comments[comment_id].status is CommentStatus.GENERATION_RETRY
+
+
+def test_generation_retries_persistence_with_same_text_before_another_model_call(
+    loop_factory, comment_factory, monkeypatch
+):
+    harness = loop_factory(comments=[comment_factory(1)], ai_responses=["Сохранить ответ"])
+    complete_generation = harness.repository.complete_generation
+    persistence_attempts = []
+
+    def fail_once(comment_id, **kwargs):
+        persistence_attempts.append(kwargs["text"])
+        if len(persistence_attempts) == 1:
+            raise RuntimeError("temporary database error")
+        return complete_generation(comment_id, **kwargs)
+
+    monkeypatch.setattr(harness.repository, "complete_generation", fail_once)
+
+    harness.loop.run_cycle()
+
+    assert persistence_attempts == [
+        "author-1, сохранить ответ",
+        "author-1, сохранить ответ",
+    ]
+    assert len(harness.ai_provider.calls) == 1
+    assert harness.repository.replies[1].generated_text == "author-1, сохранить ответ"
+
+
+def test_generation_timeout_retries_other_ready_job_within_same_cycle(
+    loop_factory, comment_factory, monkeypatch
+):
+    harness = loop_factory(ai_responses=["Второй ответ"])
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comments = [comment_factory(index) for index in (1, 2)]
+    comment_ids = []
+    for comment in comments:
+        comment.publication_id = publication_id
+        comment_ids.append(
+            harness.repository.upsert_eligible_comment(
+                comment, queued_at=datetime(2026, 10, 13, 12, 0, 0)
+            )
+        )
+    original_generate = harness.ai_provider.generate
+    model_attempts = []
+
+    def timeout_once(prompt, *, temperature, max_tokens):
+        model_attempts.append(prompt)
+        if len(model_attempts) == 1:
+            raise TimeoutError("AI request timed out")
+        return original_generate(prompt, temperature=temperature, max_tokens=max_tokens)
+
+    monkeypatch.setattr(harness.ai_provider, "generate", timeout_once)
+
+    harness.loop.run_cycle()
+
+    assert len(model_attempts) == 2
+    assert harness.repository.comments[comment_ids[0]].status is CommentStatus.GENERATION_RETRY
+    assert harness.repository.comments[comment_ids[1]].status is CommentStatus.GENERATED
+
+
+def test_run_cycle_uses_only_short_scans_and_rechecks_empty_window_after_one_minute(
     loop_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -136,21 +302,137 @@ def test_run_cycle_uses_full_scan_at_startup_then_after_sixty_minutes(
     monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
     harness = loop_factory()
     scan_limits = []
-    harness.page.fetch_comments = lambda: scan_limits.append(None) or []
     harness.page.fetch_recent_comments = lambda *, max_cards: (
         scan_limits.append(max_cards) or []
     )
 
     harness.loop.run_cycle()
-    current_time[0] = now + timedelta(minutes=59, seconds=59)
+    current_time[0] = now + timedelta(seconds=59)
     harness.loop.run_cycle()
-    current_time[0] = now + timedelta(minutes=60)
+    current_time[0] = now + timedelta(minutes=1)
     harness.loop.run_cycle()
 
-    assert scan_limits == [None, 100, None]
+    assert scan_limits == [100, 100]
 
 
-def test_failed_startup_full_scan_retries_after_draining_the_next_cycle_queue(
+def test_failed_scan_waits_five_minutes_even_when_work_window_is_empty(
+    loop_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 10, 13, 12, 0, 0)
+    current_time = [now]
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
+    harness = loop_factory()
+    scan_attempts = []
+
+    def fail_scan(*, max_cards):
+        scan_attempts.append(max_cards)
+        raise RuntimeError("studio unavailable")
+
+    harness.page.fetch_recent_comments = fail_scan
+
+    harness.loop.run_cycle()
+    current_time[0] += timedelta(minutes=1)
+    harness.loop.run_cycle()
+    assert scan_attempts == [100]
+
+    current_time[0] = now + timedelta(minutes=5)
+    harness.loop.run_cycle()
+    assert scan_attempts == [100, 100]
+
+
+def test_nonempty_window_uses_five_minute_scan_interval(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 10, 13, 12, 0, 0)
+    current_time = [now]
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
+    harness = loop_factory()
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comment = comment_factory(1)
+    comment.publication_id = publication_id
+    comment_id = harness.repository.upsert_comment(comment)
+    reply_id = harness.repository.save_reply(
+        Reply(
+            id=None,
+            comment_id=comment_id,
+            generated_text="Ожидающий ответ",
+            ai_provider="fake-ai",
+            ai_model="fake-model",
+            status=ReplyStatus.GENERATED,
+            published_at=None,
+            error_reason=None,
+            created_at=now,
+        )
+    )
+    harness.repository.enqueue_publication(reply_id, created_at=now)
+    harness.repository.publication_queue[reply_id]["next_attempt_at"] = now + timedelta(hours=1)
+    scan_limits = []
+    harness.page.fetch_recent_comments = lambda *, max_cards: scan_limits.append(max_cards) or []
+
+    harness.loop.run_cycle()
+    current_time[0] = now + timedelta(minutes=1)
+    harness.loop.run_cycle()
+    current_time[0] = now + timedelta(minutes=5)
+    harness.loop.run_cycle()
+
+    assert scan_limits == [100, 100]
+
+
+def test_cycle_that_drains_last_active_item_triggers_early_short_scan(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 10, 13, 12, 0, 0)
+    current_time = [now]
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
+    comment = comment_factory(1)
+    harness = loop_factory(ai_responses=["Готовый ответ"], comments=[])
+    scan_limits = []
+    harness.page.fetch_recent_comments = lambda *, max_cards: scan_limits.append(max_cards) or []
+
+    harness.loop.run_cycle()
+    publication_id = harness.repository.upsert_publication(
+        Publication(
+            id=None,
+            dzen_publication_id=harness.settings.COMMENTS_URL,
+            title=harness.settings.COMMENTS_URL,
+            url=harness.settings.COMMENTS_URL,
+        )
+    )
+    comment.publication_id = publication_id
+    harness.repository.upsert_eligible_comment(comment, queued_at=now)
+    current_time[0] += timedelta(minutes=1)
+
+    harness.loop.run_cycle()
+
+    assert harness.repository.comments[comment.id].status is CommentStatus.GENERATED
+    assert scan_limits == [100, 100]
+
+
+def test_missing_short_scan_method_never_falls_back_to_full_studio_scan(loop_factory):
+    harness = loop_factory()
+    full_scan_calls = []
+    harness.page.fetch_recent_comments = None
+    harness.page.fetch_comments = lambda: full_scan_calls.append(True) or []
+
+    harness.loop.run_cycle()
+
+    assert full_scan_calls == []
+
+
+def test_failed_startup_short_scan_does_not_interrupt_queue_work(
     loop_factory, comment_factory, monkeypatch
 ):
     from dzen_commenter.orchestrator import loop as loop_module
@@ -170,42 +452,34 @@ def test_failed_startup_full_scan_retries_after_draining_the_next_cycle_queue(
     first = comment_factory(1)
     first.publication_id = publication_id
     first_id = harness.repository.upsert_eligible_comment(first, queued_at=now)
-    scan_limits = []
-
-    def fail_then_succeed(*, max_cards=None):
-        scan_limits.append(max_cards)
-        if len(scan_limits) == 1:
-            assert harness.repository.generation_queue[first_id]["state"] == "completed"
-            raise RuntimeError("full scan unavailable")
-        second_id = next(
-            key
-            for key, queue in harness.repository.generation_queue.items()
-            if key != first_id and queue["state"] == "completed"
-        )
-        assert harness.repository.generation_queue[second_id]["state"] == "completed"
-        return []
-
-    harness.page.fetch_comments = fail_then_succeed
-
-    with pytest.raises(RuntimeError, match="full scan unavailable"):
-        harness.loop.run_cycle()
-
     second = comment_factory(2)
     second.publication_id = publication_id
-    harness.repository.upsert_eligible_comment(second, queued_at=now)
-    current_time[0] += timedelta(minutes=1)
+    second_id = harness.repository.upsert_eligible_comment(second, queued_at=now)
+
+    def fail_scan(*, max_cards):
+        assert max_cards == 100
+        assert harness.repository.generation_queue[first_id]["state"] == "completed"
+        assert harness.repository.generation_queue[second_id]["state"] == "completed"
+        raise RuntimeError("studio unavailable")
+
+    harness.page.fetch_recent_comments = fail_scan
+
     harness.loop.run_cycle()
 
-    assert scan_limits == [None, None]
+    assert harness.repository.generation_queue[first_id]["state"] == "completed"
+    assert harness.repository.generation_queue[second_id]["state"] == "completed"
     assert len(harness.ai_provider.calls) == 2
 
 
-def test_run_cycle_drains_at_most_five_generation_jobs_and_one_publication(
+def test_run_cycle_uses_one_common_budget_for_generation_and_publication(
     loop_factory, comment_factory
 ):
     harness = loop_factory(
         ai_responses=["Готовый ответ"] * 6,
-        settings_overrides={"AUTO_PUBLISH": True},
+        settings_overrides={
+            "AUTO_PUBLISH": True,
+            "MAX_REPLIES_PER_CYCLE": 2,
+        },
     )
     publication_id = harness.repository.upsert_publication(
         Publication(
@@ -227,16 +501,16 @@ def test_run_cycle_drains_at_most_five_generation_jobs_and_one_publication(
 
     harness.loop.run_cycle()
 
-    assert len(harness.ai_provider.calls) == 5
+    assert len(harness.ai_provider.calls) == 2
     assert [harness.repository.generation_queue[item]["state"] for item in comment_ids] == [
         "completed",
         "completed",
-        "completed",
-        "completed",
-        "completed",
+        "queued",
+        "queued",
+        "queued",
         "queued",
     ]
-    assert len(harness.page.publish_calls) == 1
+    assert len(harness.page.publish_calls) == 2
 
 
 def test_run_cycle_stops_generation_at_the_remaining_hourly_quota(
@@ -401,13 +675,13 @@ def test_studio_scan_failure_keeps_generation_and_publication_already_completed(
         comment, queued_at=datetime(2026, 9, 18, 12, 0, 0)
     )
 
-    def fail_scan():
+    def fail_scan(*, max_cards):
+        assert max_cards == 100
         raise RuntimeError("studio unavailable")
 
-    harness.page.fetch_comments = fail_scan
+    harness.page.fetch_recent_comments = fail_scan
 
-    with pytest.raises(RuntimeError, match="studio unavailable"):
-        harness.loop.run_cycle()
+    harness.loop.run_cycle()
 
     assert harness.repository.generation_queue[comment_id]["state"] == "completed"
     assert harness.repository.replies[1].status is ReplyStatus.PUBLISHED
@@ -487,7 +761,7 @@ def test_run_cycle_persists_eligible_comments_through_atomic_generation_seam(
     harness.loop.run_cycle()
 
     assert harness.repository.upsert_eligible_comment_calls == [comment]
-    assert harness.repository.has_published_reply_calls == [comment.id]
+    assert harness.repository.has_published_reply_calls == []
 
 
 def test_run_cycle_checks_database_before_processing_already_published_comment(
@@ -514,7 +788,7 @@ def test_run_cycle_checks_database_before_processing_already_published_comment(
 
     harness.loop.run_cycle()
 
-    assert harness.repository.has_published_reply_calls == [comment_id]
+    assert harness.repository.has_published_reply_calls == []
     assert harness.ai_provider.calls == []
     assert harness.repository.publication_queue == {}
 
@@ -678,7 +952,6 @@ def test_stale_watchdog_can_mark_the_durable_active_publication_unconfirmed(
         raise KeyboardInterrupt
 
     harness.page.publish_reply = blocked_publication
-    harness.loop.run_cycle()
 
     with pytest.raises(KeyboardInterrupt):
         harness.loop.run_cycle()
@@ -875,7 +1148,6 @@ def test_publication_completion_trace_correlates_draft_without_marking_published
     )
     log = logging.getLogger("dzen_commenter.orchestrator.loop")
 
-    harness.loop.run_cycle()
     with caplog.at_level(logging.INFO, logger=log.name):
         harness.loop.run_cycle()
 
@@ -909,7 +1181,6 @@ def test_publication_completion_trace_reports_published_after_auto_publish(
     )
     log = logging.getLogger("dzen_commenter.orchestrator.loop")
 
-    harness.loop.run_cycle()
     with caplog.at_level(logging.INFO, logger=log.name):
         harness.loop.run_cycle()
 
@@ -923,7 +1194,14 @@ def test_publication_completion_trace_reports_published_after_auto_publish(
     assert harness.repository.replies[completed.reply_id].published_at is not None
 
 
-def test_article_context_is_cached_for_the_next_single_comment(loop_factory, comment_factory):
+def test_article_context_is_cached_for_the_next_single_comment(
+    loop_factory, comment_factory, monkeypatch
+):
+    from dzen_commenter.orchestrator import loop as loop_module
+
+    now = datetime(2026, 10, 13, 12, 0, 0)
+    current_time = [now]
+    monkeypatch.setattr(loop_module, "moscow_now", lambda: current_time[0])
     first, second = comment_factory(1), comment_factory(2)
     first.post_url = second.post_url = "https://dzen.example.test/article"
     harness = loop_factory(comments=[first], ai_responses=["Первый"])
@@ -931,6 +1209,7 @@ def test_article_context_is_cached_for_the_next_single_comment(loop_factory, com
 
     harness.loop.run_cycle()
     harness.page.comments = [second]
+    current_time[0] += timedelta(minutes=1)
     harness.loop.run_cycle()
     harness.page.article_text_by_url[first.post_url] = "Не должен читаться"
     harness.loop.run_cycle()

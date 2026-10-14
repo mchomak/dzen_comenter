@@ -75,7 +75,8 @@ class OrchestratorLoop:
         self._authorization_not_confirmed_notified = False
         self._active_publication_lock = threading.RLock()
         self._active_publication: tuple[int, str] | None = None
-        self._last_successful_full_scan_at: datetime | None = None
+        self._last_scan_attempt_at: datetime | None = None
+        self._last_scan_failed = False
 
     def active_publication_attempt(self) -> tuple[int, str] | None:
         """Return the active durable submit claim without exposing mutable state."""
@@ -116,17 +117,68 @@ class OrchestratorLoop:
 
         runtime_settings = self.runtime_config.get().settings
         now = moscow_now()
-        self.repository.enqueue_pending_generations(queued_at=now)
-        self._drain_generation_queue(runtime_settings, max_jobs=5)
-        self._run_publication_cycle(runtime_settings, max_publications=1)
+        stale_before = now - timedelta(days=runtime_settings.max_comment_age_days)
+        window = self.repository.reconcile_work_window(
+            now=now,
+            stale_before=stale_before,
+            limit=self.settings.MAX_ACTIVE_WORK_ITEMS,
+        )
+        budget = max(0, self.settings.MAX_REPLIES_PER_CYCLE)
+        processed = self._drain_work_queue(runtime_settings, max_items=budget)
 
-        scan_started_at = moscow_now()
-        full_scan_due = (
-            self._last_successful_full_scan_at is None
-            or scan_started_at - self._last_successful_full_scan_at
-            >= timedelta(minutes=60)
+        scan_now = moscow_now()
+        active_count = window.active_generation + window.active_publication
+        scan_due = self._short_scan_due(scan_now, active_count=active_count)
+        if (
+            not scan_due
+            and processed
+            and active_count
+            and not self._last_scan_failed
+            and self._last_scan_attempt_at is not None
+            and scan_now - self._last_scan_attempt_at >= timedelta(minutes=1)
+        ):
+            window = self.repository.reconcile_work_window(
+                now=scan_now,
+                stale_before=scan_now
+                - timedelta(days=runtime_settings.max_comment_age_days),
+                limit=self.settings.MAX_ACTIVE_WORK_ITEMS,
+            )
+            active_count = window.active_generation + window.active_publication
+            scan_due = self._short_scan_due(scan_now, active_count=active_count)
+        if scan_due:
+            self._last_scan_attempt_at = scan_now
+            try:
+                self._scan_and_admit_comments(
+                    runtime_settings,
+                    queued_at=scan_now,
+                )
+            except Exception as exc:
+                self._last_scan_failed = True
+                logger.warning(
+                    "Studio short scan failed",
+                    extra={
+                        "event": "studio_short_scan_failed",
+                        "failure_type": type(exc).__name__,
+                    },
+                )
+            else:
+                self._last_scan_failed = False
+
+            remaining = max(0, budget - processed)
+            if remaining:
+                self._drain_work_queue(runtime_settings, max_items=remaining)
+
+    def _short_scan_due(self, now: datetime, *, active_count: int) -> bool:
+        if self._last_scan_attempt_at is None:
+            return True
+        elapsed = now - self._last_scan_attempt_at
+        return elapsed >= timedelta(minutes=5) or (
+            not self._last_scan_failed
+            and active_count == 0
+            and elapsed >= timedelta(minutes=1)
         )
 
+    def _scan_and_admit_comments(self, runtime_settings, *, queued_at: datetime) -> int:
         publication_id = self.repository.upsert_publication(
             Publication(
                 id=None,
@@ -135,77 +187,77 @@ class OrchestratorLoop:
                 url=self.settings.COMMENTS_URL,
             )
         )
-
+        fetch_recent_comments = getattr(self.page, "fetch_recent_comments", None)
+        if not callable(fetch_recent_comments):
+            raise RuntimeError("Dzen page does not support the bounded Studio scan")
         with self._browser_access():
-            if full_scan_due:
-                comments = self.page.fetch_comments()
-            else:
-                fetch_recent_comments = getattr(
-                    self.page, "fetch_recent_comments", None
-                )
-                if callable(fetch_recent_comments):
-                    comments = fetch_recent_comments(max_cards=100)
-                else:
-                    comments = self.page.fetch_comments()
+            comments = fetch_recent_comments(max_cards=100)
+
+        eligible: list[Comment] = []
         for comment in comments:
             if is_bot_account_author(
                 comment.author, runtime_settings.bot_account_name
             ):
                 continue
+            if self.repository.is_own_reply(comment.post_url, comment.text):
+                continue
+            if self._is_too_old(comment.posted_at):
+                continue
             comment.publication_id = publication_id
-            if self.repository.is_own_reply(comment.post_url, comment.text) or self._is_too_old(
-                comment.posted_at
-            ):
-                comment_id = self.repository.upsert_comment(comment)
-                self.repository.skip_comment_if_new(comment_id)
-            else:
-                comment_id = self.repository.upsert_eligible_comment(
-                    comment, queued_at=now
-                )
-            comment.id = comment_id
-            if self.repository.has_published_reply(comment_id):
+            eligible.append(comment)
+        return self.repository.admit_recent_comments(
+            eligible,
+            queued_at=queued_at,
+            limit=self.settings.MAX_ACTIVE_WORK_ITEMS,
+        )
+
+    def _drain_work_queue(self, runtime_settings, *, max_items: int) -> int:
+        processed = 0
+        for _ in range(max_items):
+            if self._run_publication_cycle(runtime_settings, max_publications=1):
+                processed += 1
                 continue
 
-        if full_scan_due:
-            self._last_successful_full_scan_at = moscow_now()
-
-    def _drain_generation_queue(self, runtime_settings, *, max_jobs: int) -> int:
-        processed = 0
-        for _ in range(max_jobs):
-            now = moscow_now()
-            if self.repository.count_ai_attempts_since(
-                now - timedelta(hours=1)
-            ) >= runtime_settings.max_comments_per_hour:
-                break
-
-            job_ai_attempts = 0
-
-            def generate_with_quota(prompt: str) -> str:
-                nonlocal job_ai_attempts
-                attempt_at = moscow_now()
-                if not self.repository.reserve_ai_call(
-                    attempt_at, limit=runtime_settings.max_comments_per_hour
-                ):
-                    if job_ai_attempts == 0:
-                        raise _HourlyAIAttemptLimitReached(
-                            "Hourly AI attempt limit reached before the model call"
-                        )
-                    raise RuntimeError(
-                        "Hourly AI attempt limit reached before the shortening retry"
-                    )
-                job_ai_attempts += 1
-                return self.ai_provider.generate(
-                    prompt,
-                    temperature=self.settings.AI_TEMPERATURE,
-                    max_tokens=self.settings.AI_MAX_TOKENS,
-                )
-
-            if not self._run_generation_cycle(
-                runtime_settings, ai_generate=generate_with_quota
-            ):
+            if not self._run_generation_work_item(runtime_settings):
                 break
             processed += 1
+            # The first publication attempt belongs to the generation work item.
+            self._run_publication_cycle(runtime_settings, max_publications=1)
         return processed
+
+    def _run_generation_work_item(self, runtime_settings) -> bool:
+        now = moscow_now()
+        if self.repository.count_ai_attempts_since(
+            now - timedelta(hours=1)
+        ) >= runtime_settings.max_comments_per_hour:
+            return False
+
+        job_ai_attempts = 0
+
+        def generate_with_quota(prompt: str) -> str:
+            nonlocal job_ai_attempts
+            attempt_at = moscow_now()
+            if not self.repository.reserve_ai_call(
+                attempt_at, limit=runtime_settings.max_comments_per_hour
+            ):
+                if job_ai_attempts == 0:
+                    raise _HourlyAIAttemptLimitReached(
+                        "Hourly AI attempt limit reached before the model call"
+                    )
+                raise RuntimeError(
+                    "Hourly AI attempt limit reached before the shortening retry"
+                )
+            job_ai_attempts += 1
+            return self.ai_provider.generate(
+                prompt,
+                temperature=self.settings.AI_TEMPERATURE,
+                max_tokens=self.settings.AI_MAX_TOKENS,
+            )
+
+        return self._run_generation_cycle(
+            runtime_settings,
+            ai_generate=generate_with_quota,
+        )
 
     def _run_publication_cycle(
         self,
@@ -213,23 +265,6 @@ class OrchestratorLoop:
         *,
         max_publications: int,
     ) -> int:
-        now = moscow_now()
-        oldest_allowed_comment_fetched_at = now - timedelta(
-            days=runtime_settings.max_comment_age_days
-        )
-        expired_count = self.repository.expire_stale_publications(
-            now,
-            oldest_allowed_comment_fetched_at,
-        )
-        if expired_count:
-            logger.info(
-                "Expired stale reply publications",
-                extra={
-                    "event": "publication_stale_expired",
-                    "expired_count": expired_count,
-                },
-            )
-
         publication_attempts = 0
         for _ in range(max_publications):
             claimed = self.repository.claim_next_publication(moscow_now())
@@ -472,7 +507,27 @@ class OrchestratorLoop:
             )
             return True
 
-        article_text, article_context_status = self._get_article_text(comment)
+        try:
+            article_text, article_context_status = self._get_article_text(comment)
+        except Exception as exc:
+            error_reason = f"Reply article context failed: {type(exc).__name__}"
+            self.repository.fail_generation(
+                comment_id=comment_id,
+                claim_token=claimed.claim_token,
+                error_reason=error_reason,
+                failed_at=moscow_now(),
+                ai_provider=self.settings.AI_PROVIDER,
+                ai_model=self.settings.AI_MODEL,
+                article_context_status="article_text_error",
+                retry_cooldown_minutes=(
+                    runtime_settings.generation_retry_cooldown_minutes
+                ),
+                max_attempts_per_comment=(
+                    runtime_settings.generation_max_attempts_per_comment
+                ),
+            )
+            self.notifier.notify_error("Dzen article context processing failed", exc)
+            return True
         try:
             self._generate_reply(
                 comment,
@@ -496,25 +551,17 @@ class OrchestratorLoop:
 
         article_text: str | None = None
         context_status = "without_article_text"
-        try:
-            if comment.post_url:
-                with self._browser_access():
-                    article_text = self.page.fetch_article_text(comment.post_url)
-            if article_text:
-                context_status = "article_text_used"
-        except Exception as exc:
-            context_status = "article_text_error"
-            self.notifier.notify_error("Dzen article text extraction failed", exc)
-
-        try:
-            self.repository.save_article_context(
-                comment.publication_id,
-                text=article_text,
-                status=context_status,
-                fetched_at=moscow_now(),
-            )
-        except Exception as exc:
-            self.notifier.notify_error("Dzen article context persistence failed", exc)
+        if comment.post_url:
+            with self._browser_access():
+                article_text = self.page.fetch_article_text(comment.post_url)
+        if article_text:
+            context_status = "article_text_used"
+        self.repository.save_article_context(
+            comment.publication_id,
+            text=article_text,
+            status=context_status,
+            fetched_at=moscow_now(),
+        )
         return article_text or "", context_status
 
     def _generate_reply(
@@ -611,16 +658,20 @@ class OrchestratorLoop:
                         "Model reply still exceeds the configured length after one "
                         f"shortening retry ({len(text)} > {max_reply_length} characters)"
                     )
-            self.repository.complete_generation(
-                comment_id,
-                claim_token=claim_token,
-                text=text,
-                ai_provider=self.settings.AI_PROVIDER,
-                ai_model=self.settings.AI_MODEL,
-                article_context_status=article_context_status,
-                created_at=moscow_now(),
-                is_cta_candidate=is_cta_candidate,
-            )
+            completion = {
+                "claim_token": claim_token,
+                "text": text,
+                "ai_provider": self.settings.AI_PROVIDER,
+                "ai_model": self.settings.AI_MODEL,
+                "article_context_status": article_context_status,
+                "created_at": moscow_now(),
+                "is_cta_candidate": is_cta_candidate,
+            }
+            try:
+                self.repository.complete_generation(comment_id, **completion)
+            except Exception:
+                # Keep the already generated text in memory for one persistence retry.
+                self.repository.complete_generation(comment_id, **completion)
         except _HourlyAIAttemptLimitReached:
             raise
         except Exception as exc:
