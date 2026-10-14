@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from dzen_commenter.contracts.models import (
     Comment,
     Publication,
     Reply,
+    WorkWindowSnapshot,
 )
 from dzen_commenter.db.models import (
     AICallReservationTable,
@@ -39,6 +41,9 @@ class PostgresCommentRepository:
     _PUBLICATION_CLAIM_LEASE = timedelta(hours=2)
     _GENERATION_CLAIM_LEASE = timedelta(minutes=5)
     _AI_CALL_RESERVATION_LOCK_KEY = 0x445A454E414931
+    _WORK_WINDOW_LOCK_KEY = 0x445A454E57494E
+    _STALE_WORK_REASON = "comment exceeded the configured age limit"
+    _UNKNOWN_PUBLICATION_REASON = "publication outcome unknown after worker interruption"
 
     def upsert_publication(self, pub: Publication) -> int:
         stmt = (
@@ -169,6 +174,572 @@ class PostgresCommentRepository:
         )
         with self._engine.begin() as conn:
             return len(conn.execute(stmt).scalars().all())
+
+    @classmethod
+    def _lock_work_window(cls, conn) -> None:
+        if conn.dialect.name == "postgresql":
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(:key)"),
+                {"key": cls._WORK_WINDOW_LOCK_KEY},
+            )
+
+    @staticmethod
+    def _restore_missing_publications(conn, now: datetime) -> None:
+        missing = ~exists(
+            select(ReplyPublicationQueueTable.reply_id).where(
+                ReplyPublicationQueueTable.reply_id == ReplyTable.id
+            )
+        )
+        stmt = (
+            insert(ReplyPublicationQueueTable)
+            .from_select(
+                ["reply_id", "state", "attempt_count", "created_at"],
+                select(
+                    ReplyTable.id,
+                    literal("queued"),
+                    literal(0),
+                    func.coalesce(ReplyTable.created_at, now),
+                ).where(ReplyTable.status == ReplyStatus.GENERATED.value, missing),
+            )
+            .on_conflict_do_nothing(
+                index_elements=[ReplyPublicationQueueTable.reply_id]
+            )
+        )
+        conn.execute(stmt)
+
+    @classmethod
+    def _expire_stale_generation_work(
+        cls, conn, *, now: datetime, stale_before: datetime
+    ) -> int:
+        lease_expired = or_(
+            ReplyGenerationQueueTable.claimed_at.is_(None),
+            ReplyGenerationQueueTable.claimed_at
+            <= now - cls._GENERATION_CLAIM_LEASE,
+        )
+        age = func.coalesce(CommentTable.posted_at, CommentTable.fetched_at)
+        stale_ids = conn.execute(
+            select(ReplyGenerationQueueTable.comment_id)
+            .join(
+                CommentTable,
+                CommentTable.id == ReplyGenerationQueueTable.comment_id,
+            )
+            .where(
+                ReplyGenerationQueueTable.state.in_(("queued", "waiting", "claimed")),
+                age.is_not(None),
+                age < stale_before,
+                or_(
+                    ReplyGenerationQueueTable.state != "claimed",
+                    lease_expired,
+                ),
+            )
+            .with_for_update(skip_locked=True, of=ReplyGenerationQueueTable)
+        ).scalars().all()
+        stale_new_ids = conn.execute(
+            select(CommentTable.id)
+            .where(
+                CommentTable.status == CommentStatus.NEW.value,
+                age.is_not(None),
+                age < stale_before,
+                ~exists(
+                    select(ReplyGenerationQueueTable.comment_id).where(
+                        ReplyGenerationQueueTable.comment_id == CommentTable.id
+                    )
+                ),
+                ~exists(
+                    select(ReplyTable.id).where(ReplyTable.comment_id == CommentTable.id)
+                ),
+            )
+            .with_for_update(skip_locked=True, of=CommentTable)
+        ).scalars().all()
+        comment_ids = set(stale_ids) | set(stale_new_ids)
+        if not comment_ids:
+            return 0
+
+        conn.execute(
+            update(ReplyGenerationQueueTable)
+            .where(ReplyGenerationQueueTable.comment_id.in_(comment_ids))
+            .values(
+                state="completed",
+                next_attempt_at=None,
+                last_error=cls._STALE_WORK_REASON,
+                claimed_at=None,
+                claim_token=None,
+            )
+        )
+        conn.execute(
+            insert(ReplyTable).from_select(
+                [
+                    "comment_id",
+                    "generated_text",
+                    "ai_provider",
+                    "ai_model",
+                    "status",
+                    "error_reason",
+                    "created_at",
+                    "is_cta_candidate",
+                ],
+                select(
+                    CommentTable.id,
+                    literal(""),
+                    literal("system"),
+                    literal("system"),
+                    literal(ReplyStatus.SKIPPED.value),
+                    literal(cls._STALE_WORK_REASON),
+                    literal(now),
+                    literal(False),
+                ).where(CommentTable.id.in_(comment_ids)),
+            )
+        )
+        conn.execute(
+            update(CommentTable)
+            .where(CommentTable.id.in_(comment_ids))
+            .values(status=CommentStatus.SKIPPED.value)
+        )
+        return len(comment_ids)
+
+    @classmethod
+    def _expire_stale_publication_work(
+        cls, conn, *, now: datetime, stale_before: datetime
+    ) -> int:
+        lease_expired = or_(
+            ReplyPublicationQueueTable.claimed_at.is_(None),
+            ReplyPublicationQueueTable.claimed_at
+            <= now - cls._PUBLICATION_CLAIM_LEASE,
+        )
+        age = func.coalesce(CommentTable.posted_at, CommentTable.fetched_at)
+        reply_ids = conn.execute(
+            select(ReplyPublicationQueueTable.reply_id)
+            .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
+            .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+            .where(
+                ReplyPublicationQueueTable.state.in_(
+                    ("queued", "waiting", "claimed")
+                ),
+                age.is_not(None),
+                age < stale_before,
+                or_(
+                    ReplyPublicationQueueTable.state != "claimed",
+                    lease_expired,
+                ),
+            )
+            .with_for_update(skip_locked=True, of=ReplyPublicationQueueTable)
+        ).scalars().all()
+        if not reply_ids:
+            return 0
+
+        conn.execute(
+            update(ReplyPublicationQueueTable)
+            .where(ReplyPublicationQueueTable.reply_id.in_(reply_ids))
+            .values(
+                state="completed",
+                next_attempt_at=None,
+                last_error=cls._STALE_WORK_REASON,
+                claimed_at=None,
+                claim_token=None,
+            )
+        )
+        conn.execute(
+            update(ReplyTable)
+            .where(ReplyTable.id.in_(reply_ids))
+            .values(
+                status=ReplyStatus.SKIPPED.value,
+                error_reason=cls._STALE_WORK_REASON,
+            )
+        )
+        conn.execute(
+            update(CommentTable)
+            .where(
+                CommentTable.id.in_(
+                    select(ReplyTable.comment_id).where(ReplyTable.id.in_(reply_ids))
+                )
+            )
+            .values(status=CommentStatus.SKIPPED.value)
+        )
+        return len(reply_ids)
+
+    @classmethod
+    def _expire_unknown_submissions(cls, conn, *, now: datetime) -> None:
+        reply_ids = conn.execute(
+            update(ReplyPublicationQueueTable)
+            .where(
+                ReplyPublicationQueueTable.state == "submitting",
+                or_(
+                    ReplyPublicationQueueTable.claimed_at.is_(None),
+                    ReplyPublicationQueueTable.claimed_at
+                    <= now - cls._PUBLICATION_CLAIM_LEASE,
+                ),
+            )
+            .values(
+                state="completed",
+                next_attempt_at=None,
+                last_error=cls._UNKNOWN_PUBLICATION_REASON,
+                claimed_at=None,
+                claim_token=None,
+            )
+            .returning(ReplyPublicationQueueTable.reply_id)
+        ).scalars().all()
+        if not reply_ids:
+            return
+        conn.execute(
+            update(ReplyTable)
+            .where(ReplyTable.id.in_(reply_ids))
+            .values(
+                status=ReplyStatus.UNCONFIRMED.value,
+                error_reason=cls._UNKNOWN_PUBLICATION_REASON,
+            )
+        )
+        conn.execute(
+            update(CommentTable)
+            .where(
+                CommentTable.id.in_(
+                    select(ReplyTable.comment_id).where(ReplyTable.id.in_(reply_ids))
+                )
+            )
+            .values(status=CommentStatus.PUBLICATION_UNCONFIRMED.value)
+        )
+
+    @classmethod
+    def _recover_expired_claims(cls, conn, *, now: datetime) -> None:
+        stale_generation = or_(
+            ReplyGenerationQueueTable.claimed_at.is_(None),
+            ReplyGenerationQueueTable.claimed_at
+            <= now - cls._GENERATION_CLAIM_LEASE,
+        )
+        recovered_generation = conn.execute(
+            update(ReplyGenerationQueueTable)
+            .where(
+                ReplyGenerationQueueTable.state == "claimed",
+                stale_generation,
+            )
+            .values(state="queued", claimed_at=None, claim_token=None)
+            .returning(ReplyGenerationQueueTable.comment_id)
+        ).scalars().all()
+        if recovered_generation:
+            conn.execute(
+                update(CommentTable)
+                .where(CommentTable.id.in_(recovered_generation))
+                .values(status=CommentStatus.GENERATION_RETRY.value)
+            )
+
+        stale_publication = or_(
+            ReplyPublicationQueueTable.claimed_at.is_(None),
+            ReplyPublicationQueueTable.claimed_at
+            <= now - cls._PUBLICATION_CLAIM_LEASE,
+        )
+        conn.execute(
+            update(ReplyPublicationQueueTable)
+            .where(
+                ReplyPublicationQueueTable.state == "claimed",
+                stale_publication,
+            )
+            .values(state="queued", claimed_at=None, claim_token=None)
+        )
+
+    @staticmethod
+    def _active_work_comment_ids(conn) -> set[int]:
+        generation_ids = select(
+            ReplyGenerationQueueTable.comment_id.label("comment_id")
+        ).where(ReplyGenerationQueueTable.state.in_(("queued", "claimed")))
+        publication_ids = (
+            select(ReplyTable.comment_id.label("comment_id"))
+            .join(
+                ReplyPublicationQueueTable,
+                ReplyPublicationQueueTable.reply_id == ReplyTable.id,
+            )
+            .where(
+                ReplyPublicationQueueTable.state.in_(
+                    ("queued", "claimed", "submitting")
+                )
+            )
+        )
+        return set(conn.execute(generation_ids.union(publication_ids)).scalars())
+
+    @classmethod
+    def _assign_work_window_slots(cls, conn, *, limit: int) -> None:
+        active_ids = set(
+            conn.execute(
+                select(ReplyGenerationQueueTable.comment_id).where(
+                    ReplyGenerationQueueTable.state == "claimed"
+                )
+            ).scalars()
+        )
+        active_ids.update(
+            conn.execute(
+                select(ReplyTable.comment_id)
+                .join(
+                    ReplyPublicationQueueTable,
+                    ReplyPublicationQueueTable.reply_id == ReplyTable.id,
+                )
+                .where(
+                    ReplyPublicationQueueTable.state.in_(("claimed", "submitting"))
+                )
+            ).scalars()
+        )
+        retry_generation_ids = conn.execute(
+            select(ReplyGenerationQueueTable.comment_id)
+            .join(
+                CommentTable,
+                CommentTable.id == ReplyGenerationQueueTable.comment_id,
+            )
+            .where(
+                ReplyGenerationQueueTable.state == "queued",
+                or_(
+                    ReplyGenerationQueueTable.attempt_count > 0,
+                    ReplyGenerationQueueTable.next_attempt_at.is_not(None),
+                ),
+            )
+            .order_by(
+                func.coalesce(CommentTable.posted_at, CommentTable.fetched_at)
+                .desc()
+                .nulls_last(),
+                CommentTable.dzen_comment_id.asc(),
+                CommentTable.id.asc(),
+            )
+        ).scalars().all()
+        for comment_id in retry_generation_ids:
+            if comment_id in active_ids:
+                continue
+            if len(active_ids) < limit:
+                active_ids.add(comment_id)
+                continue
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "queued",
+                )
+                .values(state="waiting", claimed_at=None, claim_token=None)
+            )
+
+        publication_candidates = conn.execute(
+            select(
+                ReplyTable.comment_id,
+                func.min(ReplyPublicationQueueTable.created_at).label("created_at"),
+            )
+            .join(
+                ReplyPublicationQueueTable,
+                ReplyPublicationQueueTable.reply_id == ReplyTable.id,
+            )
+            .where(ReplyPublicationQueueTable.state.in_(("queued", "waiting")))
+            .group_by(ReplyTable.comment_id)
+            .order_by(func.min(ReplyPublicationQueueTable.created_at), ReplyTable.comment_id)
+        ).all()
+        for comment_id, _ in publication_candidates:
+            activate = comment_id in active_ids or len(active_ids) < limit
+            if activate:
+                active_ids.add(comment_id)
+                conn.execute(
+                    update(ReplyPublicationQueueTable)
+                    .where(
+                        ReplyPublicationQueueTable.reply_id.in_(
+                            select(ReplyTable.id).where(
+                                ReplyTable.comment_id == comment_id
+                            )
+                        ),
+                        ReplyPublicationQueueTable.state == "waiting",
+                    )
+                    .values(state="queued")
+                )
+            else:
+                conn.execute(
+                    update(ReplyPublicationQueueTable)
+                    .where(
+                        ReplyPublicationQueueTable.reply_id.in_(
+                            select(ReplyTable.id).where(
+                                ReplyTable.comment_id == comment_id
+                            )
+                        ),
+                        ReplyPublicationQueueTable.state == "queued",
+                    )
+                    .values(state="waiting")
+                )
+
+        generation_candidates = conn.execute(
+            select(ReplyGenerationQueueTable.comment_id)
+            .join(
+                CommentTable,
+                CommentTable.id == ReplyGenerationQueueTable.comment_id,
+            )
+            .where(ReplyGenerationQueueTable.state == "queued")
+            .order_by(
+                func.coalesce(CommentTable.posted_at, CommentTable.fetched_at)
+                .desc()
+                .nulls_last(),
+                CommentTable.dzen_comment_id.asc(),
+                CommentTable.id.asc(),
+            )
+        ).scalars().all()
+        for comment_id in generation_candidates:
+            if comment_id in active_ids:
+                continue
+            if len(active_ids) < limit:
+                active_ids.add(comment_id)
+                continue
+            conn.execute(
+                update(ReplyGenerationQueueTable)
+                .where(
+                    ReplyGenerationQueueTable.comment_id == comment_id,
+                    ReplyGenerationQueueTable.state == "queued",
+                )
+                .values(state="waiting", claimed_at=None, claim_token=None)
+            )
+
+    @staticmethod
+    def _work_window_snapshot(
+        conn, *, expired_generation: int, expired_publication: int
+    ) -> WorkWindowSnapshot:
+        active_generation = conn.execute(
+            select(func.count(func.distinct(ReplyGenerationQueueTable.comment_id))).where(
+                ReplyGenerationQueueTable.state.in_(("queued", "claimed"))
+            )
+        ).scalar_one()
+        waiting_generation = conn.execute(
+            select(func.count(func.distinct(ReplyGenerationQueueTable.comment_id))).where(
+                ReplyGenerationQueueTable.state == "waiting"
+            )
+        ).scalar_one()
+        active_publication = conn.execute(
+            select(func.count(func.distinct(CommentTable.id)))
+            .select_from(ReplyPublicationQueueTable)
+            .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
+            .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+            .where(
+                ReplyPublicationQueueTable.state.in_(("queued", "claimed", "submitting"))
+            )
+        ).scalar_one()
+        waiting_publication_query = (
+            select(func.count(func.distinct(CommentTable.id)))
+            .select_from(ReplyPublicationQueueTable)
+            .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
+            .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+            .where(ReplyPublicationQueueTable.state == "waiting")
+        )
+        waiting_publication = conn.execute(waiting_publication_query).scalar_one()
+        generated_waiting_publication = conn.execute(
+            select(func.count(func.distinct(CommentTable.id)))
+            .select_from(ReplyPublicationQueueTable)
+            .join(ReplyTable, ReplyTable.id == ReplyPublicationQueueTable.reply_id)
+            .join(CommentTable, CommentTable.id == ReplyTable.comment_id)
+            .where(
+                ReplyPublicationQueueTable.state == "waiting",
+                ReplyTable.status == ReplyStatus.GENERATED.value,
+            )
+        ).scalar_one()
+        return WorkWindowSnapshot(
+            active_generation=int(active_generation),
+            active_publication=int(active_publication),
+            waiting_generation=int(waiting_generation),
+            waiting_publication=int(waiting_publication),
+            generated_waiting_publication=int(generated_waiting_publication),
+            expired_generation=expired_generation,
+            expired_publication=expired_publication,
+        )
+
+    def _reconcile_work_window(
+        self,
+        conn,
+        *,
+        now: datetime,
+        stale_before: datetime | None,
+        limit: int,
+    ) -> WorkWindowSnapshot:
+        self._lock_work_window(conn)
+        self._restore_missing_publications(conn, now)
+        self._expire_unknown_submissions(conn, now=now)
+        expired_generation = 0
+        expired_publication = 0
+        if stale_before is not None:
+            expired_generation = self._expire_stale_generation_work(
+                conn, now=now, stale_before=stale_before
+            )
+            expired_publication = self._expire_stale_publication_work(
+                conn, now=now, stale_before=stale_before
+            )
+        self._recover_expired_claims(conn, now=now)
+        self._assign_work_window_slots(conn, limit=limit)
+        return self._work_window_snapshot(
+            conn,
+            expired_generation=expired_generation,
+            expired_publication=expired_publication,
+        )
+
+    def reconcile_work_window(
+        self, *, now: datetime, stale_before: datetime, limit: int
+    ) -> WorkWindowSnapshot:
+        if limit <= 0:
+            raise ValueError("work window limit must be positive")
+        with self._engine.begin() as conn:
+            return self._reconcile_work_window(
+                conn, now=now, stale_before=stale_before, limit=limit
+            )
+
+    @staticmethod
+    def _insert_comment_if_unknown_statement(comment: Comment):
+        return (
+            insert(CommentTable)
+            .values(
+                dzen_comment_id=comment.dzen_comment_id,
+                publication_id=comment.publication_id,
+                author=comment.author,
+                text=comment.text,
+                parent_comment_id=comment.parent_comment_id,
+                posted_at=comment.posted_at,
+                fetched_at=comment.fetched_at,
+                status=comment.status.value,
+                post_title=comment.publication_title or None,
+                post_url=comment.post_url,
+                thread_text=comment.thread_text,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[CommentTable.dzen_comment_id]
+            )
+            .returning(CommentTable.id)
+        )
+
+    def admit_recent_comments(
+        self, comments: Sequence[Comment], *, queued_at: datetime, limit: int
+    ) -> int:
+        if limit <= 0:
+            raise ValueError("work window limit must be positive")
+
+        def order_key(comment: Comment):
+            published = comment.posted_at or comment.fetched_at
+            if published is None:
+                timestamp = float("inf")
+            else:
+                if published.tzinfo is None:
+                    published = published.replace(tzinfo=timezone.utc)
+                timestamp = -published.timestamp()
+            return timestamp, comment.dzen_comment_id
+
+        ordered = sorted(
+            (comment for comment in comments if comment.status is CommentStatus.NEW),
+            key=order_key,
+        )
+        with self._engine.begin() as conn:
+            self._reconcile_work_window(
+                conn, now=queued_at, stale_before=None, limit=limit
+            )
+            active_ids = self._active_work_comment_ids(conn)
+            slots = max(0, limit - len(active_ids))
+            seen: set[str] = set()
+            admitted = 0
+            for comment in ordered:
+                if slots == 0:
+                    break
+                if comment.dzen_comment_id in seen:
+                    continue
+                seen.add(comment.dzen_comment_id)
+                comment_id = conn.execute(
+                    self._insert_comment_if_unknown_statement(comment)
+                ).scalar_one_or_none()
+                if comment_id is None:
+                    continue
+                conn.execute(self._enqueue_generation_statement(comment_id, queued_at))
+                active_ids.add(comment_id)
+                admitted += 1
+                slots -= 1
+            return admitted
 
     def save_reply(self, reply: Reply) -> int:
         stmt = (
@@ -320,6 +891,7 @@ class PostgresCommentRepository:
             | (ReplyGenerationQueueTable.next_attempt_at <= now)
         )
         with self._engine.begin() as conn:
+            self._lock_work_window(conn)
             stale_comment_ids = conn.execute(
                 update(ReplyGenerationQueueTable)
                 .where(
@@ -775,6 +1347,7 @@ class PostgresCommentRepository:
             | (ReplyPublicationQueueTable.next_attempt_at <= now)
         )
         with self._engine.begin() as conn:
+            self._lock_work_window(conn)
             expired_submitting = conn.execute(
                 update(ReplyPublicationQueueTable)
                 .where(

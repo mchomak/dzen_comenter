@@ -65,3 +65,14 @@ class ClaimedGeneration:
     comment: Comment
     attempt_count: int
     claim_token: str
+
+
+@dataclass(frozen=True)
+class WorkWindowSnapshot:
+    active_generation: int
+    active_publication: int
+    waiting_generation: int
+    waiting_publication: int
+    generated_waiting_publication: int
+    expired_generation: int
+    expired_publication: int

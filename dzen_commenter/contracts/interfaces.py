@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,6 +17,7 @@ from dzen_commenter.contracts.models import (
     Comment,
     Publication,
     Reply,
+    WorkWindowSnapshot,
 )
 
 ReplyType = Literal["lead", "engage"]
@@ -45,6 +46,16 @@ class CommentRepository(Protocol):
         ...
 
     def enqueue_pending_generations(self, *, queued_at: datetime) -> int:
+        ...
+
+    def reconcile_work_window(
+        self, *, now: datetime, stale_before: datetime, limit: int
+    ) -> WorkWindowSnapshot:
+        ...
+
+    def admit_recent_comments(
+        self, comments: Sequence[Comment], *, queued_at: datetime, limit: int
+    ) -> int:
         ...
 
     def save_reply(self, reply: Reply) -> int:
