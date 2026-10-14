@@ -3809,7 +3809,6 @@ def test_publication_lease_exceeds_explicit_wait_budget():
     thread_checks = 3 + polls * 2
     wait_budget_ms = (
         2 * dzen_page._PUBLIC_VERIFICATION_TIMEOUT_MS
-        + dzen_page._REPLY_SEARCH_MAX_SCROLLS * dzen_page._REPLY_SEARCH_WAIT_MS
         + thread_checks * dzen_page._REPLY_EXPANSION_TIMEOUT_MS
         + 2 * dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS
         + dzen_page._REPLY_SUBMIT_BUTTON_TIMEOUT_MS
@@ -4701,13 +4700,20 @@ def test_publish_reply_fills_draft_and_waits_without_submitting():
     assert fake.listeners == {}
 
 
-def test_publish_reply_unmatched_raises_lookup_error(caplog):
-    groups = [FakeGroup("/a/private-post", [make_node(0)])]
+def test_publish_reply_stops_after_first_hundred_groups_with_retryable_miss(caplog):
+    source_node = make_node(100)
+    groups = [
+        FakeGroup(f"/a/post-{index}", [make_node(index)])
+        for index in range(dzen_page._PUBLICATION_SOURCE_MAX_CARDS)
+    ]
+    groups.append(FakeGroup("/a/private-post", [source_node]))
     fake = FakePage(groups)
     page = DzenStudioPage(fake)
     comment = Comment(
         id=None,
-        dzen_comment_id="private-synthetic-id",
+        dzen_comment_id=synthetic_id(
+            "/a/private-post", "/user/u100", "text100"
+        ),
         publication_id=0,
         author="Private Author Name",
         text="Sensitive comment body",
@@ -4717,13 +4723,22 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
         status=CommentStatus.NEW,
         post_url="https://dzen.ru/a/private-post",
     )
+    before_submit_calls = []
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
         with pytest.raises(LookupError) as error:
-            page.publish_reply(comment, "ответ", auto_publish=True, reply_id=73, before_submit=lambda: None)
+            page.publish_reply(
+                comment,
+                "ответ",
+                auto_publish=True,
+                reply_id=73,
+                before_submit=lambda: before_submit_calls.append(True),
+            )
     assert isinstance(error.value, SourceCommentUnavailableError)
-    assert len(fake.mouse.wheel_calls) == dzen_page._REPLY_SEARCH_MAX_SCROLLS
-    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * dzen_page._REPLY_SEARCH_MAX_SCROLLS
+    assert fake.mouse.wheel_calls == []
+    assert fake.waited_ms == []
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+    assert source_node.reply_submit.clicks == 0
+    assert before_submit_calls == []
     search = next(
         record for record in caplog.records
         if getattr(record, "event", None) == "publication_source_comment_search_completed"
@@ -4734,8 +4749,10 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
     assert search.failure_stage == "studio_source_comment_search"
     assert search.failure_reason == "source_comment_not_found"
     assert search.reply_id == 73
-    assert search.scroll_attempt_count == dzen_page._REPLY_SEARCH_MAX_SCROLLS
-    assert search.candidates_checked == 1
+    assert search.scroll_attempt_count == 0
+    assert search.candidates_checked == 0
+    assert search.groups_scanned == dzen_page._PUBLICATION_SOURCE_MAX_CARDS
+    assert search.publication_card_count == dzen_page._PUBLICATION_SOURCE_MAX_CARDS
     failure = next(
         record for record in caplog.records
         if getattr(record, "event", None) == "publication_action_failed"
@@ -4748,7 +4765,6 @@ def test_publish_reply_unmatched_raises_lookup_error(caplog):
         if record.name == "dzen_commenter.dzen.page"
     )
     for private_value in (
-        "private-synthetic-id",
         "Private Author Name",
         "Sensitive comment body",
         "https://dzen.ru/a/private-post",
@@ -4816,15 +4832,15 @@ def test_initial_reply_expansion_exception_logs_safely_and_propagates(caplog):
     assert "locator lookup failed" in serialized
 
 
-def test_source_comment_scrolling_exception_logs_safely_and_propagates(caplog):
+def test_source_lookup_failure_logs_safely_and_does_not_scroll(caplog):
     fake = FakePage([FakeGroup("/a/post1", [make_node(0)])])
 
-    def fail_scroll(_delta_x, _delta_y):
-        raise TimeoutError(
-            "scroll timeout for private comment https://dzen.ru/a/post?token=private-token"
+    def fail_group_lookup(_selector):
+        raise RuntimeError(
+            "locator lookup failed: https://dzen.ru/a/post?token=private-token"
         )
 
-    fake.mouse.wheel = fail_scroll
+    fake.query_selector_all = fail_group_lookup
     page = DzenStudioPage(fake)
     comment = Comment(
         id=None,
@@ -4839,21 +4855,22 @@ def test_source_comment_scrolling_exception_logs_safely_and_propagates(caplog):
     )
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(TimeoutError, match="scroll timeout") as exc_info:
+        with pytest.raises(RuntimeError, match="locator lookup failed") as exc_info:
             page.publish_reply(comment, "private reply", auto_publish=True, reply_id=74, before_submit=lambda: None)
 
     assert "private-token" in str(exc_info.value)
+    assert fake.mouse.wheel_calls == []
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
     record = next(
         record for record in caplog.records
         if getattr(record, "event", None) == "publication_source_comment_search_failed"
     )
     assert record.failure_stage == "studio_source_comment_search"
-    assert record.failure_reason == "scroll_exception"
-    assert record.failure_type == "TimeoutError"
-    assert record.failure_description == "browser operation timed out"
-    assert record.scroll_attempt_count == 1
-    assert record.candidates_checked == 1
+    assert record.failure_reason == "reply_expansion_exception"
+    assert record.failure_type == "RuntimeError"
+    assert record.failure_description == "locator lookup failed"
+    assert record.scroll_attempt_count == 0
+    assert record.candidates_checked == 0
     assert record.reply_id == 74
     serialized = "\n".join(
         StructuredFormatter().format(item)
@@ -4872,51 +4889,51 @@ def test_source_comment_scrolling_exception_logs_safely_and_propagates(caplog):
         assert secret not in serialized
 
 
-def test_find_comment_after_three_stalled_scrolls_restores_page_top():
-    initial_group = FakeGroup("/a/post1", [make_node(0)])
-    target_node = make_node(1)
-    fake = FakePage(
-        [initial_group],
-        scroll_groups=[
-            [initial_group],
-            [initial_group],
-            [initial_group],
-            [FakeGroup("/a/post1", [target_node])],
-        ],
-    )
+def test_find_comment_in_top_hundred_groups_expands_nested_reply_before_matching(caplog):
+    parent_node = make_node(100)
+    target_node = make_node(999)
+    parent_node.hidden_comment_children = [target_node]
+    groups = [
+        FakeGroup(f"/a/post-{index}", [make_node(index)])
+        for index in range(dzen_page._PUBLICATION_SOURCE_MAX_CARDS - 1)
+    ]
+    groups.append(FakeGroup("/a/post-99", [parent_node]))
+    groups.append(FakeGroup("/a/post-100", [make_node(1000)]))
+    fake = FakePage(groups)
     page = DzenStudioPage(fake)
 
-    found = page._find_comment_node_with_scroll(
-        synthetic_id("/a/post1", "/user/u1", "text1")
-    )
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        found = page._find_comment_node_in_recent_cards(
+            synthetic_id("/a/post-99", "/user/u999", "text999")
+        )
 
     assert found is target_node
-    assert len(fake.mouse.wheel_calls) == 4
-    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * 4
+    assert parent_node.reply_more_button.clicks == 1
+    assert fake.mouse.wheel_calls == []
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
+    record = next(
+        record for record in caplog.records
+        if getattr(record, "event", None) == "publication_source_comment_search_completed"
+    )
+    assert record.result == "found"
+    assert record.groups_scanned == dzen_page._PUBLICATION_SOURCE_MAX_CARDS
 
 
-def test_find_target_child_after_scroll_and_hidden_reply_expansion():
+def test_find_target_child_in_loaded_group_expands_hidden_reply():
     target_node = make_node(1)
     parent_node = make_node(0)
     parent_node.hidden_comment_children = [target_node]
-    fake = FakePage(
-        [FakeGroup("/a/post1", [make_node(2)])],
-        scroll_groups=[[FakeGroup("/a/post1", [parent_node])]],
-    )
+    fake = FakePage([FakeGroup("/a/post1", [parent_node])])
     page = DzenStudioPage(fake)
 
-    found = page._find_comment_node_with_scroll(
+    found = page._find_comment_node_in_recent_cards(
         synthetic_id("/a/post1", "/user/u1", "text1")
     )
 
     assert found is target_node
     assert parent_node.reply_more_button.clicks == 1
-    assert len(fake.mouse.wheel_calls) == 1
-    assert fake.waited_ms == [
-        dzen_page._REPLY_SEARCH_WAIT_MS,
-        dzen_page._REPLY_EXPANSION_POST_CLICK_WAIT_MS,
-    ]
+    assert fake.mouse.wheel_calls == []
+    assert fake.waited_ms == [dzen_page._REPLY_EXPANSION_POST_CLICK_WAIT_MS]
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
 
 
@@ -4941,7 +4958,7 @@ def test_find_target_child_loaded_initially_expands_before_first_lookup(monkeypa
     monkeypatch.setattr(page, "_expand_hidden_replies", record_expand)
     monkeypatch.setattr(page, "_find_comment_node", record_lookup)
 
-    found = page._find_comment_node_with_scroll(
+    found = page._find_comment_node_in_recent_cards(
         synthetic_id("/a/post1", "/user/u1", "text1")
     )
 
@@ -4968,7 +4985,7 @@ def test_publication_source_search_reads_comments_only_from_target_post():
     target = CountingGroup("/a/target", target_node)
     page = DzenStudioPage(FakePage([unrelated, target]))
 
-    found = page._find_comment_node_with_scroll(
+    found = page._find_comment_node_in_recent_cards(
         synthetic_id("/a/target", "/user/u1", "text1"),
         post_url="https://dzen.ru/a/target",
     )
@@ -4988,7 +5005,7 @@ def test_initial_reply_expansion_failure_logs_its_phase_and_reason(caplog, monke
     monkeypatch.setattr(page, "_expand_hidden_replies", fail_expansion)
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
         with pytest.raises(RuntimeError, match="initial reply expansion failed"):
-            page._find_comment_node_with_scroll("missing")
+            page._find_comment_node_in_recent_cards("missing")
 
     record = next(
         record for record in caplog.records
@@ -5000,12 +5017,9 @@ def test_initial_reply_expansion_failure_logs_its_phase_and_reason(caplog, monke
     assert record.candidates_checked == 0
 
 
-def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
+def test_publish_reply_finds_target_in_loaded_sample_and_restores_page_top():
     target_node = make_node(1)
-    fake = FakePage(
-        [FakeGroup("/a/post1", [make_node(0)])],
-        scroll_groups=[[FakeGroup("/a/post1", [target_node])]],
-    )
+    fake = FakePage([FakeGroup("/a/post1", [target_node])])
     fake.context.article_pages = [
         FakeArticlePage(public_roots=[FakePublicRoot(
             author="author1", author_href="/user/u1", text="text1"
@@ -5031,7 +5045,7 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
 
     page.publish_reply(target, "готовый ответ", auto_publish=True, before_submit=lambda: None)
 
-    assert len(fake.mouse.wheel_calls) == 1
+    assert fake.mouse.wheel_calls == []
     assert dzen_page._STUDIO_CONFIRM_DELAY_MS in fake.waited_ms
     assert target_node.reply_input.filled == ["готовый ответ"]
     assert target_node.reply_submit.clicks == 1
@@ -5039,13 +5053,10 @@ def test_publish_reply_finds_target_loaded_after_scroll_and_restores_page_top():
     assert fake.reload_calls == []
 
 
-def test_publish_reply_stops_after_twenty_scrolls_with_new_comments():
+def test_publish_reply_does_not_scan_new_groups_after_initial_snapshot():
     fake = FakePage(
         [FakeGroup("/a/post1", [make_node(0)])],
-        scroll_groups=[
-            [FakeGroup("/a/post1", [make_node(index)])]
-            for index in range(1, 21)
-        ],
+        scroll_groups=[[FakeGroup("/a/post2", [make_node(1)])]],
     )
     page = DzenStudioPage(fake)
     comment = Comment(
@@ -5063,8 +5074,8 @@ def test_publish_reply_stops_after_twenty_scrolls_with_new_comments():
     with pytest.raises(LookupError):
         page.publish_reply(comment, "ответ", auto_publish=True, before_submit=lambda: None)
 
-    assert len(fake.mouse.wheel_calls) == dzen_page._REPLY_SEARCH_MAX_SCROLLS
-    assert fake.waited_ms == [dzen_page._REPLY_SEARCH_WAIT_MS] * dzen_page._REPLY_SEARCH_MAX_SCROLLS
+    assert fake.mouse.wheel_calls == []
+    assert len(fake._scroll_groups) == 1
 
 
 def test_publish_reply_keeps_lookup_error_when_scroll_cleanup_fails():

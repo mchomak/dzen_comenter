@@ -51,7 +51,7 @@ _PROMOTIONAL_ARTICLE_MARKERS = (
     "посмотреть больше работ",
     "советует начать свой ремонт",
 )
-_REPLY_SEARCH_MAX_SCROLLS = 40
+_PUBLICATION_SOURCE_MAX_CARDS = 100
 _REPLY_SEARCH_WAIT_MS = 750
 _REPLY_SEARCH_SCROLL_DELTA_Y = 1_000
 _STUDIO_FEED_MAX_SCAN_PASSES = 40
@@ -2675,7 +2675,7 @@ class DzenStudioPage:
         lookup_options = {"reply_id": reply_id}
         if comment.post_url:
             lookup_options["post_url"] = comment.post_url
-        node = self._find_comment_node_with_scroll(
+        node = self._find_comment_node_in_recent_cards(
             comment.dzen_comment_id, **lookup_options
         )
         if node is None:
@@ -3582,7 +3582,7 @@ class DzenStudioPage:
         except Exception:
             return "invalid_response"
 
-    def _find_comment_node_with_scroll(
+    def _find_comment_node_in_recent_cards(
         self,
         comment_id: str,
         *,
@@ -3600,7 +3600,9 @@ class DzenStudioPage:
         groups: list[Any] = []
         phase = "initial_reply_expansion"
         try:
-            groups = self._page.query_selector_all(selectors.POST_GROUP)
+            groups = self._page.query_selector_all(selectors.POST_GROUP)[
+                :_PUBLICATION_SOURCE_MAX_CARDS
+            ]
             reply_expansion_deadline = self._expand_new_reply_groups(
                 groups,
                 processed_groups=processed_reply_expansion_groups,
@@ -3616,6 +3618,7 @@ class DzenStudioPage:
                 comment_id,
                 post_url=post_url,
                 processed_group_ids=searched_groups,
+                max_groups=_PUBLICATION_SOURCE_MAX_CARDS,
             )
             candidates_checked += pass_candidate_count
             if node is not None:
@@ -3637,59 +3640,20 @@ class DzenStudioPage:
                 )
                 return node
 
-            for scroll_attempt_count in range(1, _REPLY_SEARCH_MAX_SCROLLS + 1):
-                phase = "scroll"
-                self._page.mouse.wheel(0, _REPLY_SEARCH_SCROLL_DELTA_Y)
-                self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                phase = "reply_expansion"
-                groups = self._page.query_selector_all(selectors.POST_GROUP)
-                reply_expansion_deadline = self._expand_new_reply_groups(
-                    groups,
-                    processed_groups=processed_reply_expansion_groups,
-                    clicked_keys=reply_expansion_keys,
-                    attempt_counts=reply_expansion_attempts,
-                    deadline=reply_expansion_deadline,
-                    post_url_filter=post_url,
-                    expand_empty_groups=True,
-                )
-                phase = "lookup"
-                node, pass_candidate_count = self._find_comment_node(
-                    comment_id,
-                    post_url=post_url,
-                    processed_group_ids=searched_groups,
-                )
-                candidates_checked += pass_candidate_count
-                if node is not None:
-                    logger.info(
-                        "Dzen source comment search completed",
-                        extra={
-                            "event": "publication_source_comment_search_completed",
-                            "reply_id": reply_id,
-                            "result": "found",
-                            "scroll_attempt_count": scroll_attempt_count,
-                            "candidates_checked": candidates_checked,
-                            **self._studio_metric_fields(
-                                started_at,
-                                groups=groups,
-                                counts=(len(groups), candidates_checked, 0),
-                                groups_scanned=len(searched_groups),
-                            ),
-                        },
-                    )
-                    return node
-                phase = "scroll"
             logger.info(
                 "Dzen source comment search completed",
                 extra={
                     "event": "publication_source_comment_search_completed",
                     "reply_id": reply_id,
                     "result": "not_found",
-                    "scan_limit_reached": True,
+                    "scan_limit_reached": len(groups) >= _PUBLICATION_SOURCE_MAX_CARDS,
                     "absence_confirmed": False,
                     "failure_stage": "studio_source_comment_search",
                     "failure_reason": "source_comment_not_found",
                     "failure_type": "SourceCommentUnavailableError",
-                    "failure_description": "source comment was not found after scrolling",
+                    "failure_description": (
+                        "source comment was not found in the top Studio sample"
+                    ),
                     "scroll_attempt_count": scroll_attempt_count,
                     "candidates_checked": candidates_checked,
                     **self._studio_metric_fields(
@@ -3710,10 +3674,8 @@ class DzenStudioPage:
                     "failure_stage": "studio_source_comment_search",
                     "failure_phase": phase,
                     "failure_reason": (
-                        "scroll_exception"
-                        if phase == "scroll"
-                        else "reply_expansion_exception"
-                        if phase in {"initial_reply_expansion", "reply_expansion"}
+                        "reply_expansion_exception"
+                        if phase == "initial_reply_expansion"
                         else "lookup_exception"
                     ),
                     **_safe_lookup_exception_fields(exc),
@@ -3821,11 +3783,13 @@ class DzenStudioPage:
         *,
         post_url: str | None = None,
         processed_group_ids: set[Any] | None = None,
+        max_groups: int | None = None,
     ):
         candidates_checked = 0
         for node, post_href in self._iter_comment_nodes(
             post_url=post_url,
             processed_group_ids=processed_group_ids,
+            max_groups=max_groups,
         ):
             candidates_checked += 1
             author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
@@ -4007,10 +3971,13 @@ class DzenStudioPage:
         *,
         post_url: str | None = None,
         processed_group_ids: set[Any] | None = None,
+        max_groups: int | None = None,
     ):
         expected_post_url = _post_url(post_url or "")
         has_post_url_filter = bool(post_url)
         groups = self._page.query_selector_all(selectors.POST_GROUP)
+        if max_groups is not None:
+            groups = groups[:max_groups]
         group_identities = self._studio_group_identities(groups)
         for group, group_identity in zip(groups, group_identities):
             if processed_group_ids is not None:
