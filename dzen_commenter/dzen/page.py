@@ -535,6 +535,10 @@ class _ReplyControlTargetChangedError(RuntimeError):
         self.reason_code = reason_code
 
 
+class _ReplyExpansionDeadlineExceeded(RuntimeError):
+    """The shared hidden-reply expansion budget has expired."""
+
+
 _REPLY_CONTROL_VALIDATION_REASONS = frozenset(
     {
         "button_selector_mismatch",
@@ -571,6 +575,7 @@ _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 30 * 60_000
+_SHORT_REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
 _REPLY_EXPANSION_RENDER_TIMEOUT_MS = 2_000
 _REPLY_EXPANSION_RENDER_POLL_MS = 1_000
@@ -703,6 +708,8 @@ def _response_status(response: Any) -> int | None:
 def _publication_failure_location(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, PublicationUnconfirmedError) and isinstance(exc.__cause__, Exception):
         return _publication_failure_location(exc.__cause__)
+    if isinstance(exc, _ReplyExpansionDeadlineExceeded):
+        return "studio_source_comment_search", "reply_expansion_time_limit_reached"
     if isinstance(exc, SourceCommentUnavailableError):
         return "studio_source_comment_search", "source_comment_not_found"
     try:
@@ -973,6 +980,7 @@ class DzenStudioPage:
         scan_pass_count = 0
         stable_pass_count = 0
         scan_complete = False
+        reply_expansion_time_limit_reached = False
         reply_expansion_keys: set[Any] = set()
         reply_expansion_attempts: dict[Any, int] = {}
         reply_expansion_deadline: float | None = None
@@ -1021,10 +1029,22 @@ class DzenStudioPage:
                     if not initial_controls:
                         self._report_progress()
                         continue
+                    if (
+                        max_cards is not None
+                        and reply_expansion_deadline is not None
+                        and monotonic() >= reply_expansion_deadline
+                    ):
+                        reply_expansion_time_limit_reached = True
+                        break
                     if reply_expansion_deadline is None:
                         reply_expansion_deadline = (
                             monotonic()
-                            + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                            + (
+                                _SHORT_REPLY_EXPANSION_OPERATION_TIMEOUT_MS
+                                if max_cards is not None
+                                else _REPLY_EXPANSION_OPERATION_TIMEOUT_MS
+                            )
+                            / 1_000
                         )
                     failure_phase = "reply_group_identity"
                     page_locator = getattr(self._page, "locator", None)
@@ -1035,17 +1055,29 @@ class DzenStudioPage:
                         scope = group
                         expansion_controls = initial_controls
                     failure_phase = "reply_expansion"
-                    self._expand_hidden_replies(
-                        scope=scope,
-                        target_group=None,
-                        initial_controls=expansion_controls,
-                        clicked_keys=reply_expansion_keys,
-                        attempt_counts=reply_expansion_attempts,
-                        deadline=reply_expansion_deadline,
-                        expected_post_href=expected_post_href or None,
-                        expected_group_occurrence=expected_group_occurrence,
-                        scope_index=group_index,
-                    )
+                    try:
+                        self._expand_hidden_replies(
+                            scope=scope,
+                            target_group=None,
+                            initial_controls=expansion_controls,
+                            clicked_keys=reply_expansion_keys,
+                            attempt_counts=reply_expansion_attempts,
+                            deadline=reply_expansion_deadline,
+                            expected_post_href=expected_post_href or None,
+                            expected_group_occurrence=expected_group_occurrence,
+                            scope_index=group_index,
+                        )
+                    except _ReplyExpansionDeadlineExceeded:
+                        if max_cards is None:
+                            raise
+                        reply_expansion_time_limit_reached = True
+                        break
+                    if (
+                        max_cards is not None
+                        and monotonic() >= reply_expansion_deadline
+                    ):
+                        reply_expansion_time_limit_reached = True
+                        break
                     self._report_progress()
                 failure_phase = "feed_snapshot"
                 groups, current_counts = self._studio_feed_snapshot(
@@ -1062,6 +1094,8 @@ class DzenStudioPage:
                     stable_pass_count = 0
                 previous_counts = current_counts
                 self._report_progress()
+                if reply_expansion_time_limit_reached:
+                    break
                 if stable_pass_count == _STUDIO_FEED_STABLE_PASSES:
                     scan_complete = True
                     break
@@ -1231,6 +1265,27 @@ class DzenStudioPage:
                     "skipped_missing_link_count": skipped_missing_link_count,
                     "scan_pass_count": scan_pass_count,
                     "stable_pass_count": stable_pass_count,
+                },
+            )
+        elif reply_expansion_time_limit_reached:
+            logger.info(
+                "Dzen Studio reply expansion reached its time limit",
+                extra={
+                    "event": "studio_comments_read_incomplete",
+                    "failure_stage": "studio_feed_read",
+                    "failure_phase": "reply_expansion",
+                    "failure_reason": "reply_expansion_time_limit_reached",
+                    **self._studio_metric_fields(
+                        started_at,
+                        groups=groups,
+                        counts=previous_counts,
+                        groups_scanned=len(processed_reply_expansion_groups),
+                    ),
+                    "comments_extracted": len(comments),
+                    "skipped_missing_link_count": skipped_missing_link_count,
+                    "scan_pass_count": scan_pass_count,
+                    "stable_pass_count": stable_pass_count,
+                    "reply_expansion_incomplete": True,
                 },
             )
         else:
@@ -1403,11 +1458,13 @@ class DzenStudioPage:
             initial_controls = group.query_selector_all(
                 selectors.COMMENT_OPEN_MORE
             )
+            has_initial_controls = bool(initial_controls)
             if not initial_controls and not expand_empty_groups:
                 continue
             if initial_controls and deadline is None:
                 deadline = (
-                    monotonic() + _REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
+                    monotonic()
+                    + _SHORT_REPLY_EXPANSION_OPERATION_TIMEOUT_MS / 1_000
                 )
             if callable(page_locator):
                 scope = page_locator(selectors.POST_GROUP).nth(group_index)
@@ -1427,6 +1484,14 @@ class DzenStudioPage:
                 expected_group_occurrence=expected_group_occurrence,
                 scope_index=group_index,
             )
+            if (
+                has_initial_controls
+                and deadline is not None
+                and monotonic() >= deadline
+            ):
+                raise _ReplyExpansionDeadlineExceeded(
+                    "reply expansion reached its time limit before all controls expanded"
+                )
         return deadline
 
     def _studio_metric_fields(
@@ -1975,7 +2040,7 @@ class DzenStudioPage:
                     clicked_count=clicked_count,
                     visible_button_count=len(controls),
                 )
-                raise RuntimeError(
+                raise _ReplyExpansionDeadlineExceeded(
                     "reply expansion reached its time limit before all controls expanded"
                 )
 
@@ -3674,7 +3739,9 @@ class DzenStudioPage:
                     "failure_stage": "studio_source_comment_search",
                     "failure_phase": phase,
                     "failure_reason": (
-                        "reply_expansion_exception"
+                        "reply_expansion_time_limit_reached"
+                        if isinstance(exc, _ReplyExpansionDeadlineExceeded)
+                        else "reply_expansion_exception"
                         if phase == "initial_reply_expansion"
                         else "lookup_exception"
                     ),

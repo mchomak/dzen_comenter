@@ -674,6 +674,56 @@ def test_fetch_comments_with_card_limit_reads_only_first_hundred_cards():
     assert fake.mouse.wheel_calls == []
 
 
+def test_fetch_recent_comments_returns_visible_comments_when_expansion_budget_expires(
+    monkeypatch, caplog
+):
+    groups = []
+    elapsed_ms = 0
+    for index in range(25):
+        parent = make_node(index)
+        parent.hidden_comment_children = [make_node(index + 25)]
+        original_expand = parent.reply_more_button.on_click
+
+        def expand_and_advance(original_expand=original_expand):
+            nonlocal elapsed_ms
+            elapsed_ms += 30_000
+            original_expand()
+
+        parent.reply_more_button.on_click = expand_and_advance
+        groups.append(FakeGroup(f"/a/slow-post{index}", [parent]))
+
+    fake = FakePage(groups)
+
+    def wait_for_timeout(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        fake.waited_ms.append(timeout_ms)
+        elapsed_ms += timeout_ms
+
+    fake.wait_for_timeout = wait_for_timeout
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        comments = DzenStudioPage(fake).fetch_recent_comments(max_cards=25)
+
+    assert len(comments) == 27
+    assert {comment.text for comment in comments} >= {
+        *(f"text{index}" for index in range(25)),
+        "text25",
+        "text26",
+    }
+    incomplete = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "studio_comments_read_incomplete"
+    )
+    assert incomplete.failure_reason == "reply_expansion_time_limit_reached"
+    assert incomplete.comments_extracted == 27
+
+    elapsed_ms = 0
+    next_scan_comments = DzenStudioPage(fake).fetch_recent_comments(max_cards=25)
+    assert "text27" in {comment.text for comment in next_scan_comments}
+
+
 def test_fetch_comments_refreshes_health_progress_for_each_feed_pass():
     progress = []
     groups = [FakeGroup("/a/post1", [make_node(0)])]
@@ -4770,6 +4820,81 @@ def test_publish_reply_stops_after_first_hundred_groups_with_retryable_miss(capl
         "https://dzen.ru/a/private-post",
     ):
         assert private_value not in serialized
+
+
+def test_publish_reply_retries_when_source_expansion_budget_expires(
+    monkeypatch, caplog
+):
+    groups = []
+    elapsed_ms = 0
+    target_node = None
+    for index in range(25):
+        node = make_node(index)
+        if index == 24:
+            target_node = node
+        node.hidden_comment_children = [make_node(index + 25)]
+        original_expand = node.reply_more_button.on_click
+
+        def expand_and_advance(original_expand=original_expand):
+            nonlocal elapsed_ms
+            elapsed_ms += 30_000
+            original_expand()
+
+        node.reply_more_button.on_click = expand_and_advance
+        groups.append(FakeGroup(f"/a/slow-post{index}", [node]))
+
+    fake = FakePage(groups)
+
+    def wait_for_timeout(timeout_ms: float) -> None:
+        nonlocal elapsed_ms
+        fake.waited_ms.append(timeout_ms)
+        elapsed_ms += timeout_ms
+
+    fake.wait_for_timeout = wait_for_timeout
+    monkeypatch.setattr(dzen_page, "monotonic", lambda: elapsed_ms / 1_000)
+    page = DzenStudioPage(fake)
+    monkeypatch.setattr(page, "_verify_public_reply", lambda *args, **kwargs: False)
+    comment = Comment(
+        id=None,
+        dzen_comment_id=synthetic_id(
+            "/a/slow-post24", "/user/u24", "text24"
+        ),
+        publication_id=0,
+        author="author24",
+        text="text24",
+        parent_comment_id=None,
+        posted_at=None,
+        fetched_at=datetime.now(timezone.utc),
+        status=CommentStatus.NEW,
+    )
+    before_submit_calls = []
+
+    with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
+        with pytest.raises(RuntimeError, match="reply expansion reached its time limit"):
+            page.publish_reply(
+                comment,
+                "prepared answer",
+                auto_publish=True,
+                reply_id=73,
+                before_submit=lambda: before_submit_calls.append(True),
+            )
+
+    assert target_node is not None
+    assert target_node.reply_submit.clicks == 0
+    assert before_submit_calls == []
+    search_failure = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None)
+        == "publication_source_comment_search_failed"
+    )
+    assert search_failure.failure_reason == "reply_expansion_time_limit_reached"
+    publication_failure = next(
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "publication_action_failed"
+    )
+    assert publication_failure.failure_reason == "reply_expansion_time_limit_reached"
 
 
 def test_initial_reply_expansion_exception_logs_safely_and_propagates(caplog):
