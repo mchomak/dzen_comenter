@@ -515,7 +515,7 @@ def test_existing_public_reply_search_skips_collapse_and_uses_new_nested_control
     assert article.close_calls == 1
 
 
-@pytest.mark.parametrize("missing_kind", ["exhausted", "limit", "deadline"])
+@pytest.mark.parametrize("missing_kind", ["exhausted", "limit", "deadline", "top_level_deadline"])
 def test_public_source_unavailable_submits_once_with_marker_and_without_rescan(monkeypatch, missing_kind):
     node = make_node(0)
     root = FakePublicRoot(author="other", author_href="/user/other", text="other")
@@ -523,8 +523,12 @@ def test_public_source_unavailable_submits_once_with_marker_and_without_rescan(m
     if missing_kind == "limit":
         article.hidden_roots = [root]
         monkeypatch.setattr(dzen_page, "_PUBLIC_MAX_LOAD_MORE_CLICKS", 0)
-    elif missing_kind == "deadline":
-        root.hidden_replies = [{"author": "other", "text": "child"}]
+    elif missing_kind in {"deadline", "top_level_deadline"}:
+        if missing_kind == "deadline":
+            root.hidden_replies = [{"author": "other", "text": "child"}]
+        else:
+            article.hidden_roots = [root]
+            article.more_button.on_click = lambda: None
         clock = [0.0]
         monkeypatch.setattr(dzen_page, "monotonic", lambda: clock[0])
         monkeypatch.setattr(dzen_page, "_PUBLIC_VERIFICATION_TIMEOUT_MS", dzen_page._PUBLIC_COMMENT_WAIT_MS)
@@ -547,6 +551,42 @@ def test_public_source_unavailable_submits_once_with_marker_and_without_rescan(m
     assert unused.goto_calls == []
     assert article.close_calls == 1
     assert fake.listeners == {"request": [], "response": []}
+
+
+@pytest.mark.parametrize("exhaustion", ["exhausted", "limit", "reply_deadline", "top_level_deadline"])
+def test_prior_public_candidate_read_failure_blocks_every_source_fallback(monkeypatch, exhaustion):
+    node = make_node(0)
+    unreadable = FakePublicRoot(author="unreadable", author_href="/user/unreadable", text="unreadable")
+
+    def fail_read(_script):
+        raise RuntimeError("source read failed")
+
+    unreadable.evaluate = fail_read
+    readable = FakePublicRoot(author="other", author_href="/user/other", text="other")
+    article = FakeArticlePage(public_roots=[unreadable, readable])
+    if exhaustion == "limit":
+        article.hidden_roots = [readable]
+        monkeypatch.setattr(dzen_page, "_PUBLIC_MAX_LOAD_MORE_CLICKS", 0)
+    elif exhaustion in {"reply_deadline", "top_level_deadline"}:
+        if exhaustion == "reply_deadline":
+            readable.hidden_replies = [{"author": "other", "text": "child"}]
+        else:
+            article.hidden_roots = [readable]
+            article.more_button.on_click = lambda: None
+        clock = [0.0]
+        monkeypatch.setattr(dzen_page, "monotonic", lambda: clock[0])
+        monkeypatch.setattr(dzen_page, "_PUBLIC_VERIFICATION_TIMEOUT_MS", dzen_page._PUBLIC_COMMENT_WAIT_MS)
+        article.wait_for_timeout = lambda ms: clock.__setitem__(0, clock[0] + ms / 1_000)
+    fake, page, _ = make_publication_page(node)
+    fake.context.article_pages = [article]
+    markers = []
+    with pytest.raises(RuntimeError, match="public article source comment read failed") as exc_info:
+        page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=lambda: markers.append(True))
+    assert not isinstance(exc_info.value, (dzen_page._PublicSourceUnavailableError, PublicationUnconfirmedError))
+    assert isinstance(exc_info.value.__cause__, dzen_page._PublicSourceUnavailableError)
+    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert markers == []
+    assert article.close_calls == 1
 
 
 def test_preexisting_studio_reply_with_missing_public_source_is_unconfirmed_without_send():

@@ -3121,6 +3121,7 @@ class DzenStudioPage:
         article_page = self._page.context.new_page()
         navigation_status = None
         navigation_attempt_count = 0
+        candidate_read_failure_count = 0
         try:
             for attempt in range(1, _PUBLIC_NAVIGATION_ATTEMPTS + 1):
                 ensure_time_budget()
@@ -3275,7 +3276,6 @@ class DzenStudioPage:
             empty_polls = 0
             roots_checked = 0
             candidates_checked = 0
-            candidate_read_failure_count = 0
             branch_expansion_attempt_count = 0
             branch_expansion_click_count = 0
             branch_expansion_count = 0
@@ -3555,7 +3555,7 @@ class DzenStudioPage:
                 )
                 load_wait_count = 0
                 for _ in range(_PUBLIC_COMMENT_POLL_LIMIT):
-                    ensure_time_budget()
+                    ensure_time_budget(source_search=True)
                     load_wait_count += 1
                     article_page.wait_for_timeout(_PUBLIC_COMMENT_WAIT_MS)
                     if len(article_page.query_selector_all(selectors.ARTICLE_ROOT_COMMENT)) > previous_count:
@@ -3601,10 +3601,10 @@ class DzenStudioPage:
                     "wait_count": empty_polls,
                 },
             )
-            if candidate_read_failure_count:
-                raise RuntimeError("public article source comment read failed")
             raise _PublicSourceUnavailableError("source comment not found in public article")
-        except _PublicSourceUnavailableError:
+        except _PublicSourceUnavailableError as exc:
+            if candidate_read_failure_count:
+                raise RuntimeError("public article source comment read failed") from exc
             if navigation_status is not None and navigation_status >= 400:
                 raise RuntimeError("public article navigation failed")
             raise
