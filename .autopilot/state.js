@@ -1,76 +1,68 @@
 window.STATE =
 {
   "slug": "dzen-reply-queue-throughput",
-  "dir": "2026-10-13-dzen-reply-queue-throughput",
-  "title": "Восстановить своевременную генерацию и публикацию ответов Dzen",
+  "dir": "2026-10-13-dzen-reply-queue-throughput--wip",
+  "title": "Оптимизировать конвейер обработки комментариев Дзена",
   "mode": "full",
   "depth": "normal",
   "polish": null,
   "tier": "T2",
-  "briefFile": "2026-10-13-brief.md",
+  "briefFile": "2026-10-13-brief-02.md",
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-13T16:40:51+03:00",
-  "updatedAt": "2026-10-13T20:31:19+03:00",
-  "finishedAt": "2026-10-13T20:31:19+03:00",
+  "updatedAt": "2026-10-14T09:49:23.552+00:00",
+  "finishedAt": null,
   "stages": [
     {
       "id": "preflight",
       "status": "done",
-      "startedAt": "2026-10-13T16:40:51+03:00",
-      "finishedAt": "2026-10-13T16:41:40+03:00"
+      "startedAt": "2026-10-13T22:50:28+03:00",
+      "finishedAt": "2026-10-13T22:50:28+03:00",
+      "note": "Продолжение сборки от 2026-10-13"
     },
     {
       "id": "manifest",
       "status": "done",
-      "startedAt": "2026-10-13T16:41:40+03:00",
-      "finishedAt": "2026-10-13T16:42:14+03:00"
+      "startedAt": "2026-10-13T22:50:28+03:00",
+      "finishedAt": "2026-10-13T22:54:19+03:00"
     },
     {
       "id": "briefing",
       "status": "skipped",
-      "startedAt": "2026-10-13T16:42:14+03:00",
-      "note": "полный автомат — самобрифинг"
+      "startedAt": "2026-10-13T22:54:19+03:00",
+      "note": "полный автомат — самобрифинг; технические решения перечислены в manifest.md"
     },
     {
       "id": "spec",
       "status": "done",
-      "startedAt": "2026-10-13T16:46:51+03:00",
-      "finishedAt": "2026-10-13T17:42:32+03:00",
-      "note": "spec сверена с brief"
+      "startedAt": "2026-10-13T22:54:19+03:00",
+      "finishedAt": "2026-10-13T22:36:03.565+00:00"
     },
     {
       "id": "plan",
       "status": "done",
-      "startedAt": "2026-10-13T17:42:32+03:00",
-      "finishedAt": "2026-10-13T17:57:19+03:00",
-      "note": "4 задачи, T2, 4 последовательные волны"
+      "startedAt": "2026-10-13T22:29:32.404+00:00",
+      "finishedAt": "2026-10-13T22:36:03.565+00:00"
     },
     {
       "id": "build",
-      "status": "done",
-      "startedAt": "2026-10-13T17:57:19+03:00",
-      "finishedAt": "2026-10-13T20:31:19+03:00",
-      "note": "код R01–R06i готов; полный набор — 684 passed; production rollout подтверждён"
+      "status": "active",
+      "startedAt": "2026-10-13T22:36:03.565+00:00"
     },
     {
       "id": "review",
-      "status": "done",
-      "startedAt": "2026-10-13T18:13:49+03:00",
-      "finishedAt": "2026-10-13T20:31:19+03:00",
-      "note": "blind acceptance PASS; backup, migration 0012, health, cache cleanup and swap verified"
+      "status": "pending"
     },
     {
       "id": "final",
-      "status": "done",
-      "startedAt": "2026-10-13T20:26:00+03:00",
-      "finishedAt": "2026-10-13T20:31:19+03:00"
+      "status": "pending"
     }
   ],
   "requirements": {
-    "total": 6,
-    "done": 6,
-    "inTicket": 0,
+    "total": 14,
+    "done": 2,
+    "inTicket": 12,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -80,15 +72,28 @@ window.STATE =
     {
       "id": "01",
       "title": "Приоритет свежих generation jobs",
-      "requirements": ["R01"],
+      "requirements": [
+        "R01"
+      ],
       "blockedBy": [],
       "wave": 1,
-      "zone": ["dzen_commenter/db/repository.py", "tests/db/"],
+      "zone": [
+        "dzen_commenter/db/repository.py",
+        "tests/db/"
+      ],
       "status": "done",
       "startedAt": "2026-10-13T17:57:19+03:00",
       "finishedAt": "2026-10-13T18:15:01+03:00",
-      "files": ["dzen_commenter/db/repository.py", "tests/db/test_repository.py"],
-      "tests": {"passed": 618, "failed": 0, "skipped": 52, "scope": "full pytest suite; focused repository suite: 51 passed in isolated test DB"},
+      "files": [
+        "dzen_commenter/db/repository.py",
+        "tests/db/test_repository.py"
+      ],
+      "tests": {
+        "passed": 618,
+        "failed": 0,
+        "skipped": 52,
+        "scope": "full pytest suite; focused repository suite: 51 passed in isolated test DB"
+      },
       "commit": "b15ceca",
       "retries": 0,
       "repairs": 0,
@@ -102,35 +107,90 @@ window.STATE =
     {
       "id": "02",
       "title": "Ограниченная обработка очереди до сканирования",
-      "requirements": ["R01"],
-      "blockedBy": ["01"],
+      "requirements": [
+        "R01"
+      ],
+      "blockedBy": [
+        "01"
+      ],
       "wave": 2,
-      "zone": ["dzen_commenter/db/", "dzen_commenter/orchestrator/loop.py", "tests/db/", "tests/orchestrator/", "tests/test_migrations.py"],
+      "zone": [
+        "dzen_commenter/db/",
+        "dzen_commenter/orchestrator/loop.py",
+        "tests/db/",
+        "tests/orchestrator/",
+        "tests/test_migrations.py"
+      ],
       "status": "done",
       "startedAt": "2026-10-13T18:15:46+03:00",
       "finishedAt": "2026-10-13T19:15:29+03:00",
       "commit": "cdbeb6d",
-      "files": ["dzen_commenter/contracts/interfaces.py", "dzen_commenter/db/models.py", "dzen_commenter/db/repository.py", "dzen_commenter/db/migrations/versions/0012_ai_call_reservations.py", "dzen_commenter/orchestrator/loop.py", "tests/db/conftest.py", "tests/db/test_repository.py", "tests/orchestrator/conftest.py", "tests/orchestrator/test_loop.py", "tests/test_migrations.py"],
-      "tests": {"passed": 681, "failed": 0, "skipped": 0, "scope": "full suite on disposable PostgreSQL; DB/orchestrator focused suites: 98 passed; Ruff scoped passed"},
+      "files": [
+        "dzen_commenter/contracts/interfaces.py",
+        "dzen_commenter/db/models.py",
+        "dzen_commenter/db/repository.py",
+        "dzen_commenter/db/migrations/versions/0012_ai_call_reservations.py",
+        "dzen_commenter/orchestrator/loop.py",
+        "tests/db/conftest.py",
+        "tests/db/test_repository.py",
+        "tests/orchestrator/conftest.py",
+        "tests/orchestrator/test_loop.py",
+        "tests/test_migrations.py"
+      ],
+      "tests": {
+        "passed": 681,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "full suite on disposable PostgreSQL; DB/orchestrator focused suites: 98 passed; Ruff scoped passed"
+      },
       "retries": 0,
       "repairs": 3,
-      "repairFindings": ["Quota originally checked once per job; shortening retry bypassed the limit.", "In-memory cross-cycle accounting lost extra shortening calls after restart; ticket expanded to a durable repository journal and migration.", "max(ledger_count, legacy_reply_count) undercounts a failed new call alongside a legacy Reply; migration now backfills rolling-hour legacy timestamps and runtime counts the ledger only.", "Quota-race release coverage initially used only the in-memory fake; added a PostgreSQL regression for valid and stale claim tokens."],
+      "repairFindings": [
+        "Quota originally checked once per job; shortening retry bypassed the limit.",
+        "In-memory cross-cycle accounting lost extra shortening calls after restart; ticket expanded to a durable repository journal and migration.",
+        "max(ledger_count, legacy_reply_count) undercounts a failed new call alongside a legacy Reply; migration now backfills rolling-hour legacy timestamps and runtime counts the ledger only.",
+        "Quota-race release coverage initially used only the in-memory fake; added a PostgreSQL regression for valid and stale claim tokens."
+      ],
       "handoffs": 0,
-      "concerns": ["На rollout остановить старый worker до migration 0012 и запускать новую версию только после успешной миграции; старый и новый worker не должны пересекаться.", "Rollback к старому коду в течение часа после новых model calls теряет ledger-only расход квоты; перед rollback дождаться окна или сохранить учёт квоты.", "Глобальный ruff check . выявляет две не связанные с задачей ошибки в .autopilot/sync.py и tests/dzen/test_dzen_page.py; Ruff для изменённых файлов прошёл."]
+      "concerns": [
+        "На rollout остановить старый worker до migration 0012 и запускать новую версию только после успешной миграции; старый и новый worker не должны пересекаться.",
+        "Rollback к старому коду в течение часа после новых model calls теряет ledger-only расход квоты; перед rollback дождаться окна или сохранить учёт квоты.",
+        "Глобальный ruff check . выявляет две не связанные с задачей ошибки в .autopilot/sync.py и tests/dzen/test_dzen_page.py; Ruff для изменённых файлов прошёл."
+      ]
     },
     {
       "id": "03",
       "title": "Частый свежий и периодический полный скан Studio",
-      "requirements": ["R01"],
-      "blockedBy": ["02"],
+      "requirements": [
+        "R01"
+      ],
+      "blockedBy": [
+        "02"
+      ],
       "wave": 3,
-      "zone": ["dzen_commenter/dzen/page.py", "dzen_commenter/orchestrator/loop.py", "tests/dzen/", "tests/orchestrator/"],
+      "zone": [
+        "dzen_commenter/dzen/page.py",
+        "dzen_commenter/orchestrator/loop.py",
+        "tests/dzen/",
+        "tests/orchestrator/"
+      ],
       "status": "done",
       "startedAt": "2026-10-13T19:16:24+03:00",
       "finishedAt": "2026-10-13T19:43:19+03:00",
       "commit": "58c1c41",
-      "files": ["dzen_commenter/dzen/page.py", "dzen_commenter/orchestrator/loop.py", "tests/dzen/test_dzen_page.py", "tests/orchestrator/conftest.py", "tests/orchestrator/test_loop.py"],
-      "tests": {"passed": 684, "failed": 0, "skipped": 0, "scope": "full suite on disposable PostgreSQL; focused Dzen/orchestrator suite: 214 passed; functional and craft review passed"},
+      "files": [
+        "dzen_commenter/dzen/page.py",
+        "dzen_commenter/orchestrator/loop.py",
+        "tests/dzen/test_dzen_page.py",
+        "tests/orchestrator/conftest.py",
+        "tests/orchestrator/test_loop.py"
+      ],
+      "tests": {
+        "passed": 684,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "full suite on disposable PostgreSQL; focused Dzen/orchestrator suite: 214 passed; functional and craft review passed"
+      },
       "retries": 0,
       "repairs": 0,
       "repairFindings": [],
@@ -139,23 +199,194 @@ window.STATE =
     {
       "id": "04",
       "title": "Отправка и production rollout",
-      "requirements": ["R02", "R03", "R04", "R05", "R06i"],
-      "blockedBy": ["01", "02", "03"],
+      "requirements": [
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06i"
+      ],
+      "blockedBy": [
+        "01",
+        "02",
+        "03"
+      ],
       "wave": 4,
-      "zone": ["production host / release operations"],
+      "zone": [
+        "production host / release operations"
+      ],
       "status": "done",
       "startedAt": "2026-10-13T19:44:52+03:00",
       "finishedAt": "2026-10-13T20:31:19+03:00",
       "commit": "58c1c41",
-      "tests": {"passed": 0, "failed": 0, "skipped": 0, "scope": "production rollout: app healthy, fresh bot heartbeat, admin HTTP 200; migration 0012 applied; PostgreSQL volume preserved"},
+      "tests": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "production rollout: app healthy, fresh bot heartbeat, admin HTTP 200; migration 0012 applied; PostgreSQL volume preserved"
+      },
       "retries": 0,
       "repairs": 0,
       "repairFindings": [],
       "handoffs": 0
+    },
+    {
+      "id": "05",
+      "title": "Ограниченное окно и очередь публикаций",
+      "requirements": [
+        "R01",
+        "R01.3",
+        "R01.4",
+        "R01.5",
+        "G03",
+        "G04",
+        "G05",
+        "A15"
+      ],
+      "blockedBy": [
+        "01",
+        "02"
+      ],
+      "wave": 3,
+      "zone": [
+        "dzen_commenter/db/",
+        "dzen_commenter/contracts/",
+        "tests/db/",
+        "tests/contracts/ except test_foundation.py"
+      ],
+      "status": "done",
+      "commit": "1e0294f",
+      "tests": {
+        "passed": 702,
+        "failed": 0,
+        "skipped": 0,
+        "scope": "repair 1e0294f; regression failed before fix and passed after; DB/contracts 93 passed; independent repair tester PASS: 64 PostgreSQL tests; full suite 702 passed; manifest/spec repair review clean; non-blocking craft concern recorded"
+      },
+      "retries": 0,
+      "repairs": 1,
+      "repairFindings": [
+        "Addressed in 1e0294f: saved publication candidates receive free slots before queued generation retries."
+      ],
+      "handoffs": 0,
+      "startedAt": "2026-10-13T22:49:57.653+00:00",
+      "finishedAt": "2026-10-14T10:21:00+00:00"
+    },
+    {
+      "id": "06",
+      "title": "Настраиваемый timeout AI-запроса",
+      "requirements": [
+        "R01",
+        "R01.6",
+        "R01.7",
+        "A01"
+      ],
+      "blockedBy": [],
+      "wave": 3,
+      "zone": [
+        "dzen_commenter/config/",
+        "dzen_commenter/ai/",
+        ".env.example",
+        "tests/config/",
+        "tests/ai/",
+        "tests/contracts/test_foundation.py"
+      ],
+      "status": "done",
+      "commit": "6cbaa3e",
+      "tests": {
+        "passed": 638,
+        "failed": 0,
+        "skipped": 63,
+        "scope": "clean commit snapshot; full pytest suite and scoped Ruff passed; independent project tester PASS; manifest/spec review clean; one non-blocking craft test-coverage concern recorded"
+      },
+      "retries": 1,
+      "repairs": 0,
+      "repairFindings": [],
+      "handoffs": 0,
+      "startedAt": "2026-10-13T22:49:57.653+00:00",
+      "finishedAt": "2026-10-14T10:21:00+00:00"
+    },
+    {
+      "id": "07",
+      "title": "Сквозной цикл со Studio short scan",
+      "requirements": [
+        "R01",
+        "R01.1",
+        "R01.2",
+        "R01.3",
+        "R01.6",
+        "G01",
+        "G02",
+        "G04",
+        "A08",
+        "A12",
+        "A13",
+        "A15",
+        "R01.7",
+        "A02",
+        "A16"
+      ],
+      "blockedBy": [
+        "05",
+        "06"
+      ],
+      "wave": 4,
+      "zone": [
+        "dzen_commenter/orchestrator/",
+        "dzen_commenter/dzen/",
+        "tests/orchestrator/",
+        "tests/dzen/"
+      ],
+      "status": "done",
+      "commit": "d0ff669",
+      "tests": {
+        "passed": 647,
+        "failed": 0,
+        "skipped": 64,
+        "scope": "orchestrator+dzen 223 passed; independent fake-only tester 214 passed; full pytest 647 passed/64 skipped without TEST_DATABASE_URL; Ruff and manifest/spec review passed"
+      },
+      "retries": 0,
+      "repairs": 0,
+      "repairFindings": [],
+      "handoffs": 0,
+      "startedAt": "2026-10-14T10:21:00+00:00",
+      "finishedAt": "2026-10-14T10:47:22+00:00"
+    },
+    {
+      "id": "08",
+      "title": "Push, безопасная выкладка и production оценка",
+      "requirements": [
+        "R02",
+        "R05",
+        "R06i",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "A03",
+        "A04",
+        "A11"
+      ],
+      "blockedBy": [
+        "05",
+        "06",
+        "07"
+      ],
+      "wave": 5,
+      "zone": [
+        "production host / release operations"
+      ],
+      "status": "in-progress",
+      "retries": 0,
+      "repairs": 0,
+      "repairFindings": [],
+      "handoffs": 0,
+      "startedAt": "2026-10-14T10:48:56+00:00"
     }
   ],
   "singlePass": null,
-  "tests": {"passed": 684, "failed": 0, "skipped": 0, "scope": "Final full pytest suite against disposable PostgreSQL; 70.42s"},
+  "tests": null,
   "debt": {
     "placeholders": [],
     "assumptions": [
@@ -169,44 +400,23 @@ window.STATE =
   },
   "additions": [],
   "coverage": {
-    "status": "PASS",
-    "findings": 2,
-    "resolved": 2,
-    "deferred": 0,
-    "items": [
-      {
-        "finding": "Изначальный brief не перечислял рекомендации из диагностики, которые просили реализовать.",
-        "action": "Добавлен раздел с краткими результатами диагностики и рекомендациями; повторная независимая сверка brief ↔ spec вернула PASS."
-      },
-      {
-        "finding": "После расширения Ticket 02 interfaces.md всё ещё запрещал миграции.",
-        "action": "Контракт обновлён: разрешена только аддитивная миграция журнала AI-квоты; независимая повторная сверка brief/spec/manifest/ticket/interfaces вернула PASS."
-      }
-    ],
-    "followupCheck": {
-      "status": "PASS",
-      "findings": 0,
-      "scope": "brief, spec, manifest, ticket 02, interfaces после durable-quota expansion",
-      "reviewer": "coverage_check_main_brief_v3"
-    }
+    "found": 5,
+    "fixed": 5,
+    "deferred": 0
   },
   "concerns": [
     "Снято: равные timestamps имеют одинаковую свежесть; порядок между такими заданиями не влияет на требование приоритета свежих комментариев.",
+    "Ticket 06, non-blocking craft concern: tests/ai/test_ai_provider.py:122 inspects configured timeout but does not simulate an HTTP request timing out and reaching generation failure handling.",
+    "Ticket 05, non-blocking craft concern: tests/db/test_repository.py:1285 checks a retry stays waiting after first reconciliation; a follow-up test could free a slot, reconcile again, and prove it remains waiting.",
+    "Ticket 07, non-blocking craft concerns: tests/orchestrator/test_loop.py:121 attaches its ordering callback to obsolete fetch_comments instead of fetch_recent_comments; another cycle-level test could combine exhausted quota, a saved publication, and queued generation to prove publication continues while generation waits.",
     "В отчёт: PostgreSQL-тесты claims не проверяют одновременный захват несколькими workers; production сейчас использует один worker, перед масштабированием добавить concurrent regression.",
     "Закрыто при rollout: старый worker остановлен до миграции 0012, новый запущен только после её успеха.",
     "В отчёт: rollback на код до ledger в течение часа после новых AI-вызовов может потерять учёт ledger-only вызовов; перед rollback дождаться часового окна или сохранить учёт квоты.",
     "В отчёт: полный Ruff check имеет ранее существовавшие ошибки вне изменённых файлов; Ruff для затронутых production/orchestrator файлов прошёл."
   ],
   "reviewers": {
-    "manifestSpec": "/root/review_ms",
+    "manifestSpec": "/root/g2_ship",
     "craft": "/root/review_craft"
   },
-  "blind": {
-    "status": "PASS",
-    "findings": 0,
-    "resolved": 0,
-    "deferred": 0,
-    "summary": "Сверка с пользовательским brief: все требования реализованы, drift не найден. Blind checker запустил 10 безопасных offline-сценариев, 10 passed; он не запускал PostgreSQL integration suite и live Dzen browser. Полный suite отдельно запущен оркестратором на disposable PostgreSQL: 684 passed, 0 failed, 0 skipped.",
-    "items": []
-  }
+  "blind": null
 }
