@@ -1,7 +1,7 @@
 window.STATE =
 {
   "slug": "dzen-reply-queue-throughput",
-  "dir": "2026-10-13-dzen-reply-queue-throughput--wip",
+  "dir": "2026-10-13-dzen-reply-queue-throughput",
   "title": "Оптимизировать конвейер обработки комментариев Дзена",
   "mode": "full",
   "depth": "normal",
@@ -11,8 +11,8 @@ window.STATE =
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
   "startedAt": "2026-10-13T16:40:51+03:00",
-  "updatedAt": "2026-10-14T13:43:15+00:00",
-  "finishedAt": null,
+  "updatedAt": "2026-10-14T13:45:00+00:00",
+  "finishedAt": "2026-10-14T13:45:00+00:00",
   "stages": [
     {
       "id": "preflight",
@@ -54,13 +54,17 @@ window.STATE =
     },
     {
       "id": "review",
-      "status": "active",
+      "status": "done",
       "startedAt": "2026-10-14T11:33:38+00:00",
-      "note": "Tickets 09–10 and craft review PASS; blind acceptance PASS; Ticket 08 evidence push/re-review in progress."
+      "note": "Tickets 08–10 PASS; craft review clean; independent brief-only acceptance PASS. The 30-item capacity assessment remains preliminary until 24 hours of observation.",
+      "finishedAt": "2026-10-14T13:45:00+00:00"
     },
     {
       "id": "final",
-      "status": "pending"
+      "status": "done",
+      "startedAt": "2026-10-14T13:32:44+00:00",
+      "finishedAt": "2026-10-14T13:45:00+00:00",
+      "note": "Blind acceptance and production evidence finalized; 44c29b8 deployed, evidence pushed, dashboard frozen."
     }
   ],
   "requirements": {
@@ -382,29 +386,30 @@ window.STATE =
       "zone": [
         "production host / release operations"
       ],
-      "status": "in-progress",
+      "status": "done",
       "retries": 1,
       "repairs": 3,
       "repairFindings": [
         "Первый независимый тестер не смог перепроверить production backup/container/SQL: результаты были только сводным текстом, а SSH banner timeout не дал доступа. Добавлен durable sanitized evidence report с точным определением active window и повторной read-only проверкой.",
         "Повторный тестер не нашёл доказательства остановки старого worker до build и сравнения volumes. Добавлена обезличенная последовательность shell-history операций, timestamped backup/image/container metadata, прежний pre/post PostgreSQL ID и creation times существующих volumes; история не хранит точную секунду stop.",
-        "Final independent re-review found the corrected production evidence/ticket report were uncommitted; committing and pushing them before re-review."
+        "Final independent re-review found the corrected production evidence/ticket report were uncommitted; committing and pushing them before re-review.",
+        "Initial final re-review at 44c29b8 found corrected production evidence unpushed; documentation commit c956834 was pushed and passed re-review."
       ],
       "handoffs": 0,
       "startedAt": "2026-10-14T10:48:56+00:00",
-      "finishedAt": null,
-      "commit": "4cd5534",
+      "finishedAt": "2026-10-14T13:45:00+00:00",
+      "commit": "44c29b8",
       "files": [
-        ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/tickets/08-push-deploy-and-production-check.md",
-        ".autopilot/2026-10-13-dzen-reply-queue-throughput--wip/production-evidence-2026-10-14.md"
+        ".autopilot/2026-10-13-dzen-reply-queue-throughput/tickets/08-push-deploy-and-production-check.md",
+        ".autopilot/2026-10-13-dzen-reply-queue-throughput/production-evidence-2026-10-14.md"
       ],
       "tests": {
-        "passed": 0,
-        "failed": 1,
+        "passed": 1,
+        "failed": 0,
         "skipped": 0,
-        "scope": "Final evidence re-review: FAIL only because updated production evidence and ticket artifact were not pushed yet."
+        "scope": "Independent Ticket 08 re-review PASS at c956834; corrected Moscow-local production evidence committed and pushed."
       },
-      "note": "Final production evidence is corrected for Moscow-local timestamps; push the updated run artifacts and rerun the independent check."
+      "note": "Independent Ticket 08 tester PASS at c956834. Initial re-review found the updated evidence unpushed; it was committed, pushed, and re-verified."
     },
     {
       "id": "09",
