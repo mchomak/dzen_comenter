@@ -1,6 +1,8 @@
 # ADR-0026 — Public reply pagination and unconfirmed Studio submission
 - Status: Accepted
 
+The send-order and Studio reply-visibility policy below is superseded by ADR-0027. Repeated public reply pagination remains in use for post-submit confirmation.
+
 ## Context
 
 Public article reply controls can load successive pages of children. A single click per root left a Studio-visible source hidden on the public page and blocked a saved reply before submission. The user explicitly requested repeated expansion and submission through Studio when public source search is exhausted.
