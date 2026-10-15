@@ -554,7 +554,7 @@ def test_public_source_unavailable_submits_once_with_marker_and_without_rescan(m
 
 
 @pytest.mark.parametrize("exhaustion", ["exhausted", "limit", "reply_deadline", "top_level_deadline"])
-def test_prior_public_candidate_read_failure_blocks_every_source_fallback(monkeypatch, exhaustion):
+def test_prior_public_candidate_read_failure_is_unconfirmed_after_send(monkeypatch, exhaustion):
     node = make_node(0)
     unreadable = FakePublicRoot(author="unreadable", author_href="/user/unreadable", text="unreadable")
 
@@ -580,16 +580,16 @@ def test_prior_public_candidate_read_failure_blocks_every_source_fallback(monkey
     fake, page, _ = make_publication_page(node)
     fake.context.article_pages = [article]
     markers = []
-    with pytest.raises(RuntimeError, match="public article source comment read failed") as exc_info:
+    with pytest.raises(PublicationUnconfirmedError) as exc_info:
         page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=lambda: markers.append(True))
-    assert not isinstance(exc_info.value, (dzen_page._PublicSourceUnavailableError, PublicationUnconfirmedError))
-    assert isinstance(exc_info.value.__cause__, dzen_page._PublicSourceUnavailableError)
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
-    assert markers == []
+    assert "public article source comment read failed" in str(exc_info.value.__cause__)
+    assert isinstance(exc_info.value.__cause__.__cause__, dzen_page._PublicSourceUnavailableError)
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
+    assert markers == [True]
     assert article.close_calls == 1
 
 
-def test_preexisting_studio_reply_with_missing_public_source_is_unconfirmed_without_send():
+def test_studio_own_reply_is_ignored_with_missing_public_source():
     node = make_node(0)
     node.published_replies.append({"author": "Configured Bot", "text": "reply"})
     fake, page, _ = make_publication_page(node)
@@ -598,8 +598,8 @@ def test_preexisting_studio_reply_with_missing_public_source_is_unconfirmed_with
     markers = []
     with pytest.raises(PublicationUnconfirmedError, match="source_comment_not_found"):
         page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=lambda: markers.append(True))
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
-    assert markers == []
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
+    assert markers == [True]
     assert article.close_calls == 1
 
 
@@ -615,11 +615,11 @@ def test_public_source_fallback_marker_failure_prevents_send():
     with pytest.raises(RuntimeError, match="marker unavailable"):
         page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=fail_marker)
     assert node.reply_submit.clicks == 0
-    assert article.close_calls == 1
+    assert fake.context.new_page_calls == article.close_calls == 0
 
 
 @pytest.mark.parametrize("failure", ["http", "branch_click", "loading_deadline", "source_read"])
-def test_technical_public_preflight_failures_do_not_allow_fallback(monkeypatch, failure):
+def test_technical_public_verification_failures_are_unconfirmed_after_send(monkeypatch, failure):
     node = make_node(0)
     root = FakePublicRoot(author="other", author_href="/user/other", text="other")
     article = FakeArticlePage(public_roots=[root])
@@ -646,11 +646,11 @@ def test_technical_public_preflight_failures_do_not_allow_fallback(monkeypatch, 
     fake, page, _ = make_publication_page(node)
     fake.context.article_pages = [article]
     markers = []
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(PublicationUnconfirmedError) as exc_info:
         page.publish_reply(page.fetch_comments()[0], "reply", auto_publish=True, before_submit=lambda: markers.append(True))
-    assert not isinstance(exc_info.value, (PublicationUnconfirmedError, dzen_page._PublicSourceUnavailableError))
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
-    assert markers == []
+    assert "failure_stage=" in str(exc_info.value)
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
+    assert markers == [True]
     assert article.close_calls == 1
 
 
@@ -3819,16 +3819,11 @@ def test_parent_comment_id_always_none():
         assert c.parent_comment_id is None
 
 
-# Publication confirmation uses the source thread in Studio and the public article.
+# Studio selects the source; only the public article confirms the reply.
 def make_publication_page(node, *, article=None, bot_name="Configured Bot"):
     fake = FakePage([FakeGroup("/a/post1", [node])])
     article = article or FakeArticlePage(public_roots=[public_root_for(node)])
-    preflight = FakeArticlePage(public_roots=[FakePublicRoot(
-        author=node._children[selectors.COMMENT_AUTHOR_TEXT].inner_text(),
-        author_href=node._children[selectors.COMMENT_AUTHOR_LINK].get_attribute("href"),
-        text=node._children[selectors.COMMENT_TEXT].inner_text(),
-    )])
-    fake.context.article_pages = [preflight, article]
+    fake.context.article_pages = [article]
     return fake, DzenStudioPage(fake, bot_account_name_provider=lambda: bot_name), article
 
 
@@ -3836,12 +3831,7 @@ def test_publish_reply_targets_matching_node_without_reloading_studio():
     first, target_node = make_node(0), make_node(1)
     fake = FakePage([FakeGroup("/a/post1", [first, target_node])])
     article = FakeArticlePage(public_roots=[public_root_for(target_node)])
-    fake.context.article_pages = [
-        FakeArticlePage(public_roots=[FakePublicRoot(
-            author="author1", author_href="/user/u1", text="text1"
-        )]),
-        article,
-    ]
+    fake.context.article_pages = [article]
     page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
     comment = page.fetch_comments()[1]
     target_node.reply_submit.on_click = lambda: target_node.published_replies.append(
@@ -3854,7 +3844,6 @@ def test_publish_reply_targets_matching_node_without_reloading_studio():
     assert target_node.reply_input.filled == ["мой ответ"]
     assert first.reply_submit.clicks == 0
     assert fake.reload_calls == []
-    assert dzen_page._STUDIO_CONFIRM_DELAY_MS in fake.waited_ms
     assert article.goto_calls == [("https://dzen.ru/a/post1", "commit")]
     assert article.goto_timeouts == [dzen_page._PUBLIC_NAVIGATION_TIMEOUT_MS]
     assert article.scroll_calls == 1
@@ -3880,7 +3869,7 @@ def test_domeo_author_identity_confirms_both_pages():
     assert fake.reload_calls == []
 
 
-def test_auto_publication_logs_both_confirmations_without_reply_text(caplog):
+def test_auto_publication_logs_network_outcome_and_public_confirmation_without_reply_text(caplog):
     node = make_node(0)
     fake, page, _ = make_publication_page(
         node,
@@ -3899,8 +3888,13 @@ def test_auto_publication_logs_both_confirmations_without_reply_text(caplog):
 
     records = [record for record in caplog.records if record.name == log.name]
     events = [record.event for record in records]
-    assert events.index("publication_studio_visibility_check") < events.index("publication_article_check_started")
+    assert "publication_studio_visibility_check" not in events
+    assert "publication_public_preflight_started" not in events
+    assert events.index("publication_send_click_attempt") < events.index("publication_acknowledgment_wait_completed") < events.index("publication_article_check_started")
     assert events.index("publication_article_reply_found") < events.index("publication_confirmed")
+    acknowledgment = next(record for record in records if record.event == "publication_acknowledgment_wait_completed")
+    assert acknowledgment.acknowledged is False
+    assert acknowledgment.response_outcome == "missing_request"
     assert all(not hasattr(record, "comment_id") for record in records)
     assert all(record.reply_id == 73 for record in records if hasattr(record, "reply_id"))
     search = next(
@@ -4010,10 +4004,9 @@ def test_send_button_still_visible_does_not_trigger_second_click():
     node = make_node(0)
     node.reply_submit.hide_on_click = False
     fake, page, article = make_publication_page(node)
-    with pytest.raises(PublicationUnconfirmedError, match="publication not confirmed"):
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
     assert node.reply_submit.clicks == 1
-    assert article.goto_calls == []
+    assert len(article.goto_calls) == 1
     assert fake.listeners == {"request": [], "response": []}
 
 
@@ -4042,7 +4035,7 @@ def test_submit_marker_is_saved_before_click():
 
 def test_submit_marker_failure_prevents_click():
     node = make_node(0)
-    _, page, _ = make_publication_page(node)
+    fake, page, _ = make_publication_page(node)
 
     def marker_failure():
         raise RuntimeError("marker unavailable")
@@ -4055,7 +4048,8 @@ def test_submit_marker_failure_prevents_click():
             before_submit=marker_failure,
         )
 
-    assert node.reply_submit.clicks == 0
+    assert node.reply_submit.clicks == fake.context.new_page_calls == 0
+    assert fake.listeners == {"request": [], "response": []}
 
 
 def test_missing_submit_marker_prevents_click():
@@ -4068,38 +4062,35 @@ def test_missing_submit_marker_prevents_click():
     assert node.reply_submit.clicks == 0
 
 
-def test_public_verification_deadline_prevents_submit(monkeypatch):
+def test_public_verification_deadline_is_unconfirmed_after_submit(monkeypatch):
     node = make_node(0)
     _, page, _ = make_publication_page(node)
     ticks = iter((0, dzen_page._PUBLIC_VERIFICATION_TIMEOUT_MS / 1_000))
     monkeypatch.setattr(dzen_page, "monotonic", lambda: next(ticks))
 
-    with pytest.raises(RuntimeError, match="verification time limit reached"):
+    with pytest.raises(PublicationUnconfirmedError, match="verification_timeout"):
         page.publish_reply(
             page.fetch_comments()[0], "мой ответ", auto_publish=True,
             before_submit=lambda: None,
         )
 
-    assert node.reply_submit.clicks == 0
+    assert node.reply_submit.clicks == 1
 
 
 def test_publication_lease_exceeds_explicit_wait_budget():
-    polls = dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS // dzen_page._REPLY_SEARCH_WAIT_MS
-    thread_checks = 3 + polls * 2
     wait_budget_ms = (
-        2 * dzen_page._PUBLIC_VERIFICATION_TIMEOUT_MS
-        + thread_checks * dzen_page._REPLY_EXPANSION_TIMEOUT_MS
-        + 2 * dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS
+        dzen_page._SHORT_REPLY_EXPANSION_OPERATION_TIMEOUT_MS
+        + dzen_page._PUBLIC_VERIFICATION_TIMEOUT_MS
+        + dzen_page._REPLY_SUBMIT_ACK_TIMEOUT_MS
         + dzen_page._REPLY_SUBMIT_BUTTON_TIMEOUT_MS
     )
     lease_ms = PostgresCommentRepository._PUBLICATION_CLAIM_LEASE.total_seconds() * 1_000
-
     assert lease_ms > wait_budget_ms
 
 
-def test_accepted_create_response_without_studio_reply_does_not_confirm():
+def test_accepted_create_response_without_public_reply_does_not_confirm():
     node = make_node(0)
-    fake, page, article = make_publication_page(node)
+    fake, page, article = make_publication_page(node, article=FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")]))
     reply_text = "private reply"
 
     class Request:
@@ -4132,7 +4123,7 @@ def test_accepted_create_response_without_studio_reply_does_not_confirm():
     assert "private-token" not in str(exc_info.value)
     assert reply_text not in str(exc_info.value)
     assert node.reply_submit.clicks == 1
-    assert article.goto_calls == []
+    assert len(article.goto_calls) == 1
     assert fake.listeners == {"request": [], "response": []}
 
 
@@ -4151,7 +4142,7 @@ def test_create_response_outcome_is_diagnostic_not_publication_proof(
     status, created, expected_outcome
 ):
     node = make_node(0)
-    fake, page, article = make_publication_page(node)
+    fake, page, article = make_publication_page(node, article=FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")]))
 
     class Request:
         method = "POST"
@@ -4181,14 +4172,14 @@ def test_create_response_outcome_is_diagnostic_not_publication_proof(
     else:
         assert f"creation_outcome={expected_outcome}" in str(exc_info.value)
     assert "private-token" not in str(exc_info.value)
-    assert article.goto_calls == []
+    assert len(article.goto_calls) == (0 if expected_outcome == "non_2xx" else 1)
     assert node.reply_submit.clicks == 1
 
 
 def test_draft_does_not_submit_or_open_article():
     node = make_node(0)
     fake, page, article = make_publication_page(node)
-    page.publish_reply(page.fetch_comments()[0], "draft", auto_publish=False)
+    page.publish_reply(page.fetch_comments()[0], "draft", auto_publish=False, before_submit=lambda: pytest.fail("draft must not mark submit"))
     assert node.reply_button.clicks == 1
     assert node.reply_input.filled == ["draft"]
     assert node.reply_submit.clicks == 0
@@ -4198,38 +4189,37 @@ def test_draft_does_not_submit_or_open_article():
 
 def test_click_alone_does_not_confirm_publication():
     node = make_node(0)
-    fake, page, article = make_publication_page(node)
+    fake, page, article = make_publication_page(node, article=FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")]))
     with pytest.raises(RuntimeError, match="not confirmed"):
         page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
     assert node.reply_submit.clicks == 1
-    assert article.goto_calls == []
+    assert len(article.goto_calls) == 1
     assert fake.reload_calls == []
 
 
 def test_studio_reply_from_wrong_author_does_not_confirm():
     node = make_node(0)
-    fake, page, article = make_publication_page(node)
+    fake, page, article = make_publication_page(node, article=FakeArticlePage(public_roots=[public_root_for(node, reply_text="other")]))
     node.reply_submit.on_click = lambda: node.published_replies.append(
         {"author": "Another Author", "text": "мой ответ"}
     )
     with pytest.raises(RuntimeError, match="not confirmed"):
         page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-    assert article.goto_calls == []
+    assert len(article.goto_calls) == 1
     assert fake.reload_calls == []
 
 
-def test_studio_reply_can_appear_after_delay_without_reload():
+def test_unreadable_studio_own_replies_do_not_block_public_confirmation():
     node = make_node(0)
     fake, page, article = make_publication_page(node)
-    def hydrate(timeout_ms):
-        if timeout_ms == dzen_page._STUDIO_CONFIRM_DELAY_MS:
-            node.published_replies.append({"author": "Configured Bot", "text": "мой ответ"})
-    fake.on_wait_timeout = hydrate
-
-    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-
+    comment = page.fetch_comments()[0]
+    def unreadable(*args, **kwargs):
+        raise AssertionError("Studio own replies must not be inspected")
+    node.evaluate = unreadable
+    page.publish_reply(comment, "мой ответ", auto_publish=True, before_submit=lambda: None)
     assert node.reply_submit.clicks == 1
     assert article.close_calls == 1
+    assert node.published_replies == []
     assert fake.reload_calls == []
 
 
@@ -4435,11 +4425,11 @@ def test_preexisting_studio_reply_still_requires_public_verification():
     with pytest.raises(RuntimeError, match="not confirmed"):
         page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
 
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
     assert article.close_calls == 1
 
 
-def test_preexisting_studio_and_public_reply_skips_duplicate_send():
+def test_studio_and_public_own_replies_are_not_pre_submit_guards():
     node = make_node(0)
     node.published_replies.append({"author": "Configured Bot", "text": "мой ответ"})
     fake, page, article = make_publication_page(node)
@@ -4447,12 +4437,12 @@ def test_preexisting_studio_and_public_reply_skips_duplicate_send():
 
     page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
 
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
     assert article.close_calls == 1
     assert fake.reload_calls == []
 
 
-def test_public_reply_preflight_prevents_duplicate_when_studio_loses_reply():
+def test_public_article_is_only_opened_after_send():
     node = make_node(0)
     fake, page, article = make_publication_page(node)
     fake.context.article_pages = [article]
@@ -4460,16 +4450,16 @@ def test_public_reply_preflight_prevents_duplicate_when_studio_loses_reply():
 
     page.publish_reply(comment, "мой ответ", auto_publish=True, reply_id=73, before_submit=lambda: None)
 
-    assert node.reply_button.clicks == 0
-    assert node.reply_submit.clicks == 0
-    assert fake.listeners == {}
+    assert node.reply_button.clicks == 1
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
     assert article.goto_calls == [("https://dzen.ru/a/post1", "commit")]
     assert article.goto_timeouts == [dzen_page._PUBLIC_NAVIGATION_TIMEOUT_MS]
     assert article.close_calls == 1
     assert fake.reload_calls == []
 
 
-def test_public_preflight_waits_for_delayed_reply_before_submit():
+def test_public_verification_waits_for_delayed_reply_after_submit():
     node = make_node(0)
     public_root = public_root_for(node)
     public_root.replies.clear()
@@ -4492,11 +4482,11 @@ def test_public_preflight_waits_for_delayed_reply_before_submit():
 
     assert elapsed_ms > 2_000
     assert elapsed_ms <= dzen_page._PUBLIC_PREFLIGHT_POLL_LIMIT * dzen_page._PUBLIC_COMMENT_WAIT_MS
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
 
 
 @pytest.mark.parametrize("failure_mode", ["missing_root", "read_error"])
-def test_public_preflight_failure_polls_stay_bounded(failure_mode):
+def test_public_verification_failure_polls_stay_bounded(failure_mode):
     node = make_node(0)
     public_root = public_root_for(node)
     public_root.replies.clear()
@@ -4518,18 +4508,11 @@ def test_public_preflight_failure_polls_stay_bounded(failure_mode):
     fake, page, _ = make_publication_page(node, article=article)
     fake.context.article_pages = [article]
 
-    def stop_before_submit(*args, **kwargs):
-        raise RuntimeError("stopped after preflight")
-
-    page._submit_reply = stop_before_submit
-
-    with pytest.raises(RuntimeError, match="stopped after preflight"):
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-
-    assert sum(article.waited_ms) <= dzen_page._PUBLIC_PREFLIGHT_POLL_LIMIT * dzen_page._PUBLIC_COMMENT_WAIT_MS
+    assert not page._verify_public_reply(page.fetch_comments()[0], "мой ответ", "/user/u0", "author0")
+    assert sum(article.waited_ms) <= dzen_page._PUBLIC_COMMENT_POLL_LIMIT * dzen_page._PUBLIC_COMMENT_WAIT_MS
 
 
-def test_public_preflight_sorts_newest_to_find_fresh_reply():
+def test_public_verification_sorts_newest_to_find_fresh_reply():
     node = make_node(0)
     unrelated = FakePublicRoot(author="other", author_href="/user/other", text="old")
     article = FakeArticlePage(
@@ -4546,11 +4529,11 @@ def test_public_preflight_sorts_newest_to_find_fresh_reply():
     assert article.newest_button.clicks == 1
     assert article.sort_label == "Сначала новые"
     assert article.more_button.clicks == 0
-    assert node.reply_submit.clicks == 0
+    assert node.reply_submit.clicks == 1
     assert article.close_calls == 1
 
 
-def test_public_preflight_uses_load_more_when_newest_sort_is_unavailable():
+def test_public_verification_uses_load_more_when_newest_sort_is_unavailable():
     node = make_node(0)
     unrelated = FakePublicRoot(author="other", author_href="/user/other", text="old")
     article = FakeArticlePage(
@@ -4567,11 +4550,11 @@ def test_public_preflight_uses_load_more_when_newest_sort_is_unavailable():
     assert article.sort_button.clicks == 2
     assert article.newest_button.clicks == 0
     assert article.more_button.clicks == 1
-    assert node.reply_submit.clicks == 0
+    assert node.reply_submit.clicks == 1
     assert article.close_calls == 1
 
 
-def test_public_reply_preflight_error_stops_before_any_repeat_submit(caplog):
+def test_public_navigation_error_is_unconfirmed_without_repeat_submit(caplog):
     node = make_node(0)
     article = FakeArticlePage(
         goto_error=TimeoutError(
@@ -4583,13 +4566,13 @@ def test_public_reply_preflight_error_stops_before_any_repeat_submit(caplog):
     fake.context.article_pages = [article]
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
+        with pytest.raises(PublicationUnconfirmedError, match="public_article_navigation") as exc_info:
             page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, reply_id=73, before_submit=lambda: None)
 
-    assert isinstance(exc_info.value.__cause__, TimeoutError)
-    assert node.reply_button.clicks == 0
-    assert node.reply_submit.clicks == 0
-    assert fake.listeners == {}
+    assert isinstance(exc_info.value.__cause__.__cause__, TimeoutError)
+    assert node.reply_button.clicks == 1
+    assert node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
     assert article.close_calls == 1
     assert fake.reload_calls == []
     record = next(
@@ -4608,7 +4591,7 @@ def test_public_reply_preflight_error_stops_before_any_repeat_submit(caplog):
         assert secret not in serialized
 
 
-def test_public_reply_preflight_logs_comment_loading_timeout(caplog):
+def test_public_verification_logs_comment_loading_timeout(caplog):
     node = make_node(0)
     fake = FakePage([FakeGroup("/a/post1", [node])])
     article = FakeArticlePage(comments_available=False)
@@ -4617,7 +4600,7 @@ def test_public_reply_preflight_logs_comment_loading_timeout(caplog):
     comment = page.fetch_comments()[0]
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="public article comments did not load"):
+        with pytest.raises(PublicationUnconfirmedError, match="comments_not_loaded"):
             page.publish_reply(comment, "мой ответ", auto_publish=True, before_submit=lambda: None)
 
     record = next(
@@ -4634,18 +4617,12 @@ def test_public_reply_preflight_logs_comment_loading_timeout(caplog):
 
 def test_public_article_http_status_is_logged_without_stopping_publication(caplog):
     node = make_node(0)
-    preflight = FakeArticlePage(
-        public_roots=[
-            FakePublicRoot(author="author0", author_href="/user/u0", text="text0")
-        ],
-        goto_status=503,
-    )
     final_article = FakeArticlePage(
         public_roots=[public_root_for(node, reply_text="private reply")],
-        goto_status=200,
+        goto_status=503,
     )
     fake = FakePage([FakeGroup("/a/post1", [node])])
-    fake.context.article_pages = [preflight, final_article]
+    fake.context.article_pages = [final_article]
     page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
     node.reply_submit.hide_on_click = True
     node.reply_submit.on_click = lambda: node.published_replies.append(
@@ -4678,7 +4655,7 @@ def test_public_article_http_status_is_logged_without_stopping_publication(caplo
     assert "/a/post1" not in serialized
 
 
-def test_public_reply_preflight_logs_missing_source_comment(caplog):
+def test_public_verification_logs_missing_source_comment(caplog):
     node = make_node(0)
     fake = FakePage([FakeGroup("/a/post1", [node])])
     article = FakeArticlePage(
@@ -4722,7 +4699,7 @@ def test_public_reply_preflight_logs_missing_source_comment(caplog):
     assert not any(hasattr(record, "comment_id") for record in caplog.records)
 
 
-def test_public_reply_preflight_logs_collapsed_branch_timeout(caplog):
+def test_public_verification_logs_collapsed_branch_timeout(caplog):
     node = make_node(0)
     root = FakePublicRoot(
         author="other author",
@@ -4767,7 +4744,7 @@ def test_public_reply_preflight_logs_collapsed_branch_timeout(caplog):
         assert secret not in serialized
 
 
-def test_public_reply_preflight_logs_load_more_click_exception(caplog):
+def test_public_verification_logs_load_more_click_exception(caplog):
     node = make_node(0)
     unrelated = FakePublicRoot(
         author="private author",
@@ -4787,7 +4764,7 @@ def test_public_reply_preflight_logs_load_more_click_exception(caplog):
     comment = page.fetch_comments()[0]
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="load more failed"):
+        with pytest.raises(PublicationUnconfirmedError, match="verification_exception"):
             page.publish_reply(comment, "private reply", auto_publish=True, before_submit=lambda: None)
 
     record = next(
@@ -4808,7 +4785,7 @@ def test_public_reply_preflight_logs_load_more_click_exception(caplog):
         assert secret not in serialized
 
 
-def test_public_reply_preflight_logs_load_more_timeout(caplog):
+def test_public_verification_logs_load_more_timeout(caplog):
     node = make_node(0)
     unrelated = FakePublicRoot(author="other", author_href="/user/other", text="other")
     hidden = FakePublicRoot(author="author0", author_href="/user/u0", text="text0")
@@ -4820,7 +4797,7 @@ def test_public_reply_preflight_logs_load_more_timeout(caplog):
     comment = page.fetch_comments()[0]
 
     with caplog.at_level(logging.INFO, logger="dzen_commenter.dzen.page"):
-        with pytest.raises(RuntimeError, match="public article comments did not expand"):
+        with pytest.raises(PublicationUnconfirmedError, match="additional_comments_not_loaded"):
             page.publish_reply(comment, "мой ответ", auto_publish=True, before_submit=lambda: None)
 
     record = next(
@@ -4842,7 +4819,7 @@ def test_public_reply_preflight_logs_load_more_timeout(caplog):
         assert secret not in serialized
 
 
-def test_public_preflight_retries_transient_article_navigation():
+def test_public_verification_retries_transient_article_navigation():
     node = make_node(0)
     article = FakeArticlePage(
         public_roots=[public_root_for(node)],
@@ -4859,39 +4836,38 @@ def test_public_preflight_retries_transient_article_navigation():
     ]
     assert article.goto_timeouts == [dzen_page._PUBLIC_NAVIGATION_TIMEOUT_MS] * 2
     assert article.close_calls == 1
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
-    assert fake.listeners == {}
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
 
 
-def test_public_preflight_navigation_retries_exhaust_before_submit():
+def test_public_navigation_retries_exhaust_after_submit():
     node = make_node(0)
     article = FakeArticlePage(goto_error=TimeoutError("article navigation timeout"))
     fake, page, _ = make_publication_page(node, article=article)
     fake.context.article_pages = [article]
 
-    with pytest.raises(RuntimeError, match="public article navigation failed") as exc_info:
+    with pytest.raises(PublicationUnconfirmedError, match="public_article_navigation") as exc_info:
         page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
 
-    assert isinstance(exc_info.value.__cause__, TimeoutError)
-    assert str(exc_info.value.__cause__) == "article navigation timeout"
+    assert isinstance(exc_info.value.__cause__.__cause__, TimeoutError)
+    assert str(exc_info.value.__cause__.__cause__) == "article navigation timeout"
     assert article.goto_calls == [
         ("https://dzen.ru/a/post1", "commit"),
         ("https://dzen.ru/a/post1", "commit"),
     ]
     assert article.goto_timeouts == [dzen_page._PUBLIC_NAVIGATION_TIMEOUT_MS] * 2
     assert article.close_calls == 1
-    assert node.reply_button.clicks == node.reply_submit.clicks == 0
-    assert fake.listeners == {}
+    assert node.reply_button.clicks == node.reply_submit.clicks == 1
+    assert fake.listeners == {"request": [], "response": []}
 
 
-def test_hidden_studio_reply_prevents_duplicate_send():
+def test_hidden_studio_own_reply_is_not_expanded_or_used_as_send_guard():
     node = make_node(0)
     node.hidden_replies.append({"author": "Configured Bot", "text": "мой ответ"})
     fake, page, article = make_publication_page(node)
-    fake.context.article_pages = [article]
     page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-    assert node.more_button.clicks == 1
-    assert node.reply_submit.clicks == 0
+    assert node.more_button.clicks == 0
+    assert node.reply_submit.clicks == 1
     assert article.close_calls == 1
 
 
@@ -4902,27 +4878,25 @@ def test_hidden_studio_reply_prevents_duplicate_send():
         {"author": "Configured Bot", "text": "different reply"},
     ],
 )
-def test_hidden_studio_reply_requires_author_and_text(hidden_reply):
+def test_hidden_studio_own_reply_author_and_text_are_ignored(hidden_reply):
     node = make_node(0)
     node.hidden_replies.append(hidden_reply)
     fake, page, article = make_publication_page(node)
-    with pytest.raises(RuntimeError, match="not confirmed"):
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-    assert node.more_button.clicks == 1
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
+    assert node.more_button.clicks == 0
     assert node.reply_submit.clicks == 1
-    assert article.goto_calls == []
+    assert len(article.goto_calls) == 1
 
 
-def test_failed_studio_reply_expansion_stops_before_submit():
+def test_unused_studio_own_reply_expansion_does_not_block_submit():
     node = make_node(0)
     node.hidden_replies.append({"author": "Configured Bot", "text": "мой ответ"})
     node.more_button.on_click = lambda: None
     fake, page, article = make_publication_page(node)
-    with pytest.raises(RuntimeError, match="replies did not expand"):
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-    assert node.more_button.clicks == 1
-    assert node.reply_submit.clicks == 0
-    assert article.goto_calls == []
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
+    assert node.more_button.clicks == 0
+    assert node.reply_submit.clicks == 1
+    assert len(article.goto_calls) == 1
 
 
 def test_wrong_studio_thread_does_not_confirm_reply():
@@ -4940,21 +4914,20 @@ def test_wrong_studio_thread_does_not_confirm_reply():
     assert fake.reload_calls == []
 
 
-def test_missing_studio_thread_wrapper_fails_before_submit():
+def test_missing_studio_thread_wrapper_does_not_block_submit():
     node = make_node(0)
     node.has_thread_wrapper = False
     fake, page, _ = make_publication_page(node)
-    with pytest.raises(RuntimeError, match="uninspectable"):
-        page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-    assert node.reply_submit.clicks == 0
+    page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
+    assert node.reply_submit.clicks == 1
 
 
-def test_blank_bot_author_fails_before_submit():
+def test_blank_bot_author_cannot_confirm_after_submit():
     node = make_node(0)
     fake, page, _ = make_publication_page(node, bot_name=" ")
-    with pytest.raises(RuntimeError, match="uninspectable"):
+    with pytest.raises(PublicationUnconfirmedError):
         page.publish_reply(page.fetch_comments()[0], "мой ответ", auto_publish=True, before_submit=lambda: None)
-    assert node.reply_submit.clicks == 0
+    assert node.reply_submit.clicks == 1
 
 
 def test_public_article_failure_closes_temporary_tab():
@@ -5026,6 +4999,7 @@ def test_publish_reply_stops_after_first_hundred_groups_with_retryable_miss(capl
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
     assert source_node.reply_submit.clicks == 0
     assert before_submit_calls == []
+    assert fake.context.new_page_calls == 0
     search = next(
         record for record in caplog.records
         if getattr(record, "event", None) == "publication_source_comment_search_completed"
@@ -5383,9 +5357,6 @@ def test_publish_reply_finds_target_in_loaded_sample_and_restores_page_top():
     target_node = make_node(1)
     fake = FakePage([FakeGroup("/a/post1", [target_node])])
     fake.context.article_pages = [
-        FakeArticlePage(public_roots=[FakePublicRoot(
-            author="author1", author_href="/user/u1", text="text1"
-        )]),
         FakeArticlePage(public_roots=[public_root_for(target_node, reply_text="готовый ответ")])
     ]
     page = DzenStudioPage(fake, bot_account_name_provider=lambda: "Configured Bot")
@@ -5408,7 +5379,6 @@ def test_publish_reply_finds_target_in_loaded_sample_and_restores_page_top():
     page.publish_reply(target, "готовый ответ", auto_publish=True, before_submit=lambda: None)
 
     assert fake.mouse.wheel_calls == []
-    assert dzen_page._STUDIO_CONFIRM_DELAY_MS in fake.waited_ms
     assert target_node.reply_input.filled == ["готовый ответ"]
     assert target_node.reply_submit.clicks == 1
     assert fake.evaluate_calls == ["window.scrollTo(0, 0)"]
@@ -5651,3 +5621,80 @@ def test_synthetic_id_matches_helper():
     page = DzenStudioPage(FakePage([FakeGroup("/a/postX", [node])]))
     comment = page.fetch_comments()[0]
     assert comment.dzen_comment_id == synthetic_id("/a/postX", "/user/u5", "text5")
+
+
+@pytest.mark.parametrize("outcome", ["confirmed", "missing_reply", "missing_source", "comments_timeout", "navigation", "read", "click"])
+def test_studio_send_and_network_wait_precede_the_only_public_verification(outcome, caplog):
+    caplog.set_level(logging.INFO, logger="dzen_commenter.dzen.page")
+    node = make_node(0)
+    root = public_root_for(node, reply_text="saved reply")
+    if outcome == "missing_reply":
+        root.replies.clear()
+    elif outcome in {"missing_source", "click"}:
+        root.author_href, root.author, root.text = "/user/other", "other", "other"
+    article = FakeArticlePage(
+        public_roots=[root],
+        comments_available=outcome != "comments_timeout",
+        goto_error=TimeoutError("private navigation detail") if outcome == "navigation" else None,
+    )
+    if outcome == "read":
+        def fail_read(_script):
+            raise RuntimeError("private source read detail")
+        root.evaluate = fail_read
+    if outcome == "click":
+        article.hidden_roots = [root]
+        def fail_click():
+            raise RuntimeError("private load-more click detail")
+        article.more_button.on_click = fail_click
+    fake, page, _ = make_publication_page(node, article=article)
+    comment = page.fetch_comments()[0]
+    events = []
+    class Request:
+        method = "POST"
+        url = "https://dzen.ru/api/comments/create?token=private-token"
+        post_data_json = {"text": "saved reply", "replyToId": "source-id"}
+    class Response:
+        request = Request()
+        status = 200
+        def json(self):
+            return {"status": "ok", "comments": [{
+                "id": "created-id", "text": "saved reply",
+                "replyToId": "source-id", "visibility": "visible",
+            }]}
+    def send():
+        events.append("send")
+        fake.emit("request", Response.request)
+    def deliver_response(_ms):
+        if events == ["marker", "send"]:
+            events.append("network_wait")
+            fake.emit("response", Response())
+            events.append("network_response")
+    original_new_page = fake.context.new_page
+    def open_public():
+        assert events == ["marker", "send", "network_wait", "network_response"]
+        events.append("public")
+        return original_new_page()
+    def own_replies_unreadable(*args, **kwargs):
+        raise AssertionError("Studio own replies must not be read")
+    node.evaluate = own_replies_unreadable
+    node.reply_submit.on_click = send
+    fake.on_wait_timeout = deliver_response
+    fake.context.new_page = open_public
+    if outcome == "confirmed":
+        page.publish_reply(comment, "saved reply", auto_publish=True, before_submit=lambda: events.append("marker"))
+    else:
+        with pytest.raises(PublicationUnconfirmedError) as error:
+            page.publish_reply(comment, "saved reply", auto_publish=True, before_submit=lambda: events.append("marker"))
+        assert "failure_stage=public_" in str(error.value)
+        assert "creation_outcome=accepted" in str(error.value)
+        assert "private" not in str(error.value)
+    assert events == ["marker", "send", "network_wait", "network_response", "public"]
+    assert node.reply_submit.clicks == fake.context.new_page_calls == article.close_calls == 1
+    assert fake.listeners == {"request": [], "response": []}
+
+    acknowledgment = next(record for record in caplog.records if getattr(record, "event", None) == "publication_acknowledgment_wait_completed")
+    assert acknowledgment.acknowledged is True
+    assert acknowledgment.response_outcome == "accepted"
+    serialized = "\n".join(StructuredFormatter().format(record) for record in caplog.records)
+    assert "private-token" not in serialized
+    assert "saved reply" not in serialized

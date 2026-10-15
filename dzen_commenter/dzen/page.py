@@ -581,7 +581,6 @@ _REPLY_CONTROL_VALIDATION_REASONS = frozenset(
 
 _REPLY_SUBMIT_ACK_TIMEOUT_MS = 30_000
 _REPLY_SUBMIT_BUTTON_TIMEOUT_MS = 30_000
-_REPLY_EXPANSION_TIMEOUT_MS = 30_000
 _REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 30 * 60_000
 _SHORT_REPLY_EXPANSION_OPERATION_TIMEOUT_MS = 60_000
 _REPLY_EXPANSION_CLICK_TIMEOUT_MS = 5_000
@@ -602,7 +601,6 @@ _PUBLIC_NAVIGATION_TIMEOUT_MS = 90_000
 _PUBLIC_NAVIGATION_ATTEMPTS = 2
 _PUBLIC_MAX_LOAD_MORE_CLICKS = 30
 _PUBLIC_VERIFICATION_TIMEOUT_MS = 20 * 60_000
-_STUDIO_CONFIRM_DELAY_MS = 2_000
 _SUBMIT_TRACE_LIMIT = 5
 
 _SAFE_LOOKUP_EXCEPTION_DETAIL_RE = re.compile(
@@ -738,10 +736,10 @@ def _publication_failure_location(exc: Exception) -> tuple[str, str]:
         return "public_thread_expansion", "replies_not_expanded"
     if "source comment not found in public article" in message:
         return "public_source_comment_search", "source_comment_not_found"
+    if "public article source comment read failed" in message:
+        return "public_source_comment_search", "source_comment_read_failed"
     if "not confirmed in public article" in message:
         return "public_reply_confirmation", "reply_not_confirmed"
-    if "not confirmed in studio" in message:
-        return "studio_reply_confirmation", "reply_not_confirmed"
     if "send button was not found" in message:
         return "publication_controls", "send_button_not_found"
     if "send button remained visible" in message:
@@ -2756,111 +2754,6 @@ class DzenStudioPage:
         if node is None:
             raise SourceCommentUnavailableError("source comment not found on Studio page")
 
-        if auto_publish and self._has_published_reply(node, text):
-            logger.info(
-                "Matching Dzen reply is already visible",
-                extra={
-                    "event": "publication_reply_already_visible",
-                    **correlation,
-                },
-            )
-            author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
-            source_author_href = author_link.get_attribute("href") or "" if author_link else ""
-            logger.info(
-                "Checking public article for existing Dzen reply",
-                extra={"event": "publication_article_check_started", **correlation},
-            )
-            try:
-                public_visible = self._verify_public_reply(
-                    comment, text, source_author_href, comment.author, reply_id=reply_id
-                )
-            except _PublicSourceUnavailableError as exc:
-                raise PublicationUnconfirmedError(
-                    "existing Studio reply not confirmed in public article; "
-                    f"failure_stage=public_source_comment_search; failure_reason={exc.reason_code}"
-                ) from exc
-            except Exception as exc:
-                failure_stage, failure_reason = _publication_failure_location(exc)
-                logger.info(
-                    "Dzen public article verification failed",
-                    extra={
-                        "event": "publication_article_verification_failed",
-                        **correlation,
-                        "failure_stage": failure_stage,
-                        "failure_reason": failure_reason,
-                        **_safe_exception_fields(exc),
-                    },
-                )
-                raise
-            if not public_visible:
-                logger.info(
-                    "Existing Dzen reply was not confirmed in public article",
-                    extra={
-                        "event": "publication_article_verification_failed",
-                        **correlation,
-                        "failure_stage": "public_reply_confirmation",
-                        "failure_reason": "reply_not_confirmed",
-                        "failure_type": "ReplyNotConfirmed",
-                        "failure_description": "reply was not visible in the public article",
-                    },
-                )
-                raise RuntimeError("reply not confirmed in public article")
-            logger.info(
-                "Existing Dzen reply confirmed in Studio and public article",
-                extra={"event": "publication_confirmed", **correlation},
-            )
-            return
-
-        public_source_unavailable = None
-        if auto_publish:
-            author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
-            source_author_href = author_link.get_attribute("href") or "" if author_link else ""
-            logger.info(
-                "Checking public article before Dzen reply submit",
-                extra={"event": "publication_public_preflight_started", **correlation},
-            )
-            try:
-                already_public = self._verify_public_reply(
-                    comment, text, source_author_href, comment.author,
-                    wait_for_reply=False,
-                    reply_id=reply_id,
-                )
-            except _PublicSourceUnavailableError as exc:
-                public_source_unavailable = exc
-                already_public = False
-                logger.info(
-                    "Public source search exhausted; submitting through Studio without public confirmation",
-                    extra={
-                        "event": "publication_studio_fallback_started",
-                        **correlation,
-                        "failure_stage": "public_source_comment_search",
-                        "failure_reason": exc.reason_code,
-                    },
-                )
-            except Exception as exc:
-                failure_stage, failure_reason = _publication_failure_location(exc)
-                logger.info(
-                    "Public article preflight failed before Dzen reply submit",
-                    extra={
-                        "event": "publication_public_preflight_failed",
-                        **correlation,
-                        "failure_stage": failure_stage,
-                        "failure_reason": failure_reason,
-                        **_safe_exception_fields(exc),
-                    },
-                )
-                raise
-            if already_public:
-                logger.info(
-                    "Existing Dzen reply found in public article before submit",
-                    extra={"event": "publication_reply_already_public", **correlation},
-                )
-                logger.info(
-                    "Existing Dzen reply confirmed in public article",
-                    extra={"event": "publication_confirmed", **correlation},
-                )
-                return
-
         if not auto_publish:
             self._submit_reply(
                 node,
@@ -2873,6 +2766,9 @@ class DzenStudioPage:
                 extra={"event": "publication_draft_prepared", **correlation},
             )
             return
+
+        author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
+        source_author_href = author_link.get_attribute("href") or "" if author_link else ""
 
         page = self._page
         mutations: list[dict[str, Any]] = []
@@ -2934,8 +2830,8 @@ class DzenStudioPage:
             except Exception:
                 return
 
-        acknowledged = False
         submit_attempted = False
+        public_verification_started = False
 
         def mark_submit_attempted() -> None:
             nonlocal submit_attempted
@@ -2961,13 +2857,10 @@ class DzenStudioPage:
                     **correlation,
                 },
             )
-            acknowledged = acknowledged or self._has_published_reply(node, text)
             for _ in range(_REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS):
                 if creation_response is not None:
                     break
                 page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                if not acknowledged:
-                    acknowledged = self._has_published_reply(node, text)
 
             creation_outcome = self._creation_response_outcome(
                 creation_response, creation_payload, normalized_text
@@ -2977,74 +2870,31 @@ class DzenStudioPage:
                 extra={
                     "event": "publication_acknowledgment_wait_completed",
                     **correlation,
-                    "acknowledged": acknowledged,
+                    "acknowledged": creation_outcome == "accepted",
+                    "mutations": [
+                        {key: value for key, value in item.items() if key != "request"}
+                        for item in mutations
+                    ],
+                    "truncated": truncated,
                     "response_outcome": creation_outcome,
                 },
             )
             if creation_outcome == "non_2xx":
                 raise RuntimeError("Dzen create response was non-2xx")
 
-            page.wait_for_timeout(_STUDIO_CONFIRM_DELAY_MS)
-            reply_visible = False
-            for poll in range(_REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS + 1):
-                node, _ = self._find_comment_node(comment.dzen_comment_id)
-                reply_visible = bool(node is not None and self._has_published_reply(node, text))
-                logger.info(
-                    "Checked Dzen Studio reply visibility",
-                    extra={
-                        "event": "publication_studio_visibility_check",
-                        **correlation,
-                        "poll": poll + 1,
-                        "source_found": node is not None,
-                        "reply_visible": reply_visible,
-                    },
-                )
-                if reply_visible:
-                    break
-                page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-
-            if not reply_visible:
-                logger.info(
-                    "Dzen reply was not confirmed in Studio",
-                    extra={
-                        "event": "publication_studio_verification_failed",
-                        **correlation,
-                        "failure_stage": "studio_reply_confirmation",
-                        "failure_reason": "reply_not_confirmed",
-                        "failure_type": "ReplyNotConfirmed",
-                        "failure_description": "reply was not visible in Studio after waiting",
-                        "poll_count": _REPLY_SUBMIT_ACK_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS + 1,
-                        "source_found": node is not None,
-                    },
-                )
-                outcomes = ", ".join(
-                    f"{item['method']} {item['host']} "
-                    f"path_sha256={item['path_sha256']} {item['status']}"
-                    for item in mutations
-                ) or "none"
-                raise RuntimeError(
-                    "reply not confirmed in Studio; "
-                    f"creation_outcome={creation_outcome}; "
-                    f"source_found={str(node is not None).lower()}; "
-                    f"mutations=[{outcomes}]; "
-                    f"truncated={str(truncated).lower()}"
-                )
-
-            if public_source_unavailable is not None:
-                raise public_source_unavailable
-
-            author_link = node.query_selector(selectors.COMMENT_AUTHOR_LINK)
-            source_author_href = author_link.get_attribute("href") or "" if author_link else ""
             logger.info(
                 "Checking Dzen public article for published reply",
                 extra={"event": "publication_article_check_started", **correlation},
             )
+            public_verification_started = True
             try:
                 public_visible = self._verify_public_reply(
                     comment, text, source_author_href, comment.author, reply_id=reply_id
                 )
             except Exception as exc:
                 failure_stage, failure_reason = _publication_failure_location(exc)
+                if failure_stage == "publication_action":
+                    failure_stage, failure_reason = "public_reply_confirmation", "verification_exception"
                 logger.info(
                     "Dzen public article verification failed",
                     extra={
@@ -3070,7 +2920,7 @@ class DzenStudioPage:
                 )
                 raise RuntimeError("reply not confirmed in public article")
             logger.info(
-                "Dzen reply confirmed in Studio and public article",
+                "Dzen reply confirmed in public article",
                 extra={"event": "publication_confirmed", **correlation},
             )
         except Exception as exc:
@@ -3079,6 +2929,8 @@ class DzenStudioPage:
             )
             if submit_attempted and creation_outcome != "non_2xx":
                 failure_stage, failure_reason = _publication_failure_location(exc)
+                if public_verification_started and failure_stage == "publication_action":
+                    failure_stage, failure_reason = "public_reply_confirmation", "verification_exception"
                 raise PublicationUnconfirmedError(
                     "publication not confirmed after submit; "
                     f"failure_stage={failure_stage}; failure_reason={failure_reason}; "
@@ -3824,87 +3676,6 @@ class DzenStudioPage:
                 self._page.evaluate("window.scrollTo(0, 0)")
             except Exception:
                 pass
-
-    def _has_published_reply(self, node: Any, text: str) -> bool:
-        bot_account_name = self._bot_account_name_provider()
-        if not bot_account_name.strip():
-            raise RuntimeError(
-                "source comment thread is uninspectable: bot author is not configured"
-            )
-
-        read_replies = """
-            (node, threadSelector) => {
-                const thread = node.closest(threadSelector);
-                if (!thread) return null;
-                return Array.from(
-                    thread.querySelectorAll('[class*="editor--comment__block-"]')
-                ).filter((block) => block !== node).map((block) => ({
-                    author: block.querySelector(
-                        '[class*="editor--comment__nameText-"]'
-                    )?.innerText || '',
-                    text: block.querySelector(
-                        'p[aria-label="Текст комментария"]'
-                    )?.innerText || '',
-                }));
-            }
-            """
-
-        normalized_text = " ".join(text.split())
-        for check in range(2):
-            replies = node.evaluate(read_replies, selectors.COMMENT_THREAD)
-            if replies is None:
-                raise RuntimeError(
-                    "source comment thread is uninspectable: wrapper not found"
-                )
-            if any(
-                is_bot_account_author(reply.get("author"), bot_account_name)
-                and " ".join(reply.get("text", "").split()) == normalized_text
-                for reply in replies
-            ):
-                return True
-            if check == 0 and self._expand_thread(node):
-                continue
-            return False
-        return False
-
-    def _expand_thread(self, node: Any) -> bool:
-        state = node.evaluate(
-            """
-            (node, selectors) => {
-                const thread = node.closest(selectors.thread);
-                if (!thread) return null;
-                const count = thread.querySelectorAll(
-                    '[class*="editor--comment__block-"]'
-                ).length;
-                const button = thread.querySelector(selectors.more);
-                if (!button) return {count, expanded: false};
-                button.click();
-                return {count, expanded: true};
-            }
-            """,
-            {"thread": selectors.COMMENT_THREAD, "more": selectors.COMMENT_OPEN_MORE},
-        )
-        if state is None:
-            raise RuntimeError("source comment thread is uninspectable: wrapper not found")
-        if not state["expanded"]:
-            return False
-
-        for _ in range(_REPLY_EXPANSION_TIMEOUT_MS // _REPLY_SEARCH_WAIT_MS):
-            count = node.evaluate(
-                """
-                (node, threadSelector) => node.closest(threadSelector)?.querySelectorAll(
-                    '[class*="editor--comment__block-"]'
-                ).length ?? null
-                """,
-                selectors.COMMENT_THREAD,
-            )
-            if count is None:
-                raise RuntimeError("source comment thread is uninspectable: wrapper not found")
-            if count > state["count"]:
-                self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-                return True
-            self._page.wait_for_timeout(_REPLY_SEARCH_WAIT_MS)
-        raise RuntimeError("source comment thread is uninspectable: replies did not expand")
 
     def _find_comment_node(
         self,
