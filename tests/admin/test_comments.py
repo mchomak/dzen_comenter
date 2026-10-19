@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -1086,6 +1086,7 @@ def test_comments_compact_thread_styles_center_every_table_header():
     assert ".dialogue-cell { white-space: normal; }" in css
     assert ".thread-text { white-space: pre-wrap; overflow-wrap: anywhere; }" in css
     assert ".post-link-placeholder { color: var(--muted); }" in css
+    assert ".thread-post a { color: var(--blue); text-decoration: underline; }" in css
     assert "text-indent" not in css
     assert ".thread-tree { display: grid; gap: 4px; border-left: 1px solid var(--line); }" in css
     assert ".thread-depth-1 { margin-left: 16px; }" in css
@@ -1113,10 +1114,35 @@ def test_comments_error_rows_get_attention_class(client, mixed_feed):
 
 def test_main_page_renders_limited_feed_and_navigation(client, mixed_feed):
     body = client.get("/").text
-    assert "Показано 3 из последних 100" in body
+    assert "Показано 3 из последних 200" in body
     assert 'href="/" aria-current="page"' in body
     assert 'href="/comments"' in body
     assert 'href="/settings"' in body
+
+
+def test_main_page_renders_latest_200_rows_in_order_with_post_links(client, engine):
+    base = datetime(2026, 1, 1, 12, 0, 0)
+    for cid in range(1, 206):
+        _add_comment(
+            engine,
+            cid=cid,
+            author=f"author-{cid}",
+            text=f"comment-{cid}",
+            post_url=f"/a/post-{cid}",
+            fetched_at=base + timedelta(seconds=cid),
+        )
+
+    body = client.get("/").text
+    tbody = body.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+    authors = re.findall(r"<tr[^>]*>\s*<td>(.*?)</td>", tbody)
+
+    assert len(authors) == 200
+    assert authors == [f"author-{cid}" for cid in range(205, 5, -1)]
+    assert "Показано 200 из последних 200" in body
+    assert all(
+        body.count(f'href="https://dzen.ru/a/post-{cid}"') == 2
+        for cid in range(6, 206)
+    )
 
 
 def test_guest_redirected_to_login(engine):

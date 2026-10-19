@@ -69,7 +69,7 @@ def create_app(
         feed = (
             fetch_feed(
                 engine,
-                limit=100,
+                limit=200,
                 status=status or None,
                 author_query=author_query or None,
                 bot_account_name=bot_account_name,
