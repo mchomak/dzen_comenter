@@ -1,30 +1,30 @@
 window.STATE =
 {
-  "slug": "dzen-studio-stability",
-  "dir": "2026-10-09-dzen-studio-stability",
-  "title": "Dzen — устойчивый поиск комментариев и восстановление браузера",
+  "slug": "expand-hidden-studio-replies",
+  "dir": "2026-10-06-expand-hidden-studio-replies--wip",
+  "title": "Dzen Studio — раскрытие скрытых ответов и загрузка старых комментариев",
   "mode": "full",
   "depth": "normal",
   "polish": null,
-  "tier": "T3",
-  "briefFile": "2026-10-09-brief.md",
+  "tier": "T0",
+  "briefFile": "2026-10-06-brief.md",
   "memoryFile": "AGENTS.md",
   "skillDir": "C:/Users/McHomak/.agents/skills/autopilot",
-  "startedAt": "2026-10-09T20:15:02+03:00",
-  "updatedAt": "2026-10-13T13:00:49+03:00",
-  "finishedAt": "2026-10-13T13:00:49+03:00",
+  "startedAt": "2026-10-06T20:44:20+03:00",
+  "updatedAt": "2026-10-08T23:06:33+03:00",
+  "finishedAt": "2026-10-08T23:06:33+03:00",
   "stages": [
     {
       "id": "preflight",
       "status": "done",
-      "startedAt": "2026-10-09T20:15:02+03:00",
-      "finishedAt": "2026-10-09T20:16:29+03:00"
+      "startedAt": "2026-10-06T20:44:20+03:00",
+      "finishedAt": "2026-10-06T20:44:52+03:00"
     },
     {
       "id": "manifest",
       "status": "done",
-      "startedAt": "2026-10-09T20:16:29+03:00",
-      "finishedAt": "2026-10-09T20:34:56+03:00"
+      "startedAt": "2026-10-08T21:48:11+03:00",
+      "finishedAt": "2026-10-08T21:55:22+03:00"
     },
     {
       "id": "briefing",
@@ -34,487 +34,271 @@ window.STATE =
     {
       "id": "spec",
       "status": "done",
-      "startedAt": "2026-10-09T20:34:56+03:00",
-      "finishedAt": "2026-10-13T00:10:00+03:00",
-      "note": "G2 прошёл: независимая сверка brief/spec без пропусков и лишних требований."
+      "startedAt": "2026-10-08T21:55:22+03:00",
+      "finishedAt": "2026-10-08T21:56:57+03:00"
     },
     {
       "id": "plan",
-      "status": "done",
-      "startedAt": "2026-10-13T00:10:00+03:00",
-      "finishedAt": "2026-10-13T00:30:53+03:00",
-      "note": "10 тасков, ярус T3: независимые проверки Studio, Chromium lifecycle, DB и worker supervision; T10 закрывает live snapshot fallback."
+      "status": "skipped",
+      "startedAt": "2026-10-08T21:56:57+03:00",
+      "note": "ярус T0 — один модуль, без разбивки на таски",
+      "finishedAt": "2026-10-08T21:56:57+03:00"
     },
     {
       "id": "build",
       "status": "done",
-      "startedAt": "2026-10-13T12:14:03+03:00",
-      "note": "T10 закрывает найденный в ревью live fallback с ElementHandle и усиливает тесты счётчиков.",
-      "finishedAt": "2026-10-13T12:38:25+03:00"
+      "startedAt": "2026-10-08T21:56:57+03:00",
+      "finishedAt": "2026-10-08T22:35:59+03:00",
+      "note": "R08/R09 собраны; чистый набор 580 passed / 51 skipped."
     },
     {
       "id": "review",
       "status": "done",
-      "startedAt": "2026-10-13T12:27:38+03:00",
-      "finishedAt": "2026-10-13T12:38:25+03:00",
-      "note": "T10: manifest/spec и craft review чистые; полный набор 618 passed, 51 skipped; lint изменённого модуля прошёл."
+      "startedAt": "2026-10-08T22:35:59+03:00",
+      "finishedAt": "2026-10-08T22:36:00+03:00",
+      "note": "Manifest, Spec и Craft: PASS; G2 сверка без расхождений."
     },
     {
       "id": "final",
-      "status": "done",
-      "startedAt": "2026-10-13T12:38:25+03:00",
-      "finishedAt": "2026-10-13T13:00:49+03:00",
-      "note": "Blind acceptance PASS; release 9716117 pushed and deployed; app and bot health operational, admin HTTP 200, PostgreSQL unchanged and healthy."
+      "status": "failed",
+      "startedAt": "2026-10-08T22:36:00+03:00",
+      "finishedAt": "2026-10-08T23:06:33+03:00",
+      "note": "Приёмка частичная: код исправлен и отправлен в origin/main, но production-деплой не выполнен из-за недоступного SSH protocol banner."
     }
   ],
   "requirements": {
-    "total": 10,
-    "done": 10,
+    "total": 9,
+    "done": 8,
     "inTicket": 0,
-    "inSpec": 0,
+    "inSpec": 1,
     "placeholder": 0,
     "deferred": 0,
     "dropped": 0
   },
-  "tickets": [
-    {
-      "id": "01",
-      "title": "Инкрементальный поиск Studio",
-      "requirements": [
-        "R01",
-        "R02"
-      ],
-      "blockedBy": [],
-      "wave": 1,
-      "zone": [
-        "dzen_commenter/dzen/",
-        "tests/dzen/"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-09T17:40:00+00:00",
-      "finishedAt": "2026-10-09T18:50:04+00:00",
-      "retries": 0,
-      "repairs": 1,
-      "repairFindings": [
-        "R02: during full-feed collection, each loaded group's comments must be counted once; snapshots may not recount comment candidates from all prior groups"
-      ],
-      "handoffs": 0,
-      "files": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "tests": {
-        "focusedPassed": 158,
-        "fullPassed": 590,
-        "failed": 0,
-        "skipped": 51
-      },
-      "commit": "add4a2e"
+  "tickets": [],
+  "previousSinglePass": {
+    "startedAt": "2026-10-08T11:29:57+03:00",
+    "finishedAt": "2026-10-08T11:36:18+03:00",
+    "files": [
+      "dzen_commenter/dzen/page.py",
+      "tests/dzen/test_dzen_page.py"
+    ],
+    "tests": {
+      "passed": 574,
+      "failed": 0,
+      "skipped": 51
     },
-    {
-      "id": "02",
-      "title": "Проверка и обновление соединений БД",
-      "requirements": [
-        "R04"
-      ],
-      "blockedBy": [],
-      "wave": 1,
-      "zone": [
-        "dzen_commenter/db/",
-        "dzen_commenter/admin/",
-        "main.py",
-        "tests/db/",
-        "tests/admin/",
-        "tests/test_main.py"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-09T17:40:00+00:00",
-      "finishedAt": "2026-10-09T18:17:14+00:00",
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0,
-      "files": [
-        "dzen_commenter/db/__init__.py",
-        "dzen_commenter/admin/app.py",
-        "main.py",
-        "tests/admin/test_database_engine.py",
-        "tests/test_main.py"
-      ],
-      "tests": {
-        "adminPassed": 134,
-        "workerPassed": 15,
-        "fullPassed": 586,
-        "failed": 0,
-        "skipped": 51
-      },
-      "commit": "716fd88",
-      "concerns": [
-        "tests/test_main.py:153 — worker test does not assert factory call or engine identity",
-        "tests/admin/test_database_engine.py:8 — factory test does not exercise admin app boundary"
-      ]
+    "commit": "3c5bd36a3b0d91711e943e9cb208adf6840047a8"
+  },
+  "singlePass": {
+    "startedAt": "2026-10-08T21:56:57+03:00",
+    "finishedAt": "2026-10-08T22:35:59+03:00",
+    "files": [
+      "dzen_commenter/orchestrator/loop.py",
+      "tests/orchestrator/test_loop.py"
+    ],
+    "tests": {
+      "passed": 580,
+      "failed": 0,
+      "skipped": 51,
+      "warnings": 1,
+      "scope": "Full suite in clean short-path worktree at bee0144 with only changed files copied in; empty temporary .env, no secrets."
     },
-    {
-      "id": "03",
-      "title": "Немедленное восстановление Chromium",
-      "requirements": [
-        "R03"
-      ],
-      "blockedBy": [
-        "02"
-      ],
-      "wave": 2,
-      "zone": [
-        "dzen_commenter/browser/",
-        "dzen_commenter/contracts/",
-        "main.py",
-        "tests/browser/",
-        "tests/contracts/",
-        "tests/test_main.py"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-09T18:20:20+00:00",
-      "finishedAt": "2026-10-09T18:42:24+00:00",
-      "files": [
-        "dzen_commenter/browser/session_manager.py",
-        "dzen_commenter/contracts/interfaces.py",
-        "main.py",
-        "tests/browser/test_session_manager.py",
-        "tests/test_main.py"
-      ],
-      "tests": {
-        "focusedPassed": 63,
-        "fullPassed": 590,
-        "failed": 0,
-        "skipped": 51
-      },
-      "commit": "15c669a",
-      "concerns": [
-        "main.py:150 — recovery is accessed via optional getattr despite being required by the SessionManager contract"
-      ],
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
-    },
-    {
-      "id": "04",
-      "title": "Явная граница поиска и безопасный выпуск",
-      "requirements": [
-        "R05",
-        "R06"
-      ],
-      "blockedBy": [
-        "01",
-        "03"
-      ],
-      "wave": 3,
-      "zone": [
-        "dzen_commenter/dzen/",
-        "dzen_commenter/orchestrator/",
-        "tests/dzen/",
-        "tests/orchestrator/"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-09T18:50:04+00:00",
-      "finishedAt": "2026-10-09T20:25:00+00:00",
-      "files": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "tests": {
-        "focusedPassed": 7,
-        "fullPassed": 590,
-        "failed": 0,
-        "skipped": 51
-      },
-      "commit": "5e37f04",
-      "concerns": [
-        "tests/dzen/test_dzen_page.py:3087 — existing F841 predates ticket 04"
-      ],
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
-    },
-    {
-      "id": "05",
-      "title": "Heartbeat прогресса долгого цикла",
-      "requirements": [
-        "R07"
-      ],
-      "blockedBy": [
-        "01",
-        "04"
-      ],
-      "wave": 4,
-      "zone": [
-        "dzen_commenter/bot_health.py",
-        "dzen_commenter/dzen/page.py",
-        "main.py",
-        "tests/admin/",
-        "tests/dzen/",
-        "tests/test_main.py"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-09T18:50:04+00:00",
-      "finishedAt": "2026-10-09T19:16:00+00:00",
-      "files": [
-        "dzen_commenter/bot_health.py",
-        "dzen_commenter/dzen/page.py",
-        "main.py",
-        "tests/admin/test_bot_health.py",
-        "tests/dzen/test_dzen_page.py",
-        "tests/test_main.py"
-      ],
-      "tests": {
-        "focusedPassed": 34,
-        "fullPassed": 597,
-        "failed": 0,
-        "skipped": 51
-      },
-      "commit": "a995e36 + 0c41e69",
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0
-    },
-    {
-      "id": "06",
-      "title": "Пакетное извлечение комментариев Studio",
-      "requirements": [
-        "R01",
-        "R08"
-      ],
-      "blockedBy": [
-        "01",
-        "05"
-      ],
-      "wave": 5,
-      "zone": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-09T19:20:37+00:00",
-      "finishedAt": "2026-10-09T20:25:00+00:00",
-      "files": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "tests": {
-        "snapshotPassed": 1,
-        "adjacentPassed": 7,
-        "fullPassed": 597,
-        "failed": 0,
-        "skipped": 51
-      },
-      "commit": "01a9591",
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0,
-      "concerns": [
-        "After deployment, the bot later became stale; production logs showed a shared reply-expansion timeout and a cycle with no heartbeat. G01 covers remediation."
-      ]
-    },
-    {
-      "id": "07",
-      "title": "Устойчивое чтение Studio",
-      "requirements": [
-        "G01"
-      ],
-      "blockedBy": [
-        "06"
-      ],
-      "wave": 6,
-      "zone": [
-        "dzen_commenter/dzen/",
-        "tests/dzen/"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-13T00:33:16+03:00",
-      "finishedAt": "2026-10-13T02:02:50+03:00",
-      "retries": 0,
-      "repairs": 1,
-      "repairFindings": [
-        "T07 craft: тесты повторного поиска привязаны к приватному _expand_hidden_replies; длительность проверяется самоподтверждающимся >= 0 вместо управляемых часов."
-      ],
-      "handoffs": 0,
-      "files": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "commit": "638391e",
-      "tests": {
-        "focusedPassed": 166,
-        "fullPassed": 612,
-        "failed": 0,
-        "skipped": 51
-      }
-    },
-    {
-      "id": "08",
-      "title": "Восстановление зависшего цикла",
-      "requirements": [
-        "G01",
-        "D01"
-      ],
-      "blockedBy": [
-        "05"
-      ],
-      "wave": 6,
-      "zone": [
-        "main.py",
-        "dzen_commenter/bot_health.py",
-        "dzen_commenter/orchestrator/",
-        "tests/test_main.py",
-        "tests/admin/",
-        "tests/orchestrator/"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-13T00:33:16+03:00",
-      "retries": 0,
-      "repairs": 1,
-      "repairFindings": [
-        "T08 spec: run_cycle/keep_alive TimeoutError retries need a finite attempt cap per Decision 15 and ticket criterion 6."
-      ],
-      "handoffs": 0,
-      "files": [
-        "main.py",
-        "dzen_commenter/bot_health.py",
-        "dzen_commenter/orchestrator/loop.py",
-        "tests/test_main.py",
-        "tests/admin/test_bot_health.py",
-        "tests/orchestrator/test_loop.py"
-      ],
-      "tests": {
-        "focusedPassed": 200,
-        "fullPassed": 615,
-        "failed": 0,
-        "skipped": 51
-      },
-      "concerns": [
-        "Resolved: production app/admin containers were recreated for 9716117; app health, admin HTTP, and unchanged healthy PostgreSQL were verified.",
-        "Craft MEDIUM: retry-boundary tests derive expected call count from _MAX_OPERATION_ATTEMPTS, so the tests do not independently pin the selected value of three."
-      ],
-      "finishedAt": "2026-10-13T02:27:44+03:00"
-    },
-    {
-      "id": "09",
-      "title": "Убрать удержание DOM-ссылок при чтении Studio",
-      "requirements": [
-        "G01",
-        "R08"
-      ],
-      "blockedBy": [
-        "07"
-      ],
-      "wave": 7,
-      "zone": [
-        "dzen_commenter/dzen/",
-        "tests/dzen/"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-13T12:03:28+03:00",
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0,
-      "files": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "tests": {
-        "focusedPassed": 37,
-        "fullPassed": 617,
-        "failed": 0,
-        "skipped": 51
-      },
-      "resolvedFindings": [
-        "Craft: malformed live count evaluation may fall back to ElementHandle collection on a Playwright page; resolved in T10.",
-        "Craft: live count regression used a single-group fixture; resolved in T10 with varied multi-group counts."
-      ],
-      "finishedAt": "2026-10-13T12:13:27+03:00"
-    },
-    {
-      "id": "10",
-      "title": "Не собирать DOM handles при ошибке live-счётчика",
-      "requirements": [
-        "G01",
-        "R08"
-      ],
-      "blockedBy": [
-        "09"
-      ],
-      "wave": 8,
-      "zone": [
-        "dzen_commenter/dzen/",
-        "tests/dzen/"
-      ],
-      "status": "done",
-      "startedAt": "2026-10-13T12:20:00+03:00",
-      "retries": 0,
-      "repairs": 0,
-      "handoffs": 0,
-      "files": [
-        "dzen_commenter/dzen/page.py",
-        "tests/dzen/test_dzen_page.py"
-      ],
-      "tests": {
-        "focusedPassed": 169,
-        "fullPassed": 618,
-        "failed": 0,
-        "skipped": 51
-      },
-      "finishedAt": "2026-10-13T12:38:25+03:00",
-      "commit": "9716117"
-    }
-  ],
-  "singlePass": null,
+    "commit": "b50c4e83785de5d28e57033d76d4aba2cacc5fc7"
+  },
   "tests": {
-    "passed": 618,
+    "passed": 580,
     "failed": 0,
-    "skipped": 51
+    "skipped": 51,
+    "warnings": 1,
+    "scope": "clean verification worktree at bee0144 with reply-length source/tests copied in; 580 passed, 51 skipped, one Starlette/httpx deprecation warning. Root checkout has two unrelated .env.example SSH_PASSWORD failures."
   },
   "debt": {
     "placeholders": [],
-    "assumptions": [],
+    "assumptions": [
+      "A01: ???????? ??????????? ????? ???? ?????????? ????????, ?? ????? 40 ????????; ?????? ? ?????? ? ???????????, ????????? poll ?????????.",
+      "A02: ?????? ???????????? ???????????? ??????????? CSS-??????????, ?? ??????? ? ????? ??????? ????????????.",
+      "A03: Studio ??? ?????? ? ??????? ????????; ????????? ?????? ??????????? ?? ?????.",
+      "A04: ???????? ??????????? ???????? ?? fake DOM; ???????? ?????????? ?? ???????????."
+    ],
     "emptyEnv": []
   },
   "additions": [],
   "coverage": {
     "status": "PASS",
-    "found": 4,
-    "fixed": 4,
+    "findings": 5,
+    "resolved": 5,
     "deferred": 0,
-    "findings": [
+    "items": [
       {
-        "type": "resolved",
-        "detail": "Independent G2 initially found scope, timeout/DB handling, and recovery criteria that were only partly explicit; brief/spec were amended and final independent check passed with no gaps, partial coverage, or extras."
+        "finding": "Brief did not specify a finite scroll-stop rule.",
+        "action": "Accepted as A01: stop after 3 stable passes or at 40 passes, with a safe diagnostic."
+      },
+      {
+        "finding": "The spec orders reply expansion between scroll passes and ID checks.",
+        "action": "Clarified sequencing: expand after each scroll and before comparing the target ID."
+      },
+      {
+        "finding": "The spec records API, logging, and no-config/migration constraints beyond the brief.",
+        "action": "Retained as existing project invariants and safety constraints, with no new product surface."
+      },
+      {
+        "finding": "The spec gives a canonical deploy target, backup, and health checks.",
+        "action": "Retained from the repository deployment decision and the user-authorized deployment request."
+      },
+      {
+        "finding": "The screenshot was not assigned a verification method.",
+        "action": "Clarified that it is a visual reference; DOM behavior is tested because this bot has no rendered UI."
+      }
+    ],
+    "followupCheck": {
+      "status": "PASS",
+      "findings": 0,
+      "scope": "2026-10-06-brief.md including the 2026-10-08 addition vs. spec.md",
+      "reviewer": "length_spec_coverage"
+    }
+  },
+  "concerns": [],
+  "reviewers": {
+    "manifestSpec": "T0 inline orchestrator review: PASS",
+    "followupSpecCoverage": "PASS: zero discrepancies on the complete brief and spec.",
+    "craft": "PASS: direct evaluate_handle path preserves element identity validation and native click; scoped snapshot avoids page-wide control indexing; index-672 browser regression passed.",
+    "followupManifestSpec": "PASS: R08/R09 delivered as specified; G2 independent coverage found zero discrepancies.",
+    "followupCraft": "PASS: limit includes author prefix; one bounded retry, no text truncation; tests use loop_factory seam.",
+    "blind": "PASS: original brief and repository only; scroll/load older, expand visible and nested reply controls, then find target; current bee0144 deep-feed regression passed.",
+    "followupTester": "PASS: fcd2a40; focused suite 115 passed.",
+    "followupBlind": "PASS: fcd2a40; no-op click cannot report completion; focused subset 13 passed."
+  },
+  "previousBlind": {
+    "status": "PASS",
+    "scope": "Original hidden-replies brief and repository only",
+    "findings": [
+      "Studio feed scrolls and waits through stable snapshots",
+      "All structural reply buttons are expanded, including newly revealed nested buttons",
+      "Target comment lookup expands replies after scrolling",
+      "Commit and push verified at 255523e23c174e217aedef8984fc2e03de879a78"
+    ]
+  },
+  "blind": {
+    "status": "PARTIAL",
+    "scope": "Full 2026-10-06 brief with 2026-10-08 addition; current repository only",
+    "findings": [
+      "Studio scroll/load and hidden reply expansion are implemented in current code; local focused tests passed.",
+      "Length limit is now sent in every model prompt; overlong first replies get one shortening retry; repeat over-limit output remains an error and is not queued for publication.",
+      "Focused acceptance command: .venv\\Scripts\\python.exe -m pytest -q tests/orchestrator/test_loop.py -k \"overlong_reply or still_fails_safely or dynamic_length_limit\" — 3 passed, 21 deselected.",
+      "R06 partial: b50c4e8 is committed and pushed, but the requested production deploy is not done; SSH protocol banner outage remains unresolved and production was not checked."
+    ]
+  },
+  "release": {
+    "commit": "b50c4e83785de5d28e57033d76d4aba2cacc5fc7",
+    "branch": "main",
+    "push": "verified: origin/main at b50c4e83785de5d28e57033d76d4aba2cacc5fc7",
+    "database_backup": {
+      "path": "/root/backups/dzen_commenter/stage38-ef82f5d-20261008T151635Z/postgres.dump",
+      "bytes": 2330407,
+      "sha256": "3dd622bbd4bd2c70f36b907300481c6c64c9ea6e0ce73c56b935fc7d781eeca2",
+      "pg_restore_list": "passed; 73 archive entries"
+    },
+    "image": null,
+    "source_sha256_matches_origin_main": true,
+    "app": "Last confirmed healthy and authenticated on the saved base image after ef82f5d rollback; neither bee0144 nor b50c4e8 is deployed.",
+    "health_http": 200,
+    "admin_restarted": false,
+    "postgres_restarted": false,
+    "volumes_preserved": true,
+    "status": "b50c4e8 is pushed but not deployed. Earlier SSH preflight for bee0144 repeatedly timed out waiting for the protocol banner; this follow-up deployment was not retried. Last confirmed active image is the saved healthy/authenticated base; admin/PostgreSQL unchanged.",
+    "active_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+    "latest_attempt": {
+      "commit": "b50c4e83785de5d28e57033d76d4aba2cacc5fc7",
+      "status": "not attempted after repeated SSH protocol banner timeouts on the same host; no remote changes",
+      "candidate_image": null,
+      "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+      "authenticated": null,
+      "database_backup": null
+    },
+    "attempt_history": [
+      {
+        "commit": "8e52db004a867c3a99e994f5b8e3761abed2a507",
+        "status": "rolled back: stale heartbeat after control_target_evaluation timeout",
+        "candidate_image": "sha256:e48d13377aebc3b61a58fbd4d8142091a8c8b8b6d30eb159a05fe39279d5ac2c",
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "rollback_healthy_at": "2026-10-08T07:43:59.964384+00:00",
+        "authenticated": true,
+        "database_backup": "/root/backups/dzen_commenter/stage38-8e52db0-20261008T073324Z/postgres.dump"
+      },
+      {
+        "commit": "e99277c535aed3652ac6fd89323797f9d173e3b0",
+        "status": "rolled back: repeated control_target_evaluation timeout; no fresh scan",
+        "candidate_image": "sha256:934a00161e4446e7e9128bf263de00f9414eccce25dfcf011dc4a82d9e0cf302",
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "rollback_healthy_at": "2026-10-08T08:07:33.333772+00:00",
+        "authenticated": true,
+        "database_backup": "/root/backups/dzen_commenter/stage38-e99277c-20261008T075717Z/postgres.dump"
+      },
+      {
+        "commit": "89658779b796f3c3a4ea9032f835f3af92b8db87",
+        "status": "rolled back: control_target_changed followed by control_disappeared_before_click; no fresh successful scan",
+        "candidate_image": "sha256:7db6f50fd7ea0ca5805db932be4360563bb6b4b5a9fe65e4e11d03d1c1b182b8",
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "rollback_healthy_at": "2026-10-08T09:31:14.647372+00:00",
+        "authenticated": true,
+        "database_backup": "/root/backups/dzen_commenter/stage38-8965877-20261008T092451Z/postgres.dump",
+        "database_backup_sha256": "00f1e7903cdf45a90a665d1c9eb0ab115fc7fecc632afab8e283fa212db43b78",
+        "database_archive_entries": 73
+      },
+      {
+        "commit": "3c5bd36a3b0d91711e943e9cb208adf6840047a8",
+        "status": "rolled back: attempt 2 control_target_resolution_timeout; control disappeared before confirmation; no comments extracted",
+        "candidate_image": "sha256:1b30e63610720061b07a9a7163bc69038529a0fcb1d7db0fb213fe9deb64d94e",
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "rollback_healthy_at": "2026-10-08T12:21:06.111934+00:00",
+        "authenticated": true,
+        "database_backup": "/root/backups/dzen_commenter/stage38-3c5bd36-20261008T121837Z/postgres.dump",
+        "database_backup_sha256": "55e9fbcfc9420633e72628846724c412d45009a6881a17d1642d7d00d51d6cfb",
+        "database_archive_entries": 73
+      },
+      {
+        "commit": "f9e7913c0b659a24739314c472847ffbde923bf3",
+        "status": "rolled back: click target handle resolution timed out before click; base restored healthy/authenticated; admin/PostgreSQL unchanged",
+        "candidate_image": "sha256:2b03a65d8694dd751da772e51597f7ace67c06043ed0845a345dbf283b042d8c",
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "authenticated": true,
+        "database_backup": "/root/backups/dzen_commenter/stage38-f9e7913-20261008T141304Z/postgres.dump",
+        "database_backup_sha256": "3b0c78f91e4d969c30842dabc0796efb8dfd01678c2404ca5f29894ea9747eed",
+        "database_archive_entries": 73
+      },
+      {
+        "commit": "ef82f5dc51474fa89cb5b83ebbbc61b56c09890e",
+        "status": "rolled back: candidate became unhealthy before fresh scan confirmation; base restored healthy/operational/authenticated; admin/PostgreSQL unchanged",
+        "candidate_image": "sha256:21b2993ab8e3d66e243b99d2aa49f6efd7477fb68c008d9171fc5e258ae5957d",
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "authenticated": true,
+        "database_backup": "/root/backups/dzen_commenter/stage38-ef82f5d-20261008T151635Z/postgres.dump",
+        "database_backup_sha256": "3dd622bbd4bd2c70f36b907300481c6c64c9ea6e0ce73c56b935fc7d781eeca2",
+        "database_archive_entries": 73
+      },
+      {
+        "commit": "bee01448dffba2b56d05c29a6ef559d076db36a8",
+        "status": "not started: SSH protocol banner timeout during preflight; no remote changes",
+        "candidate_image": null,
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "authenticated": null,
+        "database_backup": null
+      },
+      {
+        "commit": "b50c4e83785de5d28e57033d76d4aba2cacc5fc7",
+        "status": "not attempted: same SSH banner blocker remained; no remote changes",
+        "candidate_image": null,
+        "rollback_image": "sha256:7e23852f2d48276c6ed2096db079f413866679351fee20fbc04864597edbb93f",
+        "authenticated": null,
+        "database_backup": null
       }
     ]
   },
-  "concerns": [
-    "REPORT, non-blocking: tests/test_main.py:153 does not assert worker factory call or engine identity.",
-    "REPORT, non-blocking: tests/admin/test_database_engine.py:8 tests the factory but not the admin app boundary.",
-    "REPORT, non-blocking: tests/dzen/test_dzen_page.py:754 does not assert the new regression's metrics fields.",
-    "REPORT, non-blocking: dzen_commenter/dzen/page.py has duplicated full-feed and targeted-search reply expansion paths.",
-    "REPORT, non-blocking: metric fallback may label unavailable values as counts; separate diagnostics follow-up.",
-    "DROP: main.py optional getattr for required recovery contract is defensive and has no observed behavior impact.",
-    "REPORT: full Ruff still finds pre-existing F841 in tests/dzen/test_dzen_page.py and F401 in .autopilot/sync.py and tests/db/test_repository.py.",
-    "REPORT, test-quality MEDIUM: T08 retry-boundary tests derive expected call count from _MAX_OPERATION_ATTEMPTS rather than independently pinning three."
-  ],
-  "reviewers": {
-    "manifestSpec": "/root/t10_manifest_review",
-    "craft": "/root/t10_craft_review"
-  },
-  "blind": {
-    "status": "pass",
-    "matched": 10,
-    "checked": 10,
-    "mismatches": [],
-    "findings": [
-      "618 passed, 51 skipped; production release 9716117 matches the local page.py SHA256.",
-      "Production app is healthy; /health/bot is operational; admin OpenAPI returns HTTP 200; PostgreSQL stayed healthy with its original start time. No live Dzen publication was exercised."
-    ],
-    "manual": {
-      "external": "Commit 9716117 pushed to origin/main and deployed from /root/releases/dzen-commenter-9716117; app/admin were recreated with no dependencies, RUN_DB_MIGRATIONS=false, preserving existing named volumes and PostgreSQL container.",
-      "checks": "python -m pytest -q -p no:cacheprovider: 618 passed, 51 skipped. On VPS: app healthcheck healthy, bot_health exit 0, /health/bot operational, admin HTTP 200, PostgreSQL healthy and unchanged."
-    }
+  "finalBlindAcceptance": {
+    "status": "PARTIAL",
+    "scope": "complete user brief and repository only; spec/manifest/tickets withheld",
+    "commit": "b50c4e83785de5d28e57033d76d4aba2cacc5fc7",
+    "finding": "Production deployment could not be confirmed or performed because SSH protocol banner access remains unavailable."
   }
-}
+};
