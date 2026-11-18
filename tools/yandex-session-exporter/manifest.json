@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Dzen Playwright Session Exporter",
+  "version": "1.0.0",
+  "description": "Exports the current Dzen browser session in Playwright storage-state format.",
+  "permissions": ["activeTab", "cookies", "downloads", "scripting"],
+  "host_permissions": [
+    "https://*.dzen.ru/*",
+    "https://*.yandex.ru/*",
+    "https://*.vk.ru/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Export Dzen session"
+  }
+}

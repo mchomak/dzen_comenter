@@ -90,6 +90,35 @@ def test_run_cycle_generates_and_publishes_one_cleaned_reply_with_article_contex
     assert harness.prompt_builder.contexts[0].article_text == "Очищенный текст статьи"
 
 
+def test_comment_older_than_one_day_is_skipped(loop_factory, comment_factory):
+    comment = comment_factory(1, posted_at=datetime.now() - timedelta(days=1, seconds=1))
+    harness = loop_factory(
+        comments=[comment],
+        settings_overrides={"MAX_COMMENT_AGE_DAYS": 1},
+    )
+
+    harness.loop.run_cycle()
+
+    assert harness.ai_provider.calls == []
+    assert harness.repository.comments[1].status is CommentStatus.SKIPPED
+
+
+def test_comment_within_one_day_is_not_older_than_limit(
+    loop_factory, comment_factory
+):
+    comment = comment_factory(
+        1, posted_at=datetime.now() - timedelta(days=1, seconds=-1)
+    )
+    harness = loop_factory(
+        comments=[comment],
+        settings_overrides={"MAX_COMMENT_AGE_DAYS": 1},
+    )
+
+    harness.loop.run_cycle()
+
+    assert len(harness.ai_provider.calls) == 1
+
+
 def test_overlong_reply_is_regenerated_once_with_limit_in_regular_prompt(
     loop_factory, comment_factory
 ):

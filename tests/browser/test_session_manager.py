@@ -1,4 +1,5 @@
 import inspect
+import json
 
 import dzen_commenter.browser  # noqa: F401
 import pytest
@@ -50,6 +51,9 @@ class FakePage:
     def goto(self, url: str) -> None:
         self.goto_calls.append(url)
         self.url = url
+
+    def evaluate(self, script, entries):
+        self.restored_storage = (self.url, entries)
 
     def reload(self, **kwargs) -> None:
         self.reload_count += 1
@@ -332,6 +336,21 @@ def test_restore_loads_saved_cookies_before_opening_comments(tmp_path):
 
 
 # Acceptance 5 — restore() False при отсутствии файла, на страницу не ходим.
+def test_restore_loads_local_storage_before_opening_comments(tmp_path):
+    state_path = tmp_path / "state.json"
+    entries = [{"name": "example", "value": "saved"}]
+    state_path.write_text(json.dumps({"origins": [{"origin": "https://dzen.ru", "localStorage": entries}]}))
+    settings = make_settings(STORAGE_STATE_PATH=str(state_path))
+    page = FakePage()
+    context = FakeContext(page)
+    mgr = PlaywrightSessionManager(settings, playwright_factory=make_factory(context))
+    mgr.start()
+
+    assert mgr.restore()
+    assert page.restored_storage == ("https://dzen.ru", entries)
+    assert page.goto_calls[-1] == settings.COMMENTS_URL
+
+
 def test_restore_false_when_state_file_missing(tmp_path):
     state_path = tmp_path / "missing.json"
     settings = make_settings(STORAGE_STATE_PATH=str(state_path))

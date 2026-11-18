@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Как бот читает комментарии Дзена, составляет ответы и записывает результаты в базу.">
+<title>Как работает бот Дзена</title>
+<style>
+/* Hallmark: справочник, схема процесса, светлый фон и зелёные акценты. */
+/* Критика: на маленьком экране схема становится вертикальной, длинные пояснения свёрнуты. */
+:root {
+  --paper:#f5f8f6; --ink:#222b26; --muted:#4d5b53; --accent:#195741;
+  --soft:#e5eee5; --line:#b9c9be; --warn:#f4e8d4; --warn-ink:#5d3a17;
+  --body:system-ui,sans-serif; --heading:Georgia,serif;
+}
+* { box-sizing:border-box; }
+html,body { overflow-x:clip; }
+body { margin:0; background:var(--paper); color:var(--ink); font:1rem/1.62 var(--body); }
+a { color:var(--accent); text-underline-offset:.22em; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+a:active,summary:active { background:var(--soft); }
+header,main,footer { width:min(100% - 2rem, 70rem); margin-inline:auto; }
+main { width:100%; }
+main > section { width:min(100% - 2rem, 70rem); margin-inline:auto; }
+#scheme { width:min(100% - 2rem, 110rem); }
+.canvas { overflow:auto; border:1px solid var(--line); background:var(--soft); }
+.canvas img { display:block; width:100%; min-width:1400px; height:auto; }
+.map-actions { display:flex; flex-wrap:wrap; align-items:baseline; gap:.3rem 1.2rem; }
+.map-actions p { margin:0; }
+header { padding:clamp(2.4rem,7vw,5.5rem) 0 1.7rem; border-bottom:1px solid var(--line); }
+h1,h2,h3 { overflow-wrap:break-word; min-width:0; }
+h1,h2 { font-family:var(--heading); font-weight:normal; line-height:1.12; text-wrap:balance; }
+h1 { font-size:clamp(2.55rem,7vw,5.1rem); margin:0; }
+h2 { font-size:clamp(1.7rem,4vw,2.65rem); margin:0 0 .8rem; }
+h3 { margin:1.4rem 0 .25rem; font-size:1.1rem; }
+p { max-width:72ch; margin:.5rem 0 1rem; }
+nav ul { display:flex; flex-wrap:wrap; gap:.35rem 1.4rem; list-style:none; padding:0; margin:1.3rem 0 0; }
+section { padding:2.25rem 0; border-bottom:1px solid var(--line); scroll-margin-top:1rem; }
+figure { margin:1rem 0; }
+figcaption,.muted { color:var(--muted); font-size:.93rem; }
+.flow { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1.25rem; list-style:none; padding:0; }
+.flow li { position:relative; padding:.7rem; border-top:3px solid var(--accent); background:var(--soft); }
+.flow li:not(:last-child)::after { content:"→"; position:absolute; inset-inline-end:-1.1rem; top:.45rem; color:var(--accent); }
+.flow strong,.flow span { display:block; }
+.flow span { font-size:.9rem; }
+.flow.storage { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.chart { max-width:54rem; margin:1.25rem auto 2.5rem; }
+.chart h3 { margin-bottom:.8rem; }
+.node { padding:.7rem .9rem; border:1px solid var(--line); background:var(--soft); }
+.node strong,.node small { display:block; }
+.node small { margin-top:.25rem; font-size:.9rem; }
+.node > :last-child { margin-bottom:0; }
+.decision { border:2px solid var(--accent); background:var(--paper); }
+.decision strong::before { content:"◇ "; color:var(--accent); }
+.terminal { background:var(--warn); color:var(--warn-ink); }
+.arrow { display:block; text-align:center; color:var(--accent); font-weight:700; line-height:1.8; }
+.branches { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; margin:.1rem 0; }
+.branch { min-width:0; border-top:1px solid var(--accent); }
+.branch-label { display:block; text-align:center; color:var(--accent); font-weight:650; padding:.2rem; }
+.chart [id] { scroll-margin-top:1rem; }
+.chart [id]:target { outline:3px solid var(--accent); outline-offset:3px; }
+.note { background:var(--warn); color:var(--warn-ink); padding:.85rem 1.05rem; border:1px solid var(--line); }
+.note p:last-child { margin-bottom:0; }
+details { border-bottom:1px solid var(--line); padding:.7rem 0; }
+summary { cursor:pointer; font-weight:650; color:var(--accent); }
+details > :last-child { margin-bottom:.15rem; }
+ul,ol { padding-inline-start:1.4rem; }
+li + li { margin-top:.25rem; }
+.flow li + li { margin-top:0; }
+.tables { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1.5rem; }
+dl { margin:0; }
+dt { font-weight:650; border-top:1px solid var(--line); padding-top:.45rem; }
+dd { margin:.15rem 0 .55rem; }
+code { overflow-wrap:anywhere; }
+footer { padding:1rem 0 2rem; }
+@media(max-width:700px) {
+  .flow,.flow.storage,.tables { grid-template-columns:minmax(0,1fr); }
+  .flow li:not(:last-child)::after { content:"↓"; inset-inline-end:auto; inset-inline-start:.7rem; top:100%; }
+}
+@media(max-width:480px) {
+  .branches { grid-template-columns:minmax(0,1fr); }
+  .branch-label { text-align:start; }
+}
+@media print {
+  body { background:var(--paper); }
+  section,figure,details { break-inside:avoid; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Как работает бот Дзена</h1>
+  <p>Путь комментария от ленты Студии до черновика или опубликованного ответа.</p>
+  <nav aria-label="Оглавление"><ul>
+    <li><a href="#scheme">Полная блок-схема</a></li><li><a href="#cycle">Один цикл</a></li><li><a href="#feed">Лента и фильтры</a></li>
+    <li><a href="#article">Когда открывается статья</a></li><li><a href="#requests">Запросы</a></li>
+    <li><a href="#database">База данных</a></li><li><a href="#settings">Настройки</a></li>
+    <li><a href="#failure">Что показал сбой</a></li>
+  </ul></nav>
+</header>
+<main>
+<section id="scheme">
+  <h2>Карта работы бота</h2>
+  <div class="map-actions">
+    <a href="bot-flow.svg" target="_blank" rel="noopener">Открыть схему отдельно</a>
+    <p class="muted">На узком экране полотно прокручивается вправо.</p>
+  </div>
+  <figure>
+    <div class="canvas" role="region" aria-label="Прокручиваемое полотно блок-схемы" tabindex="0">
+      <img src="bot-flow.svg" width="1530" height="1070" alt="Пять колонок блок-схемы работы бота. Вход ведёт к чтению Студии, проверке комментариев, генерации и отправке. Стрелки показывают варианты и возврат к следующему циклу. Подробное текстовое описание ниже.">
+    </div>
+    <figcaption>Текущий цикл в репозитории. Основной путь идёт слева направо. Внутри каждого этапа условия направляют поток вниз или в соседнюю колонку.</figcaption>
+  </figure>
+  <details>
+  <summary>Текстовая расшифровка схемы по этапам</summary>
+  <p>Читайте сверху вниз. Рамка с ромбом обозначает условие. Стрелки с «Да» и «Нет» ведут к разным действиям, а ссылки ведут к продолжению этой же схемы. Светло-коричневый блок завершает текущую ветку.</p>
+  <div class="chart" aria-labelledby="chart-start">
+    <h3 id="chart-start">Вход и чтение Студии</h3>
+    <div class="node"><strong>Начало цикла</strong><small>Бот проверяет команду повторного входа в Telegram. Если команда получена, сбрасывает текущую сессию.</small></div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Есть действующая сессия или вход удалось восстановить?</strong><small>Бот проверяет Студию, пробует сохранённую сессию, затем доступные способы входа. Адрес страницы берёт из <code>COMMENTS_URL</code>.</small></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node terminal">Цикл заканчивается. Если возникло исключение, его обрабатывает управляющий цикл.</div></div>
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Создать или обновить запись ленты в базе. Прокрутить Студию, раскрыть ответы, прочитать комментарии.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Сканер вернул список комментариев?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node terminal">Ошибка чтения, например лента не стабилизировалась до лимита. Список не сохраняется. До очередей этот цикл не доходит.</div></div>
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Проверить часовой лимит и <a href="#chart-filter">перейти к отбору комментариев</a>.</div></div>
+    </div>
+  </div>
+  <div class="chart" aria-labelledby="chart-filter">
+    <h3 id="chart-filter">Отбор и постановка в очередь</h3>
+    <div class="node decision"><strong>Имя автора совпадает с именем бота?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node terminal">Перейти к следующему комментарию без записи этого комментария.</div></div>
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node">Проверить историю и распознанное время публикации.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Это известный свой ответ или комментарий старше лимита?</strong><small>При неизвестной дате проверка возраста сейчас пропускает комментарий дальше.</small></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node terminal">Сохранить комментарий и отметить пропуск, если его состояние ещё «новый».</div></div>
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node">Проверить доступность часового лимита.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Часовой лимит позволяет готовить ответы?</strong><small>Настройка <code>max_comments_per_hour</code>.</small></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Сохранить или обновить комментарий и поставить подходящую запись в очередь генерации.</div></div>
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node">Сохранить или обновить комментарий. Этот цикл пропустит генерацию.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node"><strong>Повторить отбор для остальных комментариев</strong><small>После последнего комментария при доступном лимите бот восстанавливает очередь для новых записей и <a href="#chart-generate">пытается взять одну задачу генерации</a>. Если лимит исчерпан, <a href="#chart-send">переходит к очереди отправки</a>.</small></div>
+  </div>
+  <div class="chart" aria-labelledby="chart-generate">
+    <h3 id="chart-generate">Подготовка текста ответа</h3>
+    <div class="node decision"><strong>Есть готовая задача генерации?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node terminal"><a href="#chart-send">Перейти к очереди отправки</a>.</div></div>
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Взять задачу и повторно проверить возраст и историю своих ответов. При пропуске <a href="#chart-send">перейти к отправке</a>.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>В базе уже есть текст статьи?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Взять сохранённый текст.</div></div>
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node">При наличии подходящей ссылки прочитать статью. Сохранить результат чтения. Если текста нет, продолжить по комментарию и ветке.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node"><strong>Составить запрос к модели</strong><small>Заголовок, комментарий и ветка, текст статьи при наличии, правила и лимит длины из настроек.</small></div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Что вернула модель?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Ответ ↓</span><div class="node">Проверить длину. При превышении один раз запросить сокращение. Готовый текст сохранить в базе и поставить в очередь отправки.</div></div>
+      <div class="branch"><span class="branch-label">Пропуск или ошибка ↓</span><div class="node">При точном <code>SKIP</code> отметить пропуск. При ошибке, пустом результате или повторном превышении длины записать ошибку генерации и применить настройки повторов.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node"><a href="#chart-send">Перейти к очереди отправки</a>.</div>
+  </div>
+  <div class="chart" aria-labelledby="chart-send">
+    <h3 id="chart-send">Черновик или отправка</h3>
+    <div class="node"><strong>Обновить очередь и взять одну готовую задачу</strong><small>Просроченные задачи закрываются по времени первого получения комментария из Студии.</small></div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Нашлась готовая задача?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node terminal">Конец цикла.</div></div>
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Найти исходный комментарий в Студии. Если он недоступен, записать ошибку и применить настройки повторов отправки.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Включена автопубликация?</strong><small>Настройка <code>auto_publish</code>.</small></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node terminal">Заполнить поле ответа в Студии без отправки. При успехе завершить задачу как черновик.</div></div>
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node">Проверить, есть ли уже такой ответ в исходной ветке.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Ответ уже подтверждён на публичной странице?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node terminal">Завершить задачу как опубликованную без повторного нажатия.</div></div>
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node">Если проверка прошла и дубля нет, сохранить отметку о начале отправки и нажать кнопку. Ошибка проверки до отправки обрабатывается по настройкам повторов.</div></div>
+    </div>
+    <span class="arrow" aria-hidden="true">↓</span>
+    <div class="node decision"><strong>Появление ответа подтверждено после отправки?</strong></div>
+    <div class="branches">
+      <div class="branch"><span class="branch-label">Да ↓</span><div class="node terminal">Записать факт и время публикации. Конец цикла.</div></div>
+      <div class="branch"><span class="branch-label">Нет ↓</span><div class="node terminal">При неизвестном результате отметить «Публикация не подтверждена». Повторное нажатие автоматически не планируется.</div></div>
+    </div>
+  </div>
+  </details>
+</section>
+<section id="cycle">
+  <h2>Один цикл работы</h2>
+  <p>Бот заходит на страницу «Комментарии» в Студии, читает обсуждения и записывает результаты в PostgreSQL. Панель бота показывает историю из этой базы и даёт менять настройки.</p>
+  <figure>
+    <ol class="flow">
+      <li><strong>Войти</strong><span>Проверить или восстановить сессию</span></li>
+      <li><strong>Прочитать</strong><span>Прокрутить ленту и раскрыть ответы</span></li>
+      <li><strong>Отобрать</strong><span>Записать комментарии и поставить подходящие в очередь</span></li>
+      <li><strong>Подготовить</strong><span>Взять один комментарий и запросить текст у модели</span></li>
+      <li><strong>Ответить</strong><span>Взять один сохранённый ответ для черновика или отправки</span></li>
+    </ol>
+    <figcaption>Очереди хранятся в базе. Если чтение ленты завершается исключением, этот цикл обрывается до обработки обеих очередей.</figcaption>
+  </figure>
+  <details><summary>Как бот восстанавливает вход</summary><p>Сначала проверяет открытую страницу и сохранённый профиль Chromium, затем пробует загрузить состояние из файла сессии. Если есть учётные данные для автоматического входа, пробует и их. При необходимости обращается к помощнику в Telegram. Панель может передать данные для смены аккаунта по локальному каналу связи с ботом.</p></details>
+</section>
+<section id="feed">
+  <h2>Что бот читает в Студии</h2>
+  <p>Внешняя лента показывает свежесть комментариев. Заголовок карточки связывает их со статьёй, а раскрытые ответы идут в порядке своей ветки. На вашем скриншоте рядом с комментариями «1 м» видны вложенные ответы «3 ч». Для отсечения по возрасту эти два порядка нужно учитывать отдельно.</p>
+  <h3>Как устроен текущий обход</h3>
+  <p>Бот прокручивает страницу к последнему загруженному элементу, раскрывает доступные ответы и снова смотрит, сколько карточек и кнопок раскрытия есть на странице. Для завершения нужны три подряд прохода без изменения этих двух чисел. Если этого не произошло за 40 проходов, сканер сообщает об ошибке и не возвращает даже уже извлечённые комментарии.</p>
+  <h3>Что проходит отбор</h3>
+  <ul>
+    <li>Комментарии от аккаунта бота пропускаются по имени. Текст известного собственного ответа проверяется также по истории в базе и ссылке статьи.</li>
+    <li>Комментарий с распознанным возрастом больше установленного лимита сохраняется с отметкой пропуска. Возраст проверяется повторно перед генерацией.</li>
+    <li>Сейчас разбор времени понимает только отметки в минутах. При отсутствии распознанной даты проверка возраста пропускает комментарий дальше. Поэтому настройка «1 день» пока не гарантирует отсечение по отметкам в часах или днях.</li>
+    <li>Если часовой лимит исчерпан, комментарий всё равно сохраняется. Новые записи можно поставить в очередь в следующих циклах. При повторном чтении запись обновляется по идентификатору, построенному из ссылки статьи, ссылки автора и текста.</li>
+  </ul>
+</section>
+<section id="article">
+  <h2>Когда бот открывает саму статью</h2>
+  <div class="tables">
+    <div><h3>Для подготовки ответа</h3><p>Бот берёт задачу из очереди и ищет сохранённый текст. Если его нет, открывает ссылку статьи в отдельной вкладке, извлекает заголовок и содержательный текст и закрывает вкладку. Ссылки на видео пропускает при чтении текста. Если текст недоступен, может составить ответ по комментарию и ветке.</p></div>
+    <div><h3>Для проверки публикации</h3><p>При автоотправке бот ищет исходный комментарий и возможный дубль на публичной странице. После отправки проверяет, появился ли ответ под нужным комментарием. Эта проверка нужна и в случае, когда подходящий ответ уже виден в Студии.</p></div>
+  </div>
+  <div class="note"><p><strong>Особенность текущего кода.</strong> В памяти текст привязан к ссылке статьи. В PostgreSQL поиск текста идёт по общей записи страницы комментариев Студии, которую цикл присваивает всем комментариям. Сохранённый текст одной статьи поэтому может попасть в запрос для другой. Для исправления ключ сохранения и чтения нужно привязать к ссылке самой статьи.</p></div>
+</section>
+<section id="requests">
+  <h2>Куда бот обращается</h2>
+  <details open><summary>Дзен через браузер</summary><p>Открывает страницу комментариев, прокручивает её, раскрывает ветки и открывает статьи. Для черновика ищет исходный комментарий и заполняет поле ответа в Студии без нажатия кнопки отправки. При автоотправке нажимает кнопку и отслеживает результат запроса, который отправляет Студия. Сам бот работает с элементами страницы через Playwright.</p></details>
+  <details open><summary>GigaChat для текста ответа</summary><p>Получает токен запросом <code>POST</code> на адрес из <code>GIGACHAT_OAUTH_URL</code>. Затем отправляет запрос <code>POST /v1/chat/completions</code> относительно <code>GIGACHAT_BASE_URL</code>. Токен используется повторно до приближения срока окончания. Оба адреса берутся из настроек запуска.</p>
+  <p>Модель получает заголовок статьи, исходный комментарий, до 400 последних символов контекста ветки и инструкции из панели. Если текст статьи удалось получить, бот добавляет его и ссылку. Часть комментариев получает инструкцию с предложением перейти по ссылке или сделать другое целевое действие. Тип ответа выбирается по ключевым словам. Точный ответ <code>SKIP</code> означает пропуск. Если текст слишком длинный, бот один раз просит модель сократить его.</p></details>
+  <details><summary>Другие подключения</summary><p>PostgreSQL принимает запросы на чтение и запись истории и очередей. Telegram используется для помощи со входом и уведомлений. При настроенном SMTP сообщения об ошибках могут также уходить по электронной почте. Если выбран провайдер OpenAI, бот использует совместимый адрес из <code>AI_BASE_URL</code>. Генерация в адаптере YandexGPT пока не реализована.</p></details>
+</section>
+<section id="database">
+  <h2>Что хранит база</h2>
+  <figure>
+    <ol class="flow storage">
+      <li><strong>Публикация</strong><span>Хранит прочитанный текст статьи</span></li>
+      <li><strong>Комментарий</strong><span>Связан с публикацией и задачей генерации</span></li>
+      <li><strong>Ответ</strong><span>Связан с комментарием и задачей отправки</span></li>
+    </ol>
+    <figcaption>Связи между записями. Очереди позволяют продолжить работу после перезапуска.</figcaption>
+  </figure>
+  <dl>
+    <dt>Публикации <code>publications</code></dt><dd>Ссылка и название записи публикации. При чтении статьи туда сохраняются извлечённый текст, время получения, результат чтения и контрольная сумма содержимого. Сейчас контекст используется через общую запись Студии, как описано выше.</dd>
+    <dt>Комментарии <code>comments</code></dt><dd>Идентификатор, автор, текст, связь с родительским комментарием, время публикации при распознавании и время получения. Здесь же лежат заголовок и адрес конкретного поста, контекст ветки и состояние обработки.</dd>
+    <dt>Ответы <code>replies</code></dt><dd>Готовый текст, провайдер и модель, состояние, время создания или публикации, причина ошибки и отметка об использовании текста статьи. По истории опубликованных ответов бот распознаёт уже выполненную работу.</dd>
+    <dt>Две очереди <code>reply_generation_queue</code> и <code>reply_publication_queue</code></dt><dd>Какая задача ждёт, сколько раз её пробовали, когда можно повторить, какая была ошибка и кому выдана задача. Ошибка генерации повторяет обращение к модели. Ошибка публикации повторяет работу с уже сохранённым текстом.</dd>
+  </dl>
+  <details><summary>Как защищена отправка</summary><p>Права на завершение задачи привязаны к временному ключу. Перед нажатием «Отправить» бот записывает отдельную отметку. Если после нажатия результат не удалось подтвердить, ответ получает статус «Публикация не подтверждена». Истёкшая задача с отметкой об отправке не нажимает кнопку повторно автоматически.</p></details>
+</section>
+<section id="settings">
+  <h2>Какие настройки на что влияют</h2>
+  <div class="tables">
+    <div>
+      <h3>Из панели, применяются во время работы</h3>
+      <dl>
+        <dt>Автопубликация <code>auto_publish</code></dt><dd>При выключенной настройке ответ сохраняется в базе, а бот пытается заполнить поле в Студии. При включённой ищет нужную ветку, отправляет и проверяет появление ответа.</dd>
+        <dt>Возраст <code>max_comment_age_days</code></dt><dd>Ограничивает генерацию по распознанной дате публикации. В очереди публикации код сейчас отсекает по времени получения комментария, поэтому это другая проверка. Глубину прокрутки настройка пока не меняет.</dd>
+        <dt>Часовой лимит <code>max_comments_per_hour</code></dt><dd>Счётчик по записям ответов за последний час, включая черновики, ошибки и пропуски с записью ответа. Дополнительный запрос на сокращение не составляет отдельную запись.</dd>
+        <dt>Текст ответа</dt><dd>Максимальная длина, правила и запретные темы, тон, условия предложения ссылки и его частота <code>cta_every_n_comments</code>. Длина проверяется вместе с обращением к автору.</dd>
+        <dt>Повторы и уведомления</dt><dd>Для генерации и публикации отдельные паузы и пределы попыток. Здесь же задаются имя аккаунта бота, адресаты уведомлений, пауза между одинаковыми ошибками и прокси для отправки уведомлений Telegram.</dd>
+      </dl>
+    </div>
+    <div>
+      <h3>Из окружения, читаются при запуске</h3>
+      <dl>
+        <dt>Страница и сессия</dt><dd><code>COMMENTS_URL</code> указывает, какую ленту читать. <code>USER_DATA_DIR</code>, <code>STORAGE_STATE_PATH</code> и <code>HEADLESS</code> задают профиль, файл сессии и видимость браузера.</dd>
+        <dt>Расписание</dt><dd><code>POLL_INTERVAL</code> задаёт паузу опроса. <code>KEEPALIVE_INTERVAL</code> задаёт интервал поддержания браузерной сессии. Текущий цикл берёт максимум одну задачу каждого вида, это ограничение задано кодом.</dd>
+        <dt>Модель</dt><dd><code>AI_PROVIDER</code> выбирает провайдера, <code>AI_MODEL</code> и <code>GIGACHAT_MODEL</code> задают модель для соответствующего адаптера. <code>AI_TEMPERATURE</code>, <code>AI_MAX_TOKENS</code> и <code>AI_PROMPT_LANGUAGE</code> управляют генерацией и языком инструкций.</dd>
+        <dt>Подключения</dt><dd><code>DATABASE_URL</code> задаёт подключение к PostgreSQL. <code>RUNTIME_CONFIG_PATH</code> указывает файл живых настроек. Помощник для входа в Telegram берёт прокси из <code>TELEGRAM_PROXY_URL</code> при запуске. SMTP настраивается отдельно.</dd>
+      </dl>
+    </div>
+  </div>
+  <p class="muted">В локальном файле настроек указаны черновики, возраст 1 день и длина ответа до 200 символов. Настройки работающего сервера могут отличаться после изменений в панели.</p>
+</section>
+<section id="failure">
+  <h2>Что показал сбой после переноса</h2>
+  <p>Обновлённая сессия прошла проверку входа. Затем один обход достиг 40 проходов без стабилизации. Сканер успел извлечь 3&nbsp;064 комментария, но завершился исключением до их записи. Код отбора по возрасту в том цикле так и не получил эти данные.</p>
+  <ol>
+    <li>Сначала научить бота надёжно читать отметки времени, включая часы и дни, и явно обрабатывать неизвестную дату.</li>
+    <li>Затем ограничить обход по свежести внешней ленты. При раскрытии карточки проверять возраст каждого ответа отдельно. Остановку по возрасту строить на подтверждённом порядке внешней ленты и проверенных датах.</li>
+    <li>Закрепить на примерах, что неполный обход сохраняет только надёжно прочитанные записи, повтор не создаёт дублей, а сбой чтения не мешает уже поставленным задачам. Отдельно проверить кэш на двух разных статьях.</li>
+    <li>Проверять выпуск в режиме черновиков по завершённым циклам чтения и записям в базе. Статус «в процессе» показывает активность бота, а успешный обход подтверждают отдельные события в журнале.</li>
+  </ol>
+  <p>Резервный вход через Telegram тоже требует внимания. В ходе диагностики с сервера не удалось подключиться ни к настроенному прокси, ни напрямую к Telegram. Это отдельная проблема, которая снова проявится при истечении сессии.</p>
+</section>
+</main>
+<footer class="muted">
+  Карта составлена по коду в репозитории. Основные места для сверки
+  <a href="../dzen_commenter/orchestrator/loop.py">цикл бота</a>,
+  <a href="../dzen_commenter/dzen/page.py">работа со Студией</a>,
+  <a href="../dzen_commenter/db/repository.py">запись в базу</a>,
+  <a href="../dzen_commenter/config/runtime_config.py">живые настройки</a>.
+</footer>
+</body>
+</html>

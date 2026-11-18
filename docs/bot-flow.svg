@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1530" height="1070" viewBox="0 0 1530 1070" role="img" aria-labelledby="title desc">
+<title id="title">Как работает бот Дзена — карта одного цикла</title>
+<desc id="desc">Пять колонок показывают вход, чтение Студии, генерацию, отправку и исходы. Стрелки подписывают условия и переходы.</desc>
+<defs>
+  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#416351" stroke-opacity=".12"/></pattern>
+  <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L8 4 0 8Z" fill="context-stroke"/></marker>
+</defs>
+<style>
+  text{font-family:system-ui,sans-serif;fill:#172a23}
+  .edge{fill:none;stroke-width:1.8;marker-end:url(#arrow);stroke-linejoin:round}
+  .label{font-size:12px;font-weight:650;text-anchor:middle;paint-order:stroke;stroke:#f4f8f5;stroke-width:5px;stroke-linejoin:round}
+  .node{stroke-width:1.4}
+  .name{font-size:14px;font-weight:650;text-anchor:middle}
+  .detail{font-size:12px;text-anchor:middle}
+  .caption{font-size:15px;font-weight:700}
+  .legend{font-size:13px}
+</style>
+<rect width="100%" height="100%" fill="#f4f8f5"/>
+<rect width="100%" height="100%" fill="url(#grid)"/>
+<rect x="18" y="28" width="274" height="37" rx="5" fill="#155744"/><text x="32" y="52" class="caption" style="fill:white">Вход и управление</text>
+<rect x="318" y="28" width="274" height="37" rx="5" fill="#155744"/><text x="332" y="52" class="caption" style="fill:white">Чтение и отбор</text>
+<rect x="618" y="28" width="274" height="37" rx="5" fill="#284d88"/><text x="632" y="52" class="caption" style="fill:white">Генерация ответа</text>
+<rect x="918" y="28" width="274" height="37" rx="5" fill="#58467c"/><text x="932" y="52" class="caption" style="fill:white">Черновик или отправка</text>
+<rect x="1218" y="28" width="274" height="37" rx="5" fill="#654d35"/><text x="1232" y="52" class="caption" style="fill:white">Результаты</text>
+<path d="M155 157 L155 184" class="edge" stroke="#345a4b"/>
+<path d="M268 220 L302 220 L302 125 L343 125" class="edge" stroke="#345a4b"/>
+<text x="302" y="160" class="label">Да</text>
+<path d="M155 256 L155 293" class="edge" stroke="#9a4e24"/>
+<text x="178" y="280" class="label">Нет</text>
+<path d="M155 367 L155 409" class="edge" stroke="#345a4b"/>
+<path d="M268 445 L324 445 L324 146 L343 146" class="edge" stroke="#345a4b"/>
+<text x="324" y="374" class="label">Да</text>
+<path d="M155 481 L155 533" class="edge" stroke="#9a4e24"/>
+<text x="178" y="510" class="label">Нет</text>
+<path d="M455 162 L455 184" class="edge" stroke="#345a4b"/>
+<path d="M455 256 L455 293" class="edge" stroke="#345a4b"/>
+<text x="478" y="282" class="label">Да</text>
+<path d="M343 220 L328 220 L328 755 L267 755" class="edge" stroke="#9a4e24"/>
+<text x="312" y="565" class="label">Нет</text>
+<path d="M455 367 L455 409" class="edge" stroke="#345a4b"/>
+<path d="M455 481 L455 524" class="edge" stroke="#345a4b"/>
+<text x="478" y="508" class="label">Да</text>
+<path d="M343 445 L304 445 L304 785 L343 785" class="edge" stroke="#9a4e24"/>
+<text x="287" y="712" class="label">Нет</text>
+<path d="M455 596 L455 627" class="edge" stroke="#315fa0"/>
+<text x="493" y="618" class="label">Да / нет</text>
+<path d="M567 664 L580 664 L580 877 L561 877" class="edge" stroke="#315fa0"/>
+<text x="580" y="738" class="label">После записи</text>
+<path d="M455 822 L455 859" class="edge" stroke="#345a4b"/>
+<path d="M343 895 L286 895 L286 330 L343 330" class="edge" stroke="#69508d"/>
+<text x="286" y="838" class="label">Да: следующий</text>
+<path d="M567 895 L594 895 L594 125 L643 125" class="edge" stroke="#69508d"/>
+<text x="596" y="959" class="label">Нет: генерация</text>
+<path d="M755 161 L755 184" class="edge" stroke="#345a4b"/>
+<text x="776" y="178" class="label">Да</text>
+<path d="M867 125 L943 125" class="edge" stroke="#9a4e24"/>
+<text x="905" y="115" class="label">Нет</text>
+<path d="M755 256 L755 294" class="edge" stroke="#345a4b"/>
+<text x="777" y="283" class="label">Да</text>
+<path d="M643 220 L621 220 L621 895 L643 895" class="edge" stroke="#9a4e24"/>
+<text x="619" y="859" class="label">Нет</text>
+<path d="M755 366 L755 408" class="edge" stroke="#9a4e24"/>
+<text x="779" y="392" class="label">Нет</text>
+<path d="M867 330 L890 330 L890 560 L867 560" class="edge" stroke="#315fa0"/>
+<text x="890" y="390" class="label">Да: кэш</text>
+<path d="M755 482 L755 523" class="edge" stroke="#345a4b"/>
+<path d="M755 597 L755 628" class="edge" stroke="#345a4b"/>
+<path d="M755 700 L755 748" class="edge" stroke="#315fa0"/>
+<text x="778" y="727" class="label">Да</text>
+<path d="M643 664 L610 664 L610 875 L643 875" class="edge" stroke="#9a4e24"/>
+<text x="609" y="826" class="label">Нет</text>
+<path d="M867 785 L916 785 L916 145 L943 145" class="edge" stroke="#315fa0"/>
+<text x="916" y="812" class="label">Далее к отправке</text>
+<path d="M867 895 L930 895 L930 106 L943 106" class="edge" stroke="#69508d"/>
+<text x="922" y="923" class="label">Далее к отправке</text>
+<path d="M1055 161 L1055 184" class="edge" stroke="#345a4b"/>
+<text x="1077" y="178" class="label">Да</text>
+<path d="M1167 125 L1243 125" class="edge" stroke="#9a4e24"/>
+<text x="1208" y="115" class="label">Нет</text>
+<path d="M1055 256 L1055 294" class="edge" stroke="#345a4b"/>
+<text x="1078" y="280" class="label">Да</text>
+<path d="M1167 220 L1243 220" class="edge" stroke="#9a4e24"/>
+<text x="1208" y="210" class="label">Нет</text>
+<path d="M1055 366 L1055 409" class="edge" stroke="#345a4b"/>
+<text x="1078" y="391" class="label">Да</text>
+<path d="M1167 330 L1243 330" class="edge" stroke="#9a4e24"/>
+<text x="1208" y="320" class="label">Нет</text>
+<path d="M1167 445 L1213 445 L1213 505 L1243 505" class="edge" stroke="#315fa0"/>
+<text x="1212" y="435" class="label">Да</text>
+<path d="M1055 481 L1055 523" class="edge" stroke="#9a4e24"/>
+<text x="1103" y="509" class="label">Нет дубля</text>
+<path d="M1055 597 L1055 628" class="edge" stroke="#345a4b"/>
+<path d="M1167 664 L1243 664" class="edge" stroke="#9a4e24"/>
+<text x="1208" y="654" class="label">Нет</text>
+<path d="M1055 700 L1055 741 L1501 741 L1501 505 L1467 505" class="edge" stroke="#315fa0"/>
+<text x="1260" y="731" class="label">Да</text>
+<path d="M1355 701 L1355 950 L1517 950 L1517 985 L155 985 L155 962" class="edge" stroke="#69508d"/>
+<path d="M1467 125H1517V950 M1467 220H1517 M1467 330H1517 M1467 505H1517" fill="none" stroke="#69508d" stroke-width="1.8"/>
+<text x="755" y="1009" class="label">После завершения цикла — следующий опрос</text>
+<path d="M43 570 L24 570 L24 925 L43 925" class="edge" stroke="#69508d"/>
+<path d="M155 792 L155 888" class="edge" stroke="#69508d"/>
+<rect class="node" x="43" y="88" width="224" height="74" rx="22" fill="#d8eee4" stroke="#247156"/>
+<text x="155" y="121.0" class="name">Начало цикла</text>
+<text x="155" y="136.0" class="detail">Проверить команду входа</text>
+<path class="node" d="M43 220l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="155" y="223.5" class="name">Сессия работает?</text>
+<rect class="node" x="43" y="293" width="224" height="74" rx="7" fill="#ffffff" stroke="#568374"/>
+<text x="155" y="318.5" class="name">Восстановить вход</text>
+<text x="155" y="333.5" class="detail">Файл сессии, данные входа,</text>
+<text x="155" y="348.5" class="detail">при необходимости Telegram</text>
+<path class="node" d="M43 445l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="155" y="448.5" class="name">Вход восстановлен?</text>
+<rect class="node" x="43" y="533" width="224" height="74" rx="7" fill="#f6e9df" stroke="#9a6248"/>
+<text x="155" y="566.0" class="name">Нужна авторизация</text>
+<text x="155" y="581.0" class="detail">Цикл завершается</text>
+<rect class="node" x="43" y="718" width="224" height="74" rx="7" fill="#f6e9df" stroke="#9a6248"/>
+<text x="155" y="743.5" class="name">Сбой цикла</text>
+<text x="155" y="758.5" class="detail">Запись в журнал; ограниченные</text>
+<text x="155" y="773.5" class="detail">повторы управляющего цикла</text>
+<rect class="node" x="43" y="888" width="224" height="74" rx="22" fill="#d8eee4" stroke="#247156"/>
+<text x="155" y="921.0" class="name">Пауза до следующего цикла</text>
+<text x="155" y="936.0" class="detail">Интервал POLL_INTERVAL</text>
+<rect class="node" x="343" y="88" width="224" height="74" rx="7" fill="#ffffff" stroke="#568374"/>
+<text x="455" y="113.5" class="name">Читать ленту Студии</text>
+<text x="455" y="128.5" class="detail">Записать ленту в БД, прокрутить,</text>
+<text x="455" y="143.5" class="detail">раскрыть ответы и собрать снимок</text>
+<path class="node" d="M343 220l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="455" y="223.5" class="name">Лента прочитана?</text>
+<rect class="node" x="343" y="293" width="224" height="74" rx="7" fill="#ffffff" stroke="#568374"/>
+<text x="455" y="326.0" class="name">Проверить комментарий</text>
+<text x="455" y="341.0" class="detail">Имя автора, история, возраст</text>
+<path class="node" d="M343 445l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="455" y="448.5" class="name">Комментарий допустим?</text>
+<rect class="node" x="343" y="748" width="224" height="74" rx="7" fill="#e5edf9" stroke="#4266a0"/>
+<text x="455" y="766.0" class="name">Пропуск</text>
+<text x="455" y="781.0" class="detail">Свой автор: без записи.</text>
+<text x="455" y="796.0" class="detail">Свой ответ или старый: сохранить</text>
+<text x="455" y="811.0" class="detail">и отметить пропуск для нового.</text>
+<path class="node" d="M343 560l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="455" y="563.5" class="name">Часовой лимит доступен?</text>
+<rect class="node" x="343" y="627" width="224" height="74" rx="7" fill="#e5edf9" stroke="#4266a0"/>
+<text x="455" y="652.5" class="name">Сохранить в PostgreSQL</text>
+<text x="455" y="667.5" class="detail">Есть лимит: добавить в очередь.</text>
+<text x="455" y="682.5" class="detail">Лимит исчерпан: сохранить запись.</text>
+<path class="node" d="M343 895l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="455" y="898.5" class="name">Остались комментарии?</text>
+<path class="node" d="M643 125l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="755" y="121.0" class="name">Есть задача генерации?</text>
+<text x="755" y="136.0" class="detail">При доступном часовом лимите</text>
+<path class="node" d="M643 220l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="755" y="216.0" class="name">Можно отвечать?</text>
+<text x="755" y="231.0" class="detail">По возрасту и истории</text>
+<path class="node" d="M643 330l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="755" y="333.5" class="name">В базе есть текст статьи?</text>
+<rect class="node" x="643" y="408" width="224" height="74" rx="7" fill="#ffffff" stroke="#568374"/>
+<text x="755" y="433.5" class="name">Открыть и прочитать статью</text>
+<text x="755" y="448.5" class="detail">По ссылке в отдельной вкладке.</text>
+<text x="755" y="463.5" class="detail">Сохранить результат чтения.</text>
+<rect class="node" x="643" y="523" width="224" height="74" rx="7" fill="#ffffff" stroke="#568374"/>
+<text x="755" y="548.5" class="name">Запросить ответ у модели</text>
+<text x="755" y="563.5" class="detail">Комментарий, ветка, правила,</text>
+<text x="755" y="578.5" class="detail">текст статьи при наличии</text>
+<path class="node" d="M643 664l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="755" y="660.0" class="name">Получен допустимый ответ?</text>
+<text x="755" y="675.0" class="detail">Длинный текст сократить один раз</text>
+<rect class="node" x="643" y="748" width="224" height="74" rx="7" fill="#e5edf9" stroke="#4266a0"/>
+<text x="755" y="781.0" class="name">Сохранить ответ</text>
+<text x="755" y="796.0" class="detail">Создать задачу в очереди отправки</text>
+<rect class="node" x="643" y="858" width="224" height="74" rx="7" fill="#f6e9df" stroke="#9a6248"/>
+<text x="755" y="883.5" class="name">Пропуск или ошибка</text>
+<text x="755" y="898.5" class="detail">SKIP либо ошибка и повторы</text>
+<text x="755" y="913.5" class="detail">по настройкам</text>
+<path class="node" d="M943 125l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="1055" y="121.0" class="name">Есть задача отправки?</text>
+<text x="1055" y="136.0" class="detail">Просроченные задачи закрыть</text>
+<path class="node" d="M943 220l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="1055" y="223.5" class="name">Комментарий найден?</text>
+<path class="node" d="M943 330l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="1055" y="333.5" class="name">Включена автопубликация?</text>
+<path class="node" d="M943 445l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="1055" y="441.0" class="name">Такой ответ уже виден?</text>
+<text x="1055" y="456.0" class="detail">Проверка публичной страницы</text>
+<rect class="node" x="943" y="523" width="224" height="74" rx="7" fill="#ffffff" stroke="#568374"/>
+<text x="1055" y="548.5" class="name">Отправить ответ</text>
+<text x="1055" y="563.5" class="detail">Записать отметку перед нажатием</text>
+<text x="1055" y="578.5" class="detail">кнопки в Студии</text>
+<path class="node" d="M943 664l12 -36h200l12 36 -12 36h-200Z" fill="#fffdf6" stroke="#93713c"/>
+<text x="1055" y="667.5" class="name">Публикация подтверждена?</text>
+<rect class="node" x="1243" y="88" width="224" height="74" rx="7" fill="#f6e9df" stroke="#9a6248"/>
+<text x="1355" y="121.0" class="name">Очередь пуста</text>
+<text x="1355" y="136.0" class="detail">Цикл завершён</text>
+<rect class="node" x="1243" y="183" width="224" height="74" rx="7" fill="#f6e9df" stroke="#9a6248"/>
+<text x="1355" y="208.5" class="name">Ошибка отправки</text>
+<text x="1355" y="223.5" class="detail">Повтор с сохранённым текстом</text>
+<text x="1355" y="238.5" class="detail">или завершение по лимиту</text>
+<rect class="node" x="1243" y="293" width="224" height="74" rx="7" fill="#e5edf9" stroke="#4266a0"/>
+<text x="1355" y="318.5" class="name">Черновик</text>
+<text x="1355" y="333.5" class="detail">Заполнить поле без отправки,</text>
+<text x="1355" y="348.5" class="detail">завершить задачу при успехе</text>
+<rect class="node" x="1243" y="468" width="224" height="74" rx="7" fill="#e5edf9" stroke="#4266a0"/>
+<text x="1355" y="501.0" class="name">Опубликовано</text>
+<text x="1355" y="516.0" class="detail">Записать факт и время публикации</text>
+<rect class="node" x="1243" y="627" width="224" height="74" rx="7" fill="#f6e9df" stroke="#9a6248"/>
+<text x="1355" y="652.5" class="name">Исход не подтверждён</text>
+<text x="1355" y="667.5" class="detail">При неизвестном исходе</text>
+<text x="1355" y="682.5" class="detail">автоматической отправки снова нет</text>
+<text x="45" y="1042" class="legend">Зелёный — ход цикла   •   Охра — условия и ошибки   •   Синий — запись в базе   •   Фиолетовый — переход к следующей задаче или циклу</text></svg>

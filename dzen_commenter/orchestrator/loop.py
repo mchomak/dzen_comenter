@@ -386,7 +386,7 @@ class OrchestratorLoop:
         now = moscow_now()
 
         max_age_days = self.runtime_config.get().settings.max_comment_age_days
-        return (now - posted_at).days > max_age_days
+        return now - posted_at > timedelta(days=max_age_days)
 
     def _run_generation_cycle(self, runtime_settings) -> None:
         claimed = self.repository.claim_next_generation(moscow_now())

@@ -142,6 +142,18 @@ class PlaywrightSessionManager:
                 cookies = state.get("cookies", [])
                 if cookies:
                     self._context.add_cookies(cookies)
+                for origin in state.get("origins", []):
+                    address = origin["origin"]
+                    parsed = urlparse(address)
+                    if parsed.scheme != "https" or parsed.hostname not in (
+                        "dzen.ru", "www.dzen.ru", "passport.yandex.ru", "id.vk.ru"
+                    ):
+                        continue
+                    self._page.goto(address)
+                    self._page.evaluate(
+                        "entries => entries.forEach(({name, value}) => localStorage.setItem(name, value))",
+                        origin.get("localStorage", []),
+                    )
             except (AttributeError, OSError, ValueError, TypeError):
                 return False
             self._page.goto(self._settings.COMMENTS_URL)
